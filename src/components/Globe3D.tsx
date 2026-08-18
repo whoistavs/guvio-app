@@ -89,7 +89,6 @@ function isLand(lat: number, lon: number) {
   return LAND_POLYGONS.some((polygon) => pointInPolygon(lon, lat, polygon));
 }
 
-// Otimização 1 Single Draw-Call via InstancedMesh / Instanced Points
 function buildLandParticleGeometry(radius = 2.006) {
   const positions: number[] = [];
   const latitudeStep = 2.2;
@@ -144,41 +143,59 @@ function angularDistanceDeg(lat1: number, lon1: number, lat2: number, lon2: numb
   return THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(a.dot(b), -1, 1)));
 }
 
-function CountryMarker({
-  country,
-  selected,
-}: {
-  country: Country;
-  selected: boolean;
-}) {
-  const pulseRef = useRef<THREE.Group>(null!);
-  const pos = useMemo(
-    () => latLonToVector3(country.lat, country.lon, 2.038),
-    [country.lat, country.lon]
-  );
-
-  useFrame(({ clock }) => {
-    if (!pulseRef.current) return;
-    const pulse = selected ? 1 + Math.sin(clock.elapsedTime * 6) * 0.22 : 1;
-    pulseRef.current.scale.setScalar(pulse);
-  });
-
-  return (
-    <group ref={pulseRef} position={pos}>
-      <mesh>
-        <sphereGeometry args={[selected ? 0.05 : 0.028, 8, 8]} />
-        <meshBasicMaterial color={selected ? "#FF2D55" : "#FFFFFF"} transparent opacity={selected ? 1 : 0.85} />
-      </mesh>
-    </group>
-  );
-}
-
 interface EarthSceneProps {
   selectedCountry: Country | null;
   rotationRef: React.MutableRefObject<Rotation>;
   targetRef: React.MutableRefObject<Rotation | null>;
   interactingRef: React.MutableRefObject<boolean>;
   cameraZRef: React.MutableRefObject<number>;
+}
+
+// Renderizador Instanciado de Marcadores (1 ÚNICA chamada InstancedMesh na GPU para TODOS os países)
+function InstancedCountryMarkers({ selectedCountry }: { selectedCountry: Country | null }) {
+  const meshRef = useRef<THREE.InstancedMesh>(null!);
+  const tempObject = useMemo(() => new THREE.Object3D(), []);
+  const tempColor = useMemo(() => new THREE.Color(), []);
+
+  const markerPositions = useMemo(() => {
+    return COUNTRIES.map((c) => latLonToVector3(c.lat, c.lon, 2.038));
+  }, []);
+
+  useFrame(({ clock }) => {
+    if (!meshRef.current) return;
+    const time = clock.elapsedTime;
+
+    COUNTRIES.forEach((c, idx) => {
+      const [x, y, z] = markerPositions[idx];
+      tempObject.position.set(x, y, z);
+
+      const isSelected = selectedCountry?.id === c.id;
+      const scale = isSelected ? 1.4 + Math.sin(time * 6) * 0.3 : 0.8;
+      tempObject.scale.setScalar(scale);
+      tempObject.updateMatrix();
+
+      meshRef.current.setMatrixAt(idx, tempObject.matrix);
+
+      if (isSelected) {
+        tempColor.set("#FF2D55");
+      } else {
+        tempColor.set("#FFFFFF");
+      }
+      meshRef.current.setColorAt(idx, tempColor);
+    });
+
+    meshRef.current.instanceMatrix.needsUpdate = true;
+    if (meshRef.current.instanceColor) {
+      meshRef.current.instanceColor.needsUpdate = true;
+    }
+  });
+
+  return (
+    <instancedMesh ref={meshRef} args={[undefined, undefined, COUNTRIES.length]}>
+      <sphereGeometry args={[0.035, 10, 10]} />
+      <meshBasicMaterial transparent opacity={0.9} />
+    </instancedMesh>
+  );
 }
 
 function EarthScene({
@@ -228,25 +245,19 @@ function EarthScene({
       <ambientLight intensity={0.9} />
       <directionalLight position={[5, 3, 5]} intensity={1.5} />
 
-      {/* Esfera Única de Oceano (1 Draw Call) */}
+      {/* Esfera Única de Oceano */}
       <mesh>
         <sphereGeometry args={[1.988, 24, 24]} />
         <meshBasicMaterial color="#050608" transparent opacity={0.92} />
       </mesh>
 
-      {/* Partículas de Continentes Únicas (1 Draw Call) */}
+      {/* Partículas de Continentes em 1 Passagem */}
       <points geometry={landGeometry} frustumCulled={false}>
         <pointsMaterial color="#FFFFFF" size={Platform.OS === "web" ? 0.048 : 0.056} sizeAttenuation transparent opacity={1.0} />
       </points>
 
-      {/* Marcadores dos Países */}
-      {COUNTRIES.map((country) => (
-        <CountryMarker
-          key={country.id}
-          country={country}
-          selected={selectedCountry?.id === country.id}
-        />
-      ))}
+      {/* Todos os Marcadores de Países unificados em 1 Única InstancedMesh na GPU */}
+      <InstancedCountryMarkers selectedCountry={selectedCountry} />
     </group>
   );
 }
