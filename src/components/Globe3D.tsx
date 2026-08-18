@@ -89,9 +89,30 @@ function isLand(lat: number, lon: number) {
   return LAND_POLYGONS.some((polygon) => pointInPolygon(lon, lat, polygon));
 }
 
+// Textura circular em memória para eliminar cantos quadrados de partículas
+function createCircularParticleTexture(): THREE.Texture {
+  if (Platform.OS !== "web" || typeof document === "undefined") {
+    return new THREE.Texture();
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    ctx.beginPath();
+    ctx.arc(32, 32, 28, 0, Math.PI * 2);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fill();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+// Resolução de alta definição com latitudeStep = 1.35
 function buildLandParticleGeometry(radius = 2.006) {
   const positions: number[] = [];
-  const latitudeStep = 2.2;
+  const latitudeStep = 1.35;
 
   for (let lat = -88; lat <= 88; lat += latitudeStep) {
     const cosLat = Math.max(0.18, Math.cos((lat * Math.PI) / 180));
@@ -143,15 +164,7 @@ function angularDistanceDeg(lat1: number, lon1: number, lat2: number, lon2: numb
   return THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(a.dot(b), -1, 1)));
 }
 
-interface EarthSceneProps {
-  selectedCountry: Country | null;
-  rotationRef: React.MutableRefObject<Rotation>;
-  targetRef: React.MutableRefObject<Rotation | null>;
-  interactingRef: React.MutableRefObject<boolean>;
-  cameraZRef: React.MutableRefObject<number>;
-}
-
-// Renderizador Instanciado de Marcadores (1 ÚNICA chamada InstancedMesh na GPU para TODOS os países)
+// Marcadores de países via InstancedMesh batched com iluminação dinâmica
 function InstancedCountryMarkers({ selectedCountry }: { selectedCountry: Country | null }) {
   const meshRef = useRef<THREE.InstancedMesh>(null!);
   const tempObject = useMemo(() => new THREE.Object3D(), []);
@@ -170,7 +183,7 @@ function InstancedCountryMarkers({ selectedCountry }: { selectedCountry: Country
       tempObject.position.set(x, y, z);
 
       const isSelected = selectedCountry?.id === c.id;
-      const scale = isSelected ? 1.4 + Math.sin(time * 6) * 0.3 : 0.8;
+      const scale = isSelected ? 1.5 + Math.sin(time * 6) * 0.35 : 0.85;
       tempObject.scale.setScalar(scale);
       tempObject.updateMatrix();
 
@@ -179,7 +192,7 @@ function InstancedCountryMarkers({ selectedCountry }: { selectedCountry: Country
       if (isSelected) {
         tempColor.set("#FF2D55");
       } else {
-        tempColor.set("#FFFFFF");
+        tempColor.set("#007AFF");
       }
       meshRef.current.setColorAt(idx, tempColor);
     });
@@ -192,10 +205,18 @@ function InstancedCountryMarkers({ selectedCountry }: { selectedCountry: Country
 
   return (
     <instancedMesh ref={meshRef} args={[undefined, undefined, COUNTRIES.length]}>
-      <sphereGeometry args={[0.035, 10, 10]} />
-      <meshBasicMaterial transparent opacity={0.9} />
+      <sphereGeometry args={[0.038, 12, 12]} />
+      <meshBasicMaterial transparent opacity={0.95} />
     </instancedMesh>
   );
+}
+
+interface EarthSceneProps {
+  selectedCountry: Country | null;
+  rotationRef: React.MutableRefObject<Rotation>;
+  targetRef: React.MutableRefObject<Rotation | null>;
+  interactingRef: React.MutableRefObject<boolean>;
+  cameraZRef: React.MutableRefObject<number>;
 }
 
 function EarthScene({
@@ -207,6 +228,7 @@ function EarthScene({
 }: EarthSceneProps) {
   const globeRef = useRef<THREE.Group>(null!);
   const landGeometry = useMemo(() => buildLandParticleGeometry(2.006), []);
+  const particleMap = useMemo(() => createCircularParticleTexture(), []);
 
   useFrame((state, delta) => {
     if (!globeRef.current) return;
@@ -242,21 +264,35 @@ function EarthScene({
 
   return (
     <group ref={globeRef}>
-      <ambientLight intensity={0.9} />
-      <directionalLight position={[5, 3, 5]} intensity={1.5} />
+      <ambientLight intensity={1.1} />
+      <directionalLight position={[5, 3, 5]} intensity={1.8} />
 
-      {/* Esfera Única de Oceano */}
+      {/* Esfera do Oceano */}
       <mesh>
-        <sphereGeometry args={[1.988, 24, 24]} />
-        <meshBasicMaterial color="#050608" transparent opacity={0.92} />
+        <sphereGeometry args={[1.988, 32, 32]} />
+        <meshBasicMaterial color="#06080C" transparent opacity={0.94} />
       </mesh>
 
-      {/* Partículas de Continentes em 1 Passagem */}
+      {/* Halo Atmosférico de Brilho Fresnel em 3D */}
+      <mesh>
+        <sphereGeometry args={[2.025, 32, 32]} />
+        <meshBasicMaterial color="#007AFF" transparent opacity={0.12} side={THREE.BackSide} />
+      </mesh>
+
+      {/* Partículas Círculares de Continentes (Alta Densidade) */}
       <points geometry={landGeometry} frustumCulled={false}>
-        <pointsMaterial color="#FFFFFF" size={Platform.OS === "web" ? 0.048 : 0.056} sizeAttenuation transparent opacity={1.0} />
+        <pointsMaterial
+          color="#FFFFFF"
+          size={0.044}
+          map={particleMap.image ? particleMap : undefined}
+          sizeAttenuation
+          transparent
+          alphaTest={0.1}
+          opacity={0.98}
+        />
       </points>
 
-      {/* Todos os Marcadores de Países unificados em 1 Única InstancedMesh na GPU */}
+      {/* Marcadores Batched Instanciados na GPU */}
       <InstancedCountryMarkers selectedCountry={selectedCountry} />
     </group>
   );
