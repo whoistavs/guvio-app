@@ -19,6 +19,7 @@
     "expo-asset": "~12.0.13",
     "expo-blur": "~15.0.8",
     "expo-gl": "~16.0.10",
+    "expo-image": "^57.0.3",
     "expo-image-picker": "~17.0.11",
     "expo-notifications": "~0.32.17",
     "lucide-react-native": "^1.27.0",

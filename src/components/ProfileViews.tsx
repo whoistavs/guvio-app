@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { Bookmark, Camera, Clock3, Grid3X3, Heart, ImagePlus, Lock, LogOut, MapPin, MessageCircle, MoreHorizontal, Moon, Settings, UserX, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { FeedPost, UserProfile } from "../data/mockData";
@@ -7,8 +7,15 @@ import { ScreenHeader } from "./ScreenHeader";
 import { useAppTheme } from "../context/AppTheme";
 import { loadSavedProfile, saveProfile, INITIAL_USER_PROFILE, loadSavedPosts } from "../services/storage";
 import { getSavedAuthSession } from "../services/auth";
+import { FastImage, preloadImages } from "./FastImage";
 
 function Grid({ posts, colors, onSelectPost }: { posts: FeedPost[]; colors: any; onSelectPost?: (p: FeedPost) => void }) {
+  useEffect(() => {
+    if (posts.length > 0) {
+      preloadImages(posts.map(p => p.image));
+    }
+  }, [posts]);
+
   if (posts.length === 0) {
     return (
       <View style={s.emptyGrid}>
@@ -24,7 +31,7 @@ function Grid({ posts, colors, onSelectPost }: { posts: FeedPost[]; colors: any;
     <View style={s.grid}>
       {posts.map(p => (
         <Pressable key={p.id} onPress={() => onSelectPost?.(p)} style={s.tileWrap}>
-          <Image source={{ uri: p.image }} style={s.tile} />
+          <FastImage source={p.image} style={s.tile} contentFit="cover" transition={100} />
         </Pressable>
       ))}
     </View>
@@ -38,7 +45,7 @@ export function PublicProfileView({ profile, onBack, onMessage }: { profile: Use
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: 110 }}>
       <ScreenHeader title={`@${profile.username}`} onBack={onBack} />
       <View style={s.top}>
-        <Image source={{ uri: profile.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200" }} style={s.bigAvatar} />
+        <FastImage source={profile.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200"} style={s.bigAvatar} contentFit="cover" transition={100} />
         <View style={s.stats}>
           <Stat v="0" l="posts" colors={colors} />
           <Stat v={profile.followers.toLocaleString("pt-BR")} l="seguidores" colors={colors} />
@@ -153,7 +160,7 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
       <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: 110 }}>
         <ScreenHeader title={`@${profile.username}`} right={<Pressable onPress={onSettings}><MoreHorizontal size={25} color={colors.icon} /></Pressable>} />
         <View style={s.top}>
-          <Image source={{ uri: profile.avatar }} style={s.bigAvatar} />
+          <FastImage source={profile.avatar} style={s.bigAvatar} contentFit="cover" transition={100} />
           <View style={s.stats}>
             <Stat v={userPosts.length.toString()} l="posts" colors={colors} />
             <Stat v={profile.followers.toString()} l="seguidores" colors={colors} />
@@ -178,7 +185,7 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
         <View style={s.modalBack}>
           <View style={[s.postModal, { backgroundColor: colors.bg }]}>
             <View style={s.postHeader}>
-              <Image source={{ uri: profile.avatar }} style={s.postAvatar} />
+              <FastImage source={profile.avatar} style={s.postAvatar} contentFit="cover" transition={100} />
               <View style={{ flex: 1 }}>
                 <Text style={{ color: colors.text, fontWeight: "900", fontSize: 13 }}>@{profile.username}</Text>
                 {selectedPost?.city ? (
@@ -193,7 +200,7 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
               </Pressable>
             </View>
 
-            {selectedPost ? <Image source={{ uri: selectedPost.image }} style={s.postImg} /> : null}
+            {selectedPost ? <FastImage source={selectedPost.image} style={s.postImg} contentFit="cover" transition={120} /> : null}
 
             <View style={s.postBody}>
               <View style={{ flexDirection: "row", gap: 14, alignItems: "center", marginBottom: 8 }}>
@@ -228,7 +235,7 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
               </Pressable>
             </View>
 
-            <Image source={{ uri: editAvatar }} style={s.avatarEditImg} />
+            <FastImage source={editAvatar} style={s.avatarEditImg} contentFit="cover" transition={100} />
 
             <View style={s.pickers}>
               <Pressable onPress={() => pickAvatar(true)} style={[s.pickerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>

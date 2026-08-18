@@ -1,9 +1,10 @@
-import React, { useRef, useState } from "react";
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Bookmark, Heart, MapPin, MessageCircle, Plus, Send, Shirt, Trash2 } from "lucide-react-native";
 import { FeedPost } from "../data/mockData";
 import { CommentsModal } from "./CommentsModal";
 import { useAppTheme } from "../context/AppTheme";
+import { FastImage, preloadImages } from "./FastImage";
 
 const STORIES = [
   { id: "me", name: "Seu story", avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200", isMe: true },
@@ -34,6 +35,12 @@ export function HomeFeed({
   const { colors, dark } = useAppTheme();
   const [commentPost, setCommentPost] = useState<FeedPost | null>(null);
   const lastTap = useRef(0);
+
+  useEffect(() => {
+    // Pré-carregamento nativo no SDWebImage / Glide
+    const urls = [...STORIES.map(s => s.avatar), ...posts.map(p => p.image), ...posts.map(p => p.creatorAvatar)];
+    preloadImages(urls);
+  }, [posts]);
 
   const visible = cityFilter
     ? posts.filter(p => p.city === cityFilter)
@@ -72,7 +79,7 @@ export function HomeFeed({
         {STORIES.map(st => (
           <Pressable key={st.id} style={s.storyItem}>
             <View style={[s.storyRing, { borderColor: st.isMe ? colors.border : "#FF2D55" }]}>
-              <Image source={{ uri: st.avatar }} style={s.storyImg} />
+              <FastImage source={st.avatar} style={s.storyImg} contentFit="cover" transition={100} />
               {st.isMe ? (
                 <View style={[s.addStoryBadge, { backgroundColor: colors.text }]}>
                   <Plus size={11} color={colors.bg} />
@@ -109,7 +116,7 @@ export function HomeFeed({
             <View style={s.ph}>
               <Pressable onPress={() => onOpenProfile?.(p.creatorName)} style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
                 <View style={s.avatarStoryRing}>
-                  <Image source={{ uri: p.creatorAvatar }} style={s.avatar} />
+                  <FastImage source={p.creatorAvatar} style={s.avatar} contentFit="cover" transition={100} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.creator, { color: colors.text }]}>{p.creatorName}</Text>
@@ -134,9 +141,9 @@ export function HomeFeed({
               </View>
             </View>
 
-            {/* Post Image */}
+            {/* Post Image with FastImage */}
             <Pressable onPress={() => dbl(p)}>
-              <Image source={{ uri: p.image }} style={s.image} />
+              <FastImage source={p.image} style={s.image} contentFit="cover" transition={120} />
               {p.isLiked ? (
                 <View pointerEvents="none" style={s.heartGhost}>
                   <Heart size={72} color="rgba(255,255,255,.24)" fill="rgba(255,255,255,.2)" />

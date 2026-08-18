@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Camera, ImagePlus, Plus, Sparkles, Tag, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { OutfitStyle, STYLES, WardrobeItem } from "../data/mockData";
@@ -9,6 +9,7 @@ import { generateSmartOutfit, AIOutfitRecommendation } from "../services/aiStyli
 import { loadSavedWardrobe, saveWardrobe } from "../services/storage";
 import { WeatherData } from "../services/weather";
 import { getSavedAuthSession } from "../services/auth";
+import { FastImage, preloadImages } from "./FastImage";
 
 const DEFAULT_CLOTH = "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=400&auto=format&fit=crop";
 
@@ -30,7 +31,10 @@ export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; cu
     getSavedAuthSession().then(session => {
       const uId = session?.user?.email || session?.user?.id;
       setCurrentUserId(uId);
-      loadSavedWardrobe(uId).then(setItems);
+      loadSavedWardrobe(uId).then(loadedItems => {
+        setItems(loadedItems);
+        preloadImages(loadedItems.map(i => i.image));
+      });
     });
   }, []);
 
@@ -83,6 +87,7 @@ export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; cu
     const updated = [newItem, ...items];
     setItems(updated);
     saveWardrobe(updated, currentUserId);
+    preloadImages([newImageUri]);
 
     setNewName("");
     setNewImageUri(DEFAULT_CLOTH);
@@ -146,7 +151,7 @@ export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; cu
           <View style={s.items}>
             {items.map(it => (
               <View key={it.id} style={[s.item, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Image source={{ uri: it.image }} style={s.img} />
+                <FastImage source={it.image} style={s.img} contentFit="cover" transition={100} />
                 <Pressable onPress={() => handleDeleteItem(it.id, it.name)} style={s.trashBtn}>
                   <Trash2 size={14} color="#FFF" />
                 </Pressable>
@@ -194,7 +199,7 @@ export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; cu
                 <View style={s.mini}>
                   {aiResult.matchedItems.map(i => (
                     <View key={i.id} style={{ alignItems: "center" }}>
-                      <Image source={{ uri: i.image }} style={s.miniImg} />
+                      <FastImage source={i.image} style={s.miniImg} contentFit="cover" transition={100} />
                       <Text numberOfLines={1} style={{ fontSize: 9, color: colors.text, fontWeight: "700", marginTop: 4, width: 82, textAlign: "center" }}>
                         {i.name}
                       </Text>
@@ -222,7 +227,7 @@ export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; cu
               </Pressable>
             </View>
 
-            <Image source={{ uri: newImageUri }} style={s.previewImg} />
+            <FastImage source={newImageUri} style={s.previewImg} contentFit="cover" transition={100} />
 
             <View style={s.pickers}>
               <Pressable onPress={() => pickImage(true)} style={[s.pickerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>

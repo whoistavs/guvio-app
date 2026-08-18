@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Alert, Animated, Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Animated, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { Download, Play, Share2, Sparkles, X, Zap } from "lucide-react-native";
 import { WardrobeItem } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
+import { FastImage, preloadImages } from "./FastImage";
 
 export function OutfitPromoExporter({
   visible,
@@ -26,6 +27,12 @@ export function OutfitPromoExporter({
   ];
 
   useEffect(() => {
+    if (visible) {
+      preloadImages(displayItems.map(i => i.image));
+    }
+  }, [visible, displayItems]);
+
+  useEffect(() => {
     let timer: any;
     if (visible && isPlaying) {
       timer = setInterval(() => {
@@ -46,7 +53,7 @@ export function OutfitPromoExporter({
   const activeItem = displayItems[currentIndex] || displayItems[0];
 
   const handleExportTikTok = () => {
-    Alert.alert("Vídeo Comercial Gerado! 🎬✨", "Seu vídeo promocional 9:16 do look foi gerado localmente. Pronto para postar no TikTok e Reels!", [
+    Alert.alert("Vídeo Comercial Gerado! 🎬✨", "Seu vídeo promocional 9:16 do look foi gerado localmente com cache nativo sem flicker. Pronto para postar no TikTok e Reels!", [
       { text: "Compartilhar agora", onPress: onClose }
     ]);
   };
@@ -66,9 +73,9 @@ export function OutfitPromoExporter({
             </Pressable>
           </View>
 
-          {/* Animated Outfit Showcase Image */}
+          {/* Animated Outfit Showcase Image with FastImage native SDWebImage / Glide cache */}
           <Animated.View style={[s.imageWrap, { transform: [{ scale: pulseAnim }] }]}>
-            <Image source={{ uri: activeItem.image }} style={s.promoImage} />
+            <FastImage source={activeItem.image} style={s.promoImage} contentFit="cover" transition={120} />
             
             {/* Live Tag Overlay */}
             <View style={s.overlayTag}>
