@@ -1,5 +1,5 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FeedPost, WardrobeItem, UserProfile } from "../data/mockData";
+import { FastStorage } from "./FastStorage";
 
 const KEYS = {
   POSTS: "guvio_posts_v3",
@@ -18,73 +18,41 @@ export const INITIAL_USER_PROFILE: UserProfile = {
 };
 
 export async function loadSavedPosts(): Promise<FeedPost[]> {
-  try {
-    const raw = await AsyncStorage.getItem(KEYS.POSTS);
-    if (!raw) return [];
-    return JSON.parse(raw);
-  } catch (e) {
-    return [];
-  }
+  return FastStorage.getItemSync(KEYS.POSTS, []);
 }
 
 export async function savePosts(posts: FeedPost[]): Promise<void> {
-  try {
-    await AsyncStorage.setItem(KEYS.POSTS, JSON.stringify(posts));
-  } catch (e) {}
+  FastStorage.setItemSync(KEYS.POSTS, posts);
 }
 
 export async function loadSavedWardrobe(userId?: string): Promise<WardrobeItem[]> {
-  try {
-    const key = userId ? `${KEYS.WARDROBE}_${userId}` : KEYS.WARDROBE;
-    const raw = await AsyncStorage.getItem(key);
-    if (!raw) return [];
-    return JSON.parse(raw);
-  } catch (e) {
-    return [];
-  }
+  const key = userId ? `${KEYS.WARDROBE}_${userId}` : KEYS.WARDROBE;
+  return FastStorage.getItemSync(key, []);
 }
 
 export async function saveWardrobe(items: WardrobeItem[], userId?: string): Promise<void> {
-  try {
-    const key = userId ? `${KEYS.WARDROBE}_${userId}` : KEYS.WARDROBE;
-    await AsyncStorage.setItem(key, JSON.stringify(items));
-  } catch (e) {}
+  const key = userId ? `${KEYS.WARDROBE}_${userId}` : KEYS.WARDROBE;
+  FastStorage.setItemSync(key, items);
 }
 
 export async function loadSavedProfile(userId?: string): Promise<UserProfile> {
-  try {
-    const key = userId ? `${KEYS.PROFILE}_${userId}` : KEYS.PROFILE;
-    const raw = await AsyncStorage.getItem(key);
-    if (!raw) {
-      return {
-        ...INITIAL_USER_PROFILE,
-        username: userId ? userId.split("@")[0].replace(/[^a-zA-Z0-9._]/g, "") : "usuario"
-      };
-    }
-    return JSON.parse(raw);
-  } catch (e) {
-    return INITIAL_USER_PROFILE;
-  }
+  const key = userId ? `${KEYS.PROFILE}_${userId}` : KEYS.PROFILE;
+  const fallback = {
+    ...INITIAL_USER_PROFILE,
+    username: userId ? userId.split("@")[0].replace(/[^a-zA-Z0-9._]/g, "") : "usuario"
+  };
+  return FastStorage.getItemSync(key, fallback);
 }
 
 export async function saveProfile(profile: UserProfile, userId?: string): Promise<void> {
-  try {
-    const key = userId ? `${KEYS.PROFILE}_${userId}` : KEYS.PROFILE;
-    await AsyncStorage.setItem(key, JSON.stringify(profile));
-  } catch (e) {}
+  const key = userId ? `${KEYS.PROFILE}_${userId}` : KEYS.PROFILE;
+  FastStorage.setItemSync(key, profile);
 }
 
 export async function loadDirectMessages(threadId: string): Promise<string[]> {
-  try {
-    const raw = await AsyncStorage.getItem(`${KEYS.DIRECT_MSGS}_${threadId}`);
-    return raw ? JSON.parse(raw) : [];
-  } catch (e) {
-    return [];
-  }
+  return FastStorage.getItemSync(`${KEYS.DIRECT_MSGS}_${threadId}`, []);
 }
 
 export async function saveDirectMessages(threadId: string, msgs: string[]): Promise<void> {
-  try {
-    await AsyncStorage.setItem(`${KEYS.DIRECT_MSGS}_${threadId}`, JSON.stringify(msgs));
-  } catch (e) {}
+  FastStorage.setItemSync(`${KEYS.DIRECT_MSGS}_${threadId}`, msgs);
 }

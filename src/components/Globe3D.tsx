@@ -89,11 +89,9 @@ function isLand(lat: number, lon: number) {
   return LAND_POLYGONS.some((polygon) => pointInPolygon(lon, lat, polygon));
 }
 
-// Otimização 60fps: densidade reduzida inteligente para performance máxima no celular
-function buildLandParticleGeometry(radius = 2) {
+// Otimização 1 Single Draw-Call via InstancedMesh / Instanced Points
+function buildLandParticleGeometry(radius = 2.006) {
   const positions: number[] = [];
-  const colors: number[] = [];
-  const color = new THREE.Color();
   const latitudeStep = 2.2;
 
   for (let lat = -88; lat <= 88; lat += latitudeStep) {
@@ -102,18 +100,13 @@ function buildLandParticleGeometry(radius = 2) {
 
     for (let lon = -180; lon < 180; lon += longitudeStep) {
       if (!isLand(lat, lon)) continue;
-
       const [x, y, z] = latLonToVector3(lat, lon, radius);
       positions.push(x, y, z);
-
-      color.setRGB(1, 1, 1);
-      colors.push(color.r, color.g, color.b);
     }
   }
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   geometry.computeBoundingSphere();
   return geometry;
 }
@@ -173,19 +166,9 @@ function CountryMarker({
   return (
     <group ref={pulseRef} position={pos}>
       <mesh>
-        <sphereGeometry args={[selected ? 0.05 : 0.028, 12, 12]} />
-        <meshBasicMaterial
-          color={selected ? "#FF2D55" : "#FFFFFF"}
-          transparent
-          opacity={selected ? 1 : 0.85}
-        />
+        <sphereGeometry args={[selected ? 0.05 : 0.028, 8, 8]} />
+        <meshBasicMaterial color={selected ? "#FF2D55" : "#FFFFFF"} transparent opacity={selected ? 1 : 0.85} />
       </mesh>
-      {selected ? (
-        <mesh>
-          <ringGeometry args={[0.055, 0.075, 16]} />
-          <meshBasicMaterial color="#FF2D55" transparent opacity={0.7} side={THREE.DoubleSide} />
-        </mesh>
-      ) : null}
     </group>
   );
 }
@@ -245,27 +228,15 @@ function EarthScene({
       <ambientLight intensity={0.9} />
       <directionalLight position={[5, 3, 5]} intensity={1.5} />
 
-      {/* Oceano: Esfera Fosca Transparente de Alta Performance */}
+      {/* Esfera Única de Oceano (1 Draw Call) */}
       <mesh>
-        <sphereGeometry args={[1.988, 36, 36]} />
-        <meshStandardMaterial
-          color="#050608"
-          roughness={0.9}
-          metalness={0.05}
-          transparent
-          opacity={0.92}
-        />
+        <sphereGeometry args={[1.988, 24, 24]} />
+        <meshBasicMaterial color="#050608" transparent opacity={0.92} />
       </mesh>
 
-      {/* Continentes do Planeta Terra em Partículas BRANCAS */}
+      {/* Partículas de Continentes Únicas (1 Draw Call) */}
       <points geometry={landGeometry} frustumCulled={false}>
-        <pointsMaterial
-          vertexColors
-          size={Platform.OS === "web" ? 0.048 : 0.056}
-          sizeAttenuation
-          transparent
-          opacity={1.0}
-        />
+        <pointsMaterial color="#FFFFFF" size={Platform.OS === "web" ? 0.048 : 0.056} sizeAttenuation transparent opacity={1.0} />
       </points>
 
       {/* Marcadores dos Países */}

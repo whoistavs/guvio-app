@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { Camera, ImagePlus, Shirt, Upload } from "lucide-react-native";
+import { Camera, ImagePlus, Share2, Shirt, Sparkles, Upload } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useAppTheme } from "../context/AppTheme";
+import { OutfitPromoExporter } from "./OutfitPromoExporter";
 
 const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?q=80&w=800&auto=format&fit=crop";
 
@@ -11,6 +12,7 @@ export function CreateHubView({ onPublish, onWardrobe }: { onPublish: (p: { imag
   const [mode, setMode] = useState<"hub" | "post">("hub");
   const [caption, setCaption] = useState("");
   const [imageUri, setImageUri] = useState<string>(DEFAULT_IMAGE);
+  const [showPromoExporter, setShowPromoExporter] = useState(false);
 
   const pickImage = async (useCamera: boolean) => {
     try {
@@ -52,24 +54,42 @@ export function CreateHubView({ onPublish, onWardrobe }: { onPublish: (p: { imag
 
   if (mode === "hub") {
     return (
-      <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={s.c}>
-        <Text style={[s.h, { color: colors.text }]}>Criar</Text>
-        <Text style={{ color: colors.muted, marginBottom: 22 }}>O que você quer adicionar ao Guvio?</Text>
-        <Pressable onPress={() => setMode("post")} style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Upload size={28} color={colors.icon} />
-          <View style={{ flex: 1 }}>
-            <Text style={[s.ct, { color: colors.text }]}>Publicar um look</Text>
-            <Text style={{ color: colors.muted, fontSize: 12 }}>Tire uma foto ou escolha da galeria para o feed.</Text>
-          </View>
-        </Pressable>
-        <Pressable onPress={onWardrobe} style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Shirt size={28} color={colors.icon} />
-          <View style={{ flex: 1 }}>
-            <Text style={[s.ct, { color: colors.text }]}>Adicionar roupa</Text>
-            <Text style={{ color: colors.muted, fontSize: 12 }}>Envie uma peça para seu guarda-roupa digital.</Text>
-          </View>
-        </Pressable>
-      </ScrollView>
+      <>
+        <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={s.c}>
+          <Text style={[s.h, { color: colors.text }]}>Criar</Text>
+          <Text style={{ color: colors.muted, marginBottom: 22 }}>O que você quer adicionar ao Guvio?</Text>
+          
+          <Pressable onPress={() => setMode("post")} style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Upload size={28} color={colors.icon} />
+            <View style={{ flex: 1 }}>
+              <Text style={[s.ct, { color: colors.text }]}>Publicar um look</Text>
+              <Text style={{ color: colors.muted, fontSize: 12 }}>Tire uma foto ou escolha da galeria para o feed.</Text>
+            </View>
+          </Pressable>
+
+          <Pressable onPress={onWardrobe} style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Shirt size={28} color={colors.icon} />
+            <View style={{ flex: 1 }}>
+              <Text style={[s.ct, { color: colors.text }]}>Adicionar roupa</Text>
+              <Text style={{ color: colors.muted, fontSize: 12 }}>Envie uma peça para seu guarda-roupa digital.</Text>
+            </View>
+          </Pressable>
+
+          <Pressable onPress={() => setShowPromoExporter(true)} style={[s.card, s.viralCard, { backgroundColor: colors.text }]}>
+            <Sparkles size={28} color={colors.bg} />
+            <View style={{ flex: 1 }}>
+              <Text style={[s.ct, { color: colors.bg }]}>Gerar Vídeo Promo 9:16 ✨</Text>
+              <Text style={{ color: colors.bg, opacity: 0.8, fontSize: 12 }}>Crie comerciais virais de seus looks para o TikTok & Reels.</Text>
+            </View>
+          </Pressable>
+        </ScrollView>
+
+        <OutfitPromoExporter
+          visible={showPromoExporter}
+          onClose={() => setShowPromoExporter(false)}
+          items={[]}
+        />
+      </>
     );
   }
 
@@ -121,6 +141,7 @@ const s = StyleSheet.create({
   c: { padding: 22, paddingBottom: 120 },
   h: { fontSize: 28, fontWeight: "900", marginVertical: 16 },
   card: { borderWidth: 1, borderRadius: 22, padding: 20, flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 12 },
+  viralCard: { marginTop: 6 },
   ct: { fontSize: 16, fontWeight: "900", marginBottom: 4 },
   preview: { width: "100%", aspectRatio: 1, borderRadius: 22 },
   pickers: { flexDirection: "row", gap: 10, marginVertical: 14 },

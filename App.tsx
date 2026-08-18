@@ -19,6 +19,7 @@ import { fetchCityWeather, WeatherData } from "./src/services/weather";
 import { requestNotificationPermissions, sendLocalNotification } from "./src/services/notifications";
 import { syncPostToCloud } from "./src/services/supabaseSync";
 import { getSavedAuthSession, signOut } from "./src/services/auth";
+import { FastStorage } from "./src/services/FastStorage";
 
 type Route = "tabs" | "direct" | "publicProfile" | "settings" | "settingsPage";
 
@@ -40,7 +41,10 @@ function Guvio() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
 
   useEffect(() => {
-    loadSavedPosts().then(setPosts);
+    FastStorage.init().then(() => {
+      loadSavedPosts().then(setPosts);
+    });
+
     requestNotificationPermissions();
     fetchCityWeather(-22.9056, -47.0608).then(setWeather);
 
