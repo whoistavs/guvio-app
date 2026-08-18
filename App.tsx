@@ -20,6 +20,7 @@ import { requestNotificationPermissions, sendLocalNotification } from "./src/ser
 import { syncPostToCloud } from "./src/services/supabaseSync";
 import { getSavedAuthSession, signOut } from "./src/services/auth";
 import { FastStorage } from "./src/services/FastStorage";
+import { RealtimeSync } from "./src/services/realtimeSync";
 
 type Route = "tabs" | "direct" | "publicProfile" | "settings" | "settingsPage";
 
@@ -54,6 +55,27 @@ function Guvio() {
         setAuthenticated(true);
       }
     });
+
+    // Iniciar canal em tempo real do Feed Social do Supabase
+    RealtimeSync.startSocialFeedChannel(
+      newPost => {
+        setPosts(prev => {
+          if (prev.some(p => p.id === newPost.id)) return prev;
+          const updated = [newPost, ...prev];
+          savePosts(updated);
+          return updated;
+        });
+      },
+      (postId, newLikes) => {
+        setPosts(prev =>
+          prev.map(p => (p.id === postId ? { ...p, likes: newLikes } : p))
+        );
+      }
+    );
+
+    return () => {
+      RealtimeSync.stop();
+    };
   }, []);
 
   const handleUpdatePosts = (action: React.SetStateAction<FeedPost[]>) => {
