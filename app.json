@@ -3,26 +3,41 @@
     "name": "Guvio",
     "slug": "guvio",
     "scheme": "guvio",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
+    "updates": {
+      "url": "https://u.expo.dev/eb78cc29-c0da-4637-b6cc-efe73650bff6"
+    },
+    "runtimeVersion": "1.1.0",
     "ios": {
-      "supportsTablet": false,
-      "bundleIdentifier": "app.guvio.ios"
+      "supportsTablet": true,
+      "bundleIdentifier": "app.guvio.ios",
+      "buildNumber": "2"
     },
     "android": {
       "package": "app.guvio.android",
+      "versionCode": 2,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#050608"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "bundler": "metro",
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "eb78cc29-c0da-4637-b6cc-efe73650bff6"
+      }
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
   }
 }

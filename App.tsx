@@ -12,9 +12,10 @@ import { BottomNavLiquid } from "./src/components/BottomNavLiquid";
 import { MOCK_FEED_POSTS, MOCK_PROFILES, FeedPost, UserProfile } from "./src/data/mockData";
 import { MyProfileView, PublicProfileView, SettingsView, SimpleSettingsPage } from "./src/components/ProfileViews";
 import { DirectView } from "./src/components/DirectView";
+import { ActivityView } from "./src/components/ActivityView";
 import { CreateHubView } from "./src/components/CreateHubView";
 import { AuthScreen } from "./src/components/AuthScreen";
-import { loadSavedPosts, savePosts } from "./src/services/storage";
+import { loadSavedPosts, savePosts, loadAllRegisteredProfiles } from "./src/services/storage";
 import { fetchCityWeather, WeatherData } from "./src/services/weather";
 import { requestNotificationPermissions, sendLocalNotification } from "./src/services/notifications";
 import { syncPostToCloud } from "./src/services/supabaseSync";
@@ -22,7 +23,7 @@ import { getSavedAuthSession, signOut } from "./src/services/auth";
 import { FastStorage } from "./src/services/FastStorage";
 import { RealtimeSync } from "./src/services/realtimeSync";
 
-type Route = "tabs" | "direct" | "publicProfile" | "settings" | "settingsPage";
+type Route = "tabs" | "direct" | "activity" | "publicProfile" | "settings" | "settingsPage";
 
 function Guvio() {
   const { colors, dark } = useAppTheme();
@@ -109,8 +110,25 @@ function Guvio() {
     fetchCityWeather(x.lat, x.lon).then(setWeather);
   };
 
-  const openName = (name: string) => {
-    const p = MOCK_PROFILES.find(x => x.displayName === name) || MOCK_PROFILES[0];
+  const openName = async (name: string) => {
+    const cleanName = name.replace("@", "").toLowerCase();
+    const allRegistered = await loadAllRegisteredProfiles();
+    const p =
+      allRegistered.find(
+        x =>
+          x.displayName.toLowerCase() === cleanName ||
+          x.username.toLowerCase() === cleanName ||
+          x.id === cleanName
+      ) || {
+        id: `p-${cleanName}`,
+        username: cleanName,
+        displayName: name,
+        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=300",
+        location: location || "Brasil",
+        followers: 0,
+        following: 0,
+        bio: `Criador(a) de estilo explorando tendências de moda no Guvio.`
+      };
     setProfile(p);
     setRoute("publicProfile");
   };
@@ -122,17 +140,38 @@ function Guvio() {
       </SafeAreaView>
     );
 
+  if (route === "activity")
+    return (
+      <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
+        <ActivityView
+          onBack={() => setRoute("tabs")}
+          onOpenProfile={openName}
+        />
+      </SafeAreaView>
+    );
+
   if (route === "publicProfile" && profile)
     return (
       <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
-        <PublicProfileView profile={profile} onBack={() => setRoute("tabs")} onMessage={() => setRoute("direct")} />
+        <PublicProfileView
+          profile={profile}
+          onBack={() => setRoute("tabs")}
+          onMessage={() => setRoute("direct")}
+        />
       </SafeAreaView>
     );
 
   if (route === "settings")
     return (
       <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
-        <SettingsView onBack={() => setRoute("tabs")} onOpen={x => { setSettingsPage(x); setRoute("settingsPage"); }} onSignOut={handleSignOut} />
+        <SettingsView
+          onBack={() => setRoute("tabs")}
+          onOpen={x => {
+            setSettingsPage(x);
+            setRoute("settingsPage");
+          }}
+          onSignOut={handleSignOut}
+        />
       </SafeAreaView>
     );
 
@@ -149,21 +188,51 @@ function Guvio() {
     <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
       <StatusBar barStyle={dark ? "light-content" : "dark-content"} backgroundColor={colors.bg} />
       {tab === "home" ? (
-        <ScrollView ref={scroll} style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          ref={scroll}
+          style={{ flex: 1, backgroundColor: colors.bg }}
+          contentContainerStyle={{ flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={[s.first, { minHeight: h - 40, backgroundColor: colors.bg }]}>
-            <Header locationText={location} weatherText={weatherText} onOpenDirect={() => setRoute("direct")} />
+            <Header
+              locationText={location}
+              weatherText={weatherText}
+              onOpenDirect={() => setRoute("direct")}
+              onOpenActivity={() => setRoute("activity")}
+              hasUnreadActivity={true}
+            />
             <GlobeLocationSearch onSelect={search} />
             <View style={s.globeContainer}>
-              <Globe3D selectedCountry={null} onSelectCountry={c => search({ type: "country", label: c.name, lat: c.lat, lon: c.lon })} focusTarget={focus} />
+              <Globe3D
+                selectedCountry={null}
+                onSelectCountry={c =>
+                  search({ type: "country", label: c.name, lat: c.lat, lon: c.lon })
+                }
+                focusTarget={focus}
+              />
             </View>
             <ScrollIndicator onPress={() => scroll.current?.scrollTo({ y: h - 60, animated: true })} />
           </View>
-          <HomeFeed posts={posts} setPosts={handleUpdatePosts} countryFilter={filterCountry} cityFilter={filterCity} onAssembleWithWardrobe={() => setTab("wardrobe")} onOpenProfile={openName} onShare={() => setRoute("direct")} />
+          <HomeFeed
+            posts={posts}
+            setPosts={handleUpdatePosts}
+            countryFilter={filterCountry}
+            cityFilter={filterCity}
+            onAssembleWithWardrobe={() => setTab("wardrobe")}
+            onOpenProfile={openName}
+          />
         </ScrollView>
       ) : tab === "wardrobe" ? (
         <WardrobeView onAdd={() => setTab("add")} currentWeather={weather} />
       ) : tab === "search" ? (
-        <SearchProfilesView onOpenProfile={p => { setProfile(p); setRoute("publicProfile"); }} />
+        <SearchProfilesView
+          onOpenProfile={p => {
+            setProfile(p);
+            setRoute("publicProfile");
+          }}
+        />
       ) : tab === "profile" ? (
         <MyProfileView onSettings={() => setRoute("settings")} />
       ) : (
@@ -187,7 +256,10 @@ function Guvio() {
             };
             handleUpdatePosts(v => [p, ...v]);
             syncPostToCloud(p);
-            sendLocalNotification("Novo look publicado! ✨", `Seu look em ${p.city} já está visível para a comunidade Guvio.`);
+            sendLocalNotification(
+              "Novo look publicado! ✨",
+              `Seu look em ${p.city} já está visível para a comunidade Guvio.`
+            );
             setTab("home");
           }}
         />

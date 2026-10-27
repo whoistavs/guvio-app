@@ -152,7 +152,7 @@ export function BottomNavLiquid({ activeTab, onTabChange }: { activeTab: string;
 const styles = StyleSheet.create({
   fixed: {
     position: Platform.OS === "web" ? ("fixed" as any) : "absolute",
-    bottom: Platform.OS === "ios" ? 22 : 12,
+    bottom: Platform.OS === "ios" ? 24 : Platform.OS === "android" ? 38 : 16,
     left: 0,
     right: 0,
     alignItems: "center",

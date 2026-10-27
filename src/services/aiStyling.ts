@@ -8,6 +8,21 @@ export interface AIOutfitRecommendation {
   matchScore: number;
 }
 
+export function getWeatherRecommendationTip(weather?: WeatherData | null): string {
+  if (!weather) {
+    return "💡 Dica de Estilo Guvio: Camadas leves com jaqueta coringa são ideais para qualquer clima urbano.";
+  }
+
+  const { temperature, condition } = weather;
+  if (temperature < 15) {
+    return `❄️ Frio em foco (${temperature}°C - ${condition}): A IA recomenda casacos estruturados, gola alta e botas de couro.`;
+  }
+  if (temperature <= 22) {
+    return `🍂 Clima Ameno (${temperature}°C - ${condition}): Camisas de manga longa, suéteres leves e tênis casuais são perfeitos.`;
+  }
+  return `☀️ Clima Quente (${temperature}°C - ${condition}): Tecidos fluídos como linho, camisetas de algodão e calçados abertos.`;
+}
+
 export function generateSmartOutfit(
   style: OutfitStyle, 
   wardrobe: WardrobeItem[], 
@@ -22,7 +37,6 @@ export function generateSmartOutfit(
     };
   }
 
-  const titleLower = style.title.toLowerCase();
   const temp = weather?.temperature ?? 22;
   const isCold = weather?.isCold ?? (temp < 18);
   const isWarm = weather?.isWarm ?? (temp >= 22);
@@ -107,3 +121,4 @@ export function generateSmartOutfit(
     matchScore: Math.min(99, 88 + finalItems.length * 3)
   };
 }
+

@@ -211,6 +211,43 @@ function InstancedCountryMarkers({ selectedCountry }: { selectedCountry: Country
   );
 }
 
+function ConnectionArc({ target }: { target: Country | null }) {
+  const line = useMemo(() => {
+    if (!target) return null;
+    const originLat = -22.9056;
+    const originLon = -47.0608;
+    const start = new THREE.Vector3(...latLonToVector3(originLat, originLon, 2.04));
+    const end = new THREE.Vector3(...latLonToVector3(target.lat, target.lon, 2.04));
+
+    const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+    const distance = start.distanceTo(end);
+    mid.normalize().multiplyScalar(2.04 + Math.min(1.2, distance * 0.45));
+
+    const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+    const points = curve.getPoints(50);
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineDashedMaterial({
+      color: "#007AFF",
+      dashSize: 0.12,
+      gapSize: 0.06,
+      linewidth: 2,
+      transparent: true,
+      opacity: 0.9,
+    });
+    return new THREE.Line(geometry, material);
+  }, [target?.id, target?.lat, target?.lon]);
+
+  useFrame(({ clock }) => {
+    if (line && line.material) {
+      (line.material as any).dashOffset = -clock.elapsedTime * 2.5;
+    }
+  });
+
+  if (!target || !line) return null;
+
+  return <primitive object={line} />;
+}
+
 interface EarthSceneProps {
   selectedCountry: Country | null;
   rotationRef: React.MutableRefObject<Rotation>;
@@ -294,6 +331,9 @@ function EarthScene({
 
       {/* Marcadores Batched Instanciados na GPU */}
       <InstancedCountryMarkers selectedCountry={selectedCountry} />
+
+      {/* Arco de Rota de Estilo em 3D */}
+      <ConnectionArc target={selectedCountry} />
     </group>
   );
 }

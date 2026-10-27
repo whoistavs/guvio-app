@@ -26,8 +26,18 @@ export interface OutfitStyle {
   image: string;
 }
 
+export interface ClothingTag {
+  id: string;
+  name: string;
+  brand: string;
+  price?: string;
+  x: number; // percentage 0-100
+  y: number; // percentage 0-100
+}
+
 export interface FeedPost {
   id: string;
+  userId?: string;
   creatorName: string;
   creatorAvatar: string;
   city: string;
@@ -40,6 +50,7 @@ export interface FeedPost {
   timeAgo: string;
   isLiked?: boolean;
   isSaved?: boolean;
+  clothingTags?: ClothingTag[];
 }
 
 export interface WardrobeItem {
@@ -48,6 +59,37 @@ export interface WardrobeItem {
   category: string;
   colorTag: string;
   image: string;
+}
+
+export interface StoryItem {
+  id: string;
+  image: string;
+  timestamp: string;
+  caption?: string;
+}
+
+export interface UserStoryGroup {
+  id: string;
+  username: string;
+  displayName: string;
+  avatar: string;
+  flag?: string;
+  isMe?: boolean;
+  hasUnseen?: boolean;
+  stories: StoryItem[];
+}
+
+export interface ActivityItem {
+  id: string;
+  type: "like" | "comment" | "follow";
+  userId: string;
+  username: string;
+  userAvatar: string;
+  message: string;
+  timeAgo: string;
+  postImage?: string;
+  isFollowing?: boolean;
+  timeCategory: "today" | "week" | "earlier";
 }
 
 // Spherical coordinates helper: converts Lat/Lon (degrees) to 3D Vector (x,y,z) on sphere radius R
@@ -205,15 +247,240 @@ export interface UserProfile {
   avatar: string;
   location: string;
   followers: number;
+  following?: number;
+  postsCount?: number;
+  bio?: string;
+  website?: string;
   verified?: boolean;
+  isFollowing?: boolean;
 }
 
-export const MOCK_PROFILES: UserProfile[] = [];
+export const MOCK_PROFILES: UserProfile[] = [
+  {
+    id: "p-elena",
+    username: "elena.milan",
+    displayName: "Elena Rossi",
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=300",
+    location: "Milão, Itália",
+    followers: 12450,
+    following: 412,
+    postsCount: 48,
+    bio: "Diretora criativa & consultora de moda em Milão. Quiet luxury & alfaiataria atemporal.",
+    website: "elenarossi.style",
+    verified: true
+  },
+  {
+    id: "p-kai",
+    username: "kai.tokyo",
+    displayName: "Kai Tanaka",
+    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=300",
+    location: "Tóquio, Japão",
+    followers: 28900,
+    following: 380,
+    postsCount: 112,
+    bio: "Streetwear minimalista & techwear em Shibuya. Curadoria do novo futurismo oriental.",
+    website: "tokyokai.jp",
+    verified: true
+  },
+  {
+    id: "p-lucas",
+    username: "lucas.paris",
+    displayName: "Lucas Delacroix",
+    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=300",
+    location: "Paris, França",
+    followers: 18320,
+    following: 290,
+    postsCount: 64,
+    bio: "Stylist & fotógrafo de moda em Paris. Trench coats e silhuetas monocromáticas.",
+    website: "lucasparis.co",
+    verified: true
+  },
+  {
+    id: "p-maya",
+    username: "maya.sp",
+    displayName: "Maya Drummond",
+    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=300",
+    location: "São Paulo, Brasil",
+    followers: 9840,
+    following: 512,
+    postsCount: 37,
+    bio: "Moda autoral brasileira & design sustentável. Cores quentes e tecidos naturais.",
+    website: "mayadrummond.com.br",
+    verified: false
+  }
+];
+
+export const INITIAL_STORIES: UserStoryGroup[] = [
+  {
+    id: "me",
+    username: "voce",
+    displayName: "Seu story",
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200",
+    isMe: true,
+    hasUnseen: false,
+    stories: []
+  },
+  {
+    id: "story-paris",
+    username: "lucas.paris",
+    displayName: "Paris",
+    avatar: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?q=80&w=200",
+    flag: "🇫🇷",
+    hasUnseen: true,
+    stories: [
+      {
+        id: "st-fr-1",
+        image: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?q=80&w=800",
+        timestamp: "Há 2h",
+        caption: "Manhã de desfile em Le Marais 🥐✨"
+      },
+      {
+        id: "st-fr-2",
+        image: "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?q=80&w=800",
+        timestamp: "Há 1h",
+        caption: "Linhas limpas e quiet luxury para o outono parisiense."
+      }
+    ]
+  },
+  {
+    id: "story-tokyo",
+    username: "kai.tokyo",
+    displayName: "Tóquio",
+    avatar: "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?q=80&w=200",
+    flag: "🇯🇵",
+    hasUnseen: true,
+    stories: [
+      {
+        id: "st-jp-1",
+        image: "https://images.unsplash.com/photo-1509631179647-0177331693ae?q=80&w=800",
+        timestamp: "Há 3h",
+        caption: "Harajuku drop da semana! 🎌"
+      }
+    ]
+  },
+  {
+    id: "story-milan",
+    username: "elena.milan",
+    displayName: "Milão",
+    avatar: "https://images.unsplash.com/photo-1513584684374-8bab748fbf90?q=80&w=200",
+    flag: "🇮🇹",
+    hasUnseen: true,
+    stories: [
+      {
+        id: "st-it-1",
+        image: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=800",
+        timestamp: "Há 4h",
+        caption: "Corte artesanal milanês na Galleria ☕"
+      }
+    ]
+  },
+  {
+    id: "story-sp",
+    username: "maya.sp",
+    displayName: "São Paulo",
+    avatar: "https://images.unsplash.com/photo-1543059080-f9b1272213d5?q=80&w=200",
+    flag: "🇧🇷",
+    hasUnseen: true,
+    stories: [
+      {
+        id: "st-br-1",
+        image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=800",
+        timestamp: "Há 5h",
+        caption: "Encontro de criadores nos Jardins 🌴"
+      }
+    ]
+  }
+];
+
+export const MOCK_ACTIVITIES: ActivityItem[] = [
+  {
+    id: "act-1",
+    type: "like",
+    userId: "p-elena",
+    username: "elena.milan",
+    userAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200",
+    message: "curtiu seu look casual.",
+    timeAgo: "Há 15 min",
+    postImage: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=200",
+    timeCategory: "today"
+  },
+  {
+    id: "act-2",
+    type: "follow",
+    userId: "p-kai",
+    username: "kai.tokyo",
+    userAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200",
+    message: "começou a seguir você.",
+    timeAgo: "Há 2h",
+    isFollowing: false,
+    timeCategory: "today"
+  },
+  {
+    id: "act-3",
+    type: "comment",
+    userId: "p-lucas",
+    username: "lucas.paris",
+    userAvatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200",
+    message: 'comentou: "O caimento dessa peça ficou impecável!"',
+    timeAgo: "Há 5h",
+    postImage: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=200",
+    timeCategory: "today"
+  },
+  {
+    id: "act-4",
+    type: "like",
+    userId: "p-maya",
+    username: "maya.sp",
+    userAvatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200",
+    message: "curtiu sua combinação monocromática.",
+    timeAgo: "Há 2 dias",
+    postImage: "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?q=80&w=200",
+    timeCategory: "week"
+  },
+  {
+    id: "act-5",
+    type: "follow",
+    userId: "p-maya",
+    username: "maya.sp",
+    userAvatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200",
+    message: "começou a seguir você.",
+    timeAgo: "Há 3 dias",
+    isFollowing: true,
+    timeCategory: "week"
+  }
+];
 
 export interface CommentItem { id: string; postId: string; username: string; avatar: string; text: string; createdAt: string; likes: number; }
 export interface DirectThread { id: string; profileId: string; username: string; avatar: string; lastMessage: string; time: string; unread?: number; }
 
 export const MOCK_COMMENTS: CommentItem[] = [];
 
-export const MOCK_DIRECTS: DirectThread[] = [];
-
+export const MOCK_DIRECTS: DirectThread[] = [
+  {
+    id: "dir-1",
+    profileId: "p-elena",
+    username: "elena.milan",
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200",
+    lastMessage: "Adorei a composição com tons neutros!",
+    time: "10:14",
+    unread: 1
+  },
+  {
+    id: "dir-2",
+    profileId: "p-kai",
+    username: "kai.tokyo",
+    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200",
+    lastMessage: "Onde você comprou essa jaqueta oversized?",
+    time: "Ontem",
+    unread: 0
+  },
+  {
+    id: "dir-3",
+    profileId: "p-lucas",
+    username: "lucas.paris",
+    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200",
+    lastMessage: "Vamos combinar um ensaio na Fashion Week.",
+    time: "Seg",
+    unread: 0
+  }
+];

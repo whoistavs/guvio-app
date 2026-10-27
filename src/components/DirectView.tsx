@@ -1,31 +1,96 @@
 import React, { useState, useEffect } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { MessageCircle, Search, Send } from "lucide-react-native";
+import { Image as ImageIcon, MessageCircle, Search, Send, Heart } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
 import { MOCK_DIRECTS, DirectThread } from "../data/mockData";
 import { ScreenHeader } from "./ScreenHeader";
 import { useAppTheme } from "../context/AppTheme";
 import { loadDirectMessages, saveDirectMessages } from "../services/storage";
+
+interface ChatMessage {
+  id: string;
+  text?: string;
+  image?: string;
+  reaction?: string;
+  sender: "me" | "other";
+}
 
 export function DirectView({ onBack }: { onBack: () => void }) {
   const { colors } = useAppTheme();
   const [threads, setThreads] = useState<DirectThread[]>(MOCK_DIRECTS);
   const [open, setOpen] = useState<DirectThread | null>(null);
   const [query, setQuery] = useState("");
-  const [msg, setMsg] = useState("");
-  const [messages, setMessages] = useState<string[]>([]);
+  const [msgText, setMsgText] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
     if (open) {
-      loadDirectMessages(open.id).then(setMessages);
+      loadDirectMessages(open.id).then(loaded => {
+        if (loaded.length === 0) {
+          const initial: ChatMessage[] = open.lastMessage
+            ? [{ id: "init-1", text: open.lastMessage, sender: "other" }]
+            : [];
+          setMessages(initial);
+        } else {
+          // Converter mensagens string para ChatMessage se necessário
+          const parsed: ChatMessage[] = loaded.map((item: any, idx: number) => {
+            if (typeof item === "string") {
+              return { id: `m-${idx}`, text: item, sender: "me" };
+            }
+            return item;
+          });
+          setMessages(parsed);
+        }
+      });
     }
   }, [open]);
 
-  const handleSend = () => {
-    if (!open || !msg.trim()) return;
-    const updated = [...messages, msg.trim()];
+  const handleSendText = () => {
+    if (!open || !msgText.trim()) return;
+    const newMsg: ChatMessage = {
+      id: `m-${Date.now()}`,
+      text: msgText.trim(),
+      sender: "me",
+    };
+    const updated = [...messages, newMsg];
     setMessages(updated);
-    saveDirectMessages(open.id, updated);
-    setMsg("");
+    saveDirectMessages(open.id, updated as any);
+    setMsgText("");
+  };
+
+  const handlePickImage = async () => {
+    if (!open) return;
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") return;
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+        allowsEditing: true,
+      });
+      if (!res.canceled && res.assets?.[0]?.uri) {
+        const newMsg: ChatMessage = {
+          id: `m-img-${Date.now()}`,
+          image: res.assets[0].uri,
+          sender: "me",
+        };
+        const updated = [...messages, newMsg];
+        setMessages(updated);
+        saveDirectMessages(open.id, updated as any);
+      }
+    } catch (e) {}
+  };
+
+  const handleToggleReaction = (id: string, emoji: string) => {
+    if (!open) return;
+    const updated = messages.map(m => {
+      if (m.id === id) {
+        return { ...m, reaction: m.reaction === emoji ? undefined : emoji };
+      }
+      return m;
+    });
+    setMessages(updated);
+    saveDirectMessages(open.id, updated as any);
   };
 
   const filteredThreads = threads.filter(d => 
@@ -38,27 +103,64 @@ export function DirectView({ onBack }: { onBack: () => void }) {
       <View style={[s.full, { backgroundColor: colors.bg }]}>
         <ScreenHeader title={`@${open.username}`} onBack={() => setOpen(null)} />
         <ScrollView contentContainerStyle={s.chat}>
-          {open.lastMessage ? (
-            <View style={[s.bubbleOther, { backgroundColor: colors.surface }]}>
-              <Text style={{ color: colors.text }}>{open.lastMessage}</Text>
-            </View>
-          ) : null}
-          {messages.map((m, i) => (
-            <View key={i} style={[s.bubbleMe, { backgroundColor: colors.text }]}>
-              <Text style={{ color: colors.bg }}>{m}</Text>
-            </View>
-          ))}
+          {messages.map(m => {
+            const isMe = m.sender === "me";
+            return (
+              <View key={m.id} style={isMe ? s.bubbleMeWrapper : s.bubbleOtherWrapper}>
+                <View
+                  style={[
+                    isMe ? s.bubbleMe : s.bubbleOther,
+                    { backgroundColor: isMe ? colors.text : colors.surface },
+                  ]}
+                >
+                  {m.image ? (
+                    <Image source={{ uri: m.image }} style={s.chatImage} />
+                  ) : null}
+                  {m.text ? (
+                    <Text style={{ color: isMe ? colors.bg : colors.text, fontSize: 14 }}>
+                      {m.text}
+                    </Text>
+                  ) : null}
+
+                  {/* Reações com Emojis */}
+                  <View style={s.reactionBar}>
+                    {["❤️", "🔥", "✨"].map(emoji => (
+                      <Pressable
+                        key={emoji}
+                        onPress={() => handleToggleReaction(m.id, emoji)}
+                        style={[
+                          s.reactionBtn,
+                          m.reaction === emoji && s.reactionBtnActive,
+                        ]}
+                      >
+                        <Text style={{ fontSize: 11 }}>{emoji}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+                {m.reaction ? (
+                  <View style={s.activeBadge}>
+                    <Text style={{ fontSize: 12 }}>{m.reaction}</Text>
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
         </ScrollView>
+
         <View style={[s.composer, { borderTopColor: colors.border, backgroundColor: colors.bg }]}>
+          <Pressable onPress={handlePickImage} style={s.iconBtn}>
+            <ImageIcon color={colors.icon} size={22} />
+          </Pressable>
           <TextInput
-            value={msg}
-            onChangeText={setMsg}
+            value={msgText}
+            onChangeText={setMsgText}
             placeholder="Mensagem..."
             placeholderTextColor={colors.muted}
             style={[s.input, { backgroundColor: colors.surface, color: colors.text }]}
           />
-          <Pressable onPress={handleSend}>
-            <Send color={colors.icon} />
+          <Pressable onPress={handleSendText}>
+            <Send color={colors.icon} size={22} />
           </Pressable>
         </View>
       </View>
@@ -121,11 +223,20 @@ const s = StyleSheet.create({
   user: { fontSize: 14, fontWeight: "800", marginBottom: 4 },
   unread: { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: "#168CFF", alignItems: "center", justifyContent: "center" },
   unreadText: { fontSize: 10, color: "white", fontWeight: "800" },
-  chat: { padding: 16, gap: 10, paddingBottom: 90 },
-  bubbleOther: { alignSelf: "flex-start", maxWidth: "78%", padding: 12, borderRadius: 18 },
-  bubbleMe: { alignSelf: "flex-end", maxWidth: "78%", padding: 12, borderRadius: 18 },
+  chat: { padding: 16, gap: 14, paddingBottom: 90 },
+  bubbleMeWrapper: { alignSelf: "flex-end", maxWidth: "82%", position: "relative" },
+  bubbleOtherWrapper: { alignSelf: "flex-start", maxWidth: "82%", position: "relative" },
+  bubbleOther: { padding: 12, borderRadius: 18, borderBottomLeftRadius: 4 },
+  bubbleMe: { padding: 12, borderRadius: 18, borderBottomRightRadius: 4 },
+  chatImage: { width: 210, height: 210, borderRadius: 12, marginBottom: 6 },
+  reactionBar: { flexDirection: "row", gap: 6, marginTop: 6, opacity: 0.8 },
+  reactionBtn: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, backgroundColor: "rgba(0,0,0,0.06)" },
+  reactionBtnActive: { backgroundColor: "rgba(0,122,255,0.25)" },
+  activeBadge: { position: "absolute", bottom: -8, right: 6, backgroundColor: "#FFF", borderRadius: 10, paddingHorizontal: 4, paddingVertical: 2, borderWidth: 1, borderColor: "#DDD" },
   composer: { position: "absolute", bottom: 76, left: 0, right: 0, borderTopWidth: 1, padding: 10, flexDirection: "row", gap: 10, alignItems: "center" },
-  input: { height: 42, borderRadius: 22, flex: 1, paddingHorizontal: 15 },
+  iconBtn: { padding: 4 },
+  input: { height: 42, borderRadius: 22, flex: 1, paddingHorizontal: 15, fontSize: 13 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 36, gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: "800", marginTop: 6 }
 });
+

@@ -1,15 +1,54 @@
 import React, { useState, useEffect } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
-import { Bookmark, Camera, Clock3, Grid3X3, Heart, ImagePlus, Lock, LogOut, MapPin, MessageCircle, MoreHorizontal, Moon, Settings, UserX, X } from "lucide-react-native";
+import {
+  Bookmark,
+  Camera,
+  Clock3,
+  Globe,
+  Grid3X3,
+  Heart,
+  ImagePlus,
+  Lock,
+  LogOut,
+  MapPin,
+  MessageCircle,
+  MoreHorizontal,
+  Moon,
+  Settings,
+  Tag,
+  UserCheck,
+  UserPlus,
+  UserX,
+  X
+} from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
-import { FeedPost, UserProfile } from "../data/mockData";
+import { FeedPost, UserProfile, MOCK_FEED_POSTS } from "../data/mockData";
 import { ScreenHeader } from "./ScreenHeader";
 import { useAppTheme } from "../context/AppTheme";
-import { loadSavedProfile, saveProfile, INITIAL_USER_PROFILE, loadSavedPosts } from "../services/storage";
+import {
+  loadSavedProfile,
+  saveProfile,
+  INITIAL_USER_PROFILE,
+  loadSavedPosts,
+  loadFollowedUsers,
+  saveFollowedUsers
+} from "../services/storage";
 import { getSavedAuthSession } from "../services/auth";
 import { FastImage, preloadImages } from "./FastImage";
 
-function Grid({ posts, colors, onSelectPost }: { posts: FeedPost[]; colors: any; onSelectPost?: (p: FeedPost) => void }) {
+function Grid({
+  posts,
+  colors,
+  onSelectPost,
+  emptyTitle = "Nenhuma publicação ainda",
+  emptySubtitle = "Seus looks publicados no feed aparecerão aqui no estilo grade do Instagram."
+}: {
+  posts: FeedPost[];
+  colors: any;
+  onSelectPost?: (p: FeedPost) => void;
+  emptyTitle?: string;
+  emptySubtitle?: string;
+}) {
   useEffect(() => {
     if (posts.length > 0) {
       preloadImages(posts.map(p => p.image));
@@ -20,9 +59,9 @@ function Grid({ posts, colors, onSelectPost }: { posts: FeedPost[]; colors: any;
     return (
       <View style={s.emptyGrid}>
         <Grid3X3 size={32} color={colors.muted} />
-        <Text style={{ color: colors.text, fontWeight: "800", marginTop: 8 }}>Nenhuma publicação ainda</Text>
+        <Text style={{ color: colors.text, fontWeight: "800", marginTop: 8 }}>{emptyTitle}</Text>
         <Text style={{ color: colors.muted, fontSize: 12, textAlign: "center", marginTop: 4 }}>
-          Seus looks publicados no feed aparecerão aqui no estilo grade do Instagram.
+          {emptySubtitle}
         </Text>
       </View>
     );
@@ -38,38 +77,158 @@ function Grid({ posts, colors, onSelectPost }: { posts: FeedPost[]; colors: any;
   );
 }
 
-export function PublicProfileView({ profile, onBack, onMessage }: { profile: UserProfile; onBack: () => void; onMessage: () => void }) {
+export function PublicProfileView({
+  profile,
+  onBack,
+  onMessage
+}: {
+  profile: UserProfile;
+  onBack: () => void;
+  onMessage: () => void;
+}) {
   const { colors } = useAppTheme();
-  const [follow, setFollow] = useState(false);
+  const [followedIds, setFollowedIds] = useState<string[]>([]);
+  const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [selectedPost, setSelectedPost] = useState<FeedPost | null>(null);
+
+  const isFollowed = followedIds.includes(profile.id || profile.username);
+
+  useEffect(() => {
+    loadFollowedUsers().then(setFollowedIds);
+    loadSavedPosts().then(allPosts => {
+      const userLooks = allPosts.filter(
+        p => p.creatorName === profile.displayName || p.creatorName === profile.username
+      );
+      setPosts(userLooks);
+    });
+  }, [profile]);
+
+  const toggleFollow = async () => {
+    const targetId = profile.id || profile.username;
+    const updated = isFollowed
+      ? followedIds.filter(id => id !== targetId)
+      : [...followedIds, targetId];
+    setFollowedIds(updated);
+    await saveFollowedUsers(updated);
+  };
+
+  const followersCount = (profile.followers || 0) + (isFollowed ? 1 : 0);
+
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: 110 }}>
-      <ScreenHeader title={`@${profile.username}`} onBack={onBack} />
-      <View style={s.top}>
-        <FastImage source={profile.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200"} style={s.bigAvatar} contentFit="cover" transition={100} />
-        <View style={s.stats}>
-          <Stat v="0" l="posts" colors={colors} />
-          <Stat v={profile.followers.toLocaleString("pt-BR")} l="seguidores" colors={colors} />
-          <Stat v="0" l="seguindo" colors={colors} />
+    <>
+      <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: 110 }}>
+        <ScreenHeader title={`@${profile.username}`} onBack={onBack} />
+        <View style={s.top}>
+          <FastImage
+            source={profile.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200"}
+            style={s.bigAvatar}
+            contentFit="cover"
+            transition={100}
+          />
+          <View style={s.stats}>
+            <Stat v={posts.length.toString()} l="posts" colors={colors} />
+            <Stat v={followersCount.toLocaleString("pt-BR")} l="seguidores" colors={colors} />
+            <Stat v={(profile.following || 12).toString()} l="seguindo" colors={colors} />
+          </View>
         </View>
-      </View>
-      <View style={s.bio}>
-        <Text style={[s.display, { color: colors.text }]}>{profile.displayName}</Text>
-        <Text style={{ color: colors.muted }}>{profile.location}</Text>
-      </View>
-      <View style={s.actions}>
-        <Pressable onPress={() => setFollow(!follow)} style={[s.btn, { backgroundColor: follow ? colors.surface2 : colors.text }]}>
-          <Text style={{ color: follow ? colors.text : colors.bg, fontWeight: "800" }}>{follow ? "Seguindo" : "Seguir"}</Text>
-        </Pressable>
-        <Pressable onPress={onMessage} style={[s.btn, { backgroundColor: colors.surface }]}>
-          <MessageCircle size={17} color={colors.icon} />
-          <Text style={{ color: colors.text, fontWeight: "800" }}>Mensagem</Text>
-        </Pressable>
-      </View>
-      <View style={[s.tab, { borderTopColor: colors.border }]}>
-        <Grid3X3 size={20} color={colors.icon} />
-      </View>
-      <Grid posts={[]} colors={colors} />
-    </ScrollView>
+
+        <View style={s.bio}>
+          <Text style={[s.display, { color: colors.text }]}>{profile.displayName}</Text>
+          <Text style={{ color: colors.muted }}>{profile.location}</Text>
+          {profile.bio ? <Text style={[s.bioText, { color: colors.text }]}>{profile.bio}</Text> : null}
+          {profile.website ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+              <Globe size={12} color="#0095F6" />
+              <Text style={{ color: "#0095F6", fontSize: 12, fontWeight: "600" }}>{profile.website}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={s.actions}>
+          <Pressable
+            onPress={toggleFollow}
+            style={[
+              s.btn,
+              { backgroundColor: isFollowed ? colors.surface : "#0095F6" }
+            ]}
+          >
+            {isFollowed ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <UserCheck size={16} color={colors.text} />
+                <Text style={{ color: colors.text, fontWeight: "800" }}>Seguindo</Text>
+              </View>
+            ) : (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <UserPlus size={16} color="#FFF" />
+                <Text style={{ color: "#FFF", fontWeight: "800" }}>Seguir</Text>
+              </View>
+            )}
+          </Pressable>
+
+          <Pressable onPress={onMessage} style={[s.btn, { backgroundColor: colors.surface }]}>
+            <MessageCircle size={17} color={colors.icon} />
+            <Text style={{ color: colors.text, fontWeight: "800" }}>Mensagem</Text>
+          </Pressable>
+        </View>
+
+        <View style={[s.tab, { borderTopColor: colors.border }]}>
+          <Grid3X3 size={20} color={colors.icon} />
+        </View>
+        <Grid posts={posts} colors={colors} onSelectPost={setSelectedPost} />
+      </ScrollView>
+
+      {/* Post Viewer Modal */}
+      <Modal visible={!!selectedPost} transparent animationType="slide" onRequestClose={() => setSelectedPost(null)}>
+        <View style={s.modalBack}>
+          <View style={[s.postModal, { backgroundColor: colors.bg }]}>
+            <View style={s.postHeader}>
+              <FastImage source={profile.avatar} style={s.postAvatar} contentFit="cover" />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.text, fontWeight: "900", fontSize: 13 }}>@{profile.username}</Text>
+                {selectedPost?.city ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                    <MapPin size={11} color={colors.muted} />
+                    <Text style={{ color: colors.muted, fontSize: 11 }}>
+                      {selectedPost.city}, {selectedPost.country}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <Pressable onPress={() => setSelectedPost(null)} hitSlop={10}>
+                <X size={24} color={colors.icon} />
+              </Pressable>
+            </View>
+
+            {selectedPost && (
+              <FastImage source={selectedPost.image} style={s.postImg} contentFit="cover" transition={120} />
+            )}
+
+            <View style={s.postBody}>
+              <View style={{ flexDirection: "row", gap: 14, alignItems: "center", marginBottom: 8 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Heart size={20} color={colors.icon} />
+                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>
+                    {selectedPost?.likes || 0}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <MessageCircle size={20} color={colors.icon} />
+                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>
+                    {selectedPost?.commentsCount || 0}
+                  </Text>
+                </View>
+              </View>
+              {selectedPost?.caption ? (
+                <Text style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}>
+                  <Text style={{ fontWeight: "900" }}>@{profile.username} </Text>
+                  {selectedPost.caption}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -86,13 +245,18 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
   const { colors } = useAppTheme();
   const [profile, setProfileState] = useState<UserProfile>(INITIAL_USER_PROFILE);
   const [userPosts, setUserPosts] = useState<FeedPost[]>([]);
+  const [savedPosts, setSavedPosts] = useState<FeedPost[]>([]);
   const [selectedPost, setSelectedPost] = useState<FeedPost | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<"posts" | "saved" | "tagged">("posts");
+  const [followingCount, setFollowingCount] = useState(0);
 
   // Edit fields
   const [editName, setEditName] = useState("");
   const [editUsername, setEditUsername] = useState("");
+  const [editBio, setEditBio] = useState("");
+  const [editWebsite, setEditWebsite] = useState("");
   const [editLocation, setEditLocation] = useState("");
   const [editAvatar, setEditAvatar] = useState("");
 
@@ -104,6 +268,8 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
         setProfileState(p);
         setEditName(p.displayName);
         setEditUsername(p.username);
+        setEditBio(p.bio || "");
+        setEditWebsite(p.website || "");
         setEditLocation(p.location);
         setEditAvatar(p.avatar);
       });
@@ -111,6 +277,11 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
 
     loadSavedPosts().then(allPosts => {
       setUserPosts(allPosts);
+      setSavedPosts(allPosts.filter(p => p.isSaved));
+    });
+
+    loadFollowedUsers().then(ids => {
+      setFollowingCount(ids.length);
     });
   }, []);
 
@@ -147,6 +318,8 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
       ...profile,
       displayName: editName.trim() || profile.displayName,
       username: editUsername.trim() || profile.username,
+      bio: editBio.trim(),
+      website: editWebsite.trim(),
       location: editLocation.trim() || profile.location,
       avatar: editAvatar || profile.avatar
     };
@@ -158,29 +331,96 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
   return (
     <>
       <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: 110 }}>
-        <ScreenHeader title={`@${profile.username}`} right={<Pressable onPress={onSettings}><MoreHorizontal size={25} color={colors.icon} /></Pressable>} />
+        <ScreenHeader
+          title={`@${profile.username}`}
+          right={
+            <Pressable onPress={onSettings}>
+              <MoreHorizontal size={25} color={colors.icon} />
+            </Pressable>
+          }
+        />
         <View style={s.top}>
           <FastImage source={profile.avatar} style={s.bigAvatar} contentFit="cover" transition={100} />
           <View style={s.stats}>
             <Stat v={userPosts.length.toString()} l="posts" colors={colors} />
             <Stat v={profile.followers.toString()} l="seguidores" colors={colors} />
-            <Stat v="0" l="seguindo" colors={colors} />
+            <Stat v={followingCount.toString()} l="seguindo" colors={colors} />
           </View>
         </View>
+
         <View style={s.bio}>
           <Text style={[s.display, { color: colors.text }]}>{profile.displayName}</Text>
-          <Text style={{ color: colors.muted }}>{profile.location} · Explorando moda pelo mundo 🌎</Text>
+          <Text style={{ color: colors.muted }}>{profile.location}</Text>
+          {profile.bio ? <Text style={[s.bioText, { color: colors.text }]}>{profile.bio}</Text> : null}
+          {profile.website ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+              <Globe size={12} color="#0095F6" />
+              <Text style={{ color: "#0095F6", fontSize: 12, fontWeight: "600" }}>{profile.website}</Text>
+            </View>
+          ) : null}
         </View>
+
         <Pressable onPress={() => setEditModalVisible(true)} style={[s.edit, { backgroundColor: colors.surface }]}>
           <Text style={{ color: colors.text, fontWeight: "800" }}>Editar perfil</Text>
         </Pressable>
-        <View style={[s.tab, { borderTopColor: colors.border }]}>
-          <Grid3X3 size={20} color={colors.icon} />
+
+        {/* Instagram Profile Tabs: Posts | Saved | Tagged */}
+        <View style={[s.profileTabsBar, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
+          <Pressable
+            onPress={() => setActiveTab("posts")}
+            style={[s.tabItem, activeTab === "posts" && { borderBottomColor: colors.text, borderBottomWidth: 2 }]}
+          >
+            <Grid3X3 size={20} color={activeTab === "posts" ? colors.text : colors.muted} />
+          </Pressable>
+
+          <Pressable
+            onPress={() => setActiveTab("saved")}
+            style={[s.tabItem, activeTab === "saved" && { borderBottomColor: colors.text, borderBottomWidth: 2 }]}
+          >
+            <Bookmark size={20} color={activeTab === "saved" ? colors.text : colors.muted} />
+          </Pressable>
+
+          <Pressable
+            onPress={() => setActiveTab("tagged")}
+            style={[s.tabItem, activeTab === "tagged" && { borderBottomColor: colors.text, borderBottomWidth: 2 }]}
+          >
+            <Tag size={20} color={activeTab === "tagged" ? colors.text : colors.muted} />
+          </Pressable>
         </View>
-        <Grid posts={userPosts} colors={colors} onSelectPost={setSelectedPost} />
+
+        {/* Tab Content */}
+        {activeTab === "posts" && (
+          <Grid
+            posts={userPosts}
+            colors={colors}
+            onSelectPost={setSelectedPost}
+            emptyTitle="Nenhum look postado"
+            emptySubtitle="Seus looks publicados no feed aparecerão aqui no estilo grade do Instagram."
+          />
+        )}
+
+        {activeTab === "saved" && (
+          <Grid
+            posts={savedPosts}
+            colors={colors}
+            onSelectPost={setSelectedPost}
+            emptyTitle="Nenhum look salvo"
+            emptySubtitle="Clique no ícone de salvar em qualquer look do feed para guardá-lo na sua coleção privada."
+          />
+        )}
+
+        {activeTab === "tagged" && (
+          <Grid
+            posts={[]}
+            colors={colors}
+            onSelectPost={setSelectedPost}
+            emptyTitle="Nenhuma marcação"
+            emptySubtitle="Fotos e looks onde outros criadores marcarem seu perfil aparecerão aqui."
+          />
+        )}
       </ScrollView>
 
-      {/* Instagram-style Post Viewer Modal */}
+      {/* Post Viewer Modal */}
       <Modal visible={!!selectedPost} transparent animationType="slide" onRequestClose={() => setSelectedPost(null)}>
         <View style={s.modalBack}>
           <View style={[s.postModal, { backgroundColor: colors.bg }]}>
@@ -191,7 +431,9 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
                 {selectedPost?.city ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
                     <MapPin size={11} color={colors.muted} />
-                    <Text style={{ color: colors.muted, fontSize: 11 }}>{selectedPost.city}, {selectedPost.country}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 11 }}>
+                      {selectedPost.city}, {selectedPost.country}
+                    </Text>
                   </View>
                 ) : null}
               </View>
@@ -200,17 +442,23 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
               </Pressable>
             </View>
 
-            {selectedPost ? <FastImage source={selectedPost.image} style={s.postImg} contentFit="cover" transition={120} /> : null}
+            {selectedPost ? (
+              <FastImage source={selectedPost.image} style={s.postImg} contentFit="cover" transition={120} />
+            ) : null}
 
             <View style={s.postBody}>
               <View style={{ flexDirection: "row", gap: 14, alignItems: "center", marginBottom: 8 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Heart size={20} color={colors.icon} />
-                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>{selectedPost?.likes || 0}</Text>
+                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>
+                    {selectedPost?.likes || 0}
+                  </Text>
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <MessageCircle size={20} color={colors.icon} />
-                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>{selectedPost?.commentsCount || 0}</Text>
+                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>
+                    {selectedPost?.commentsCount || 0}
+                  </Text>
                 </View>
               </View>
               {selectedPost?.caption ? (
@@ -238,11 +486,17 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
             <FastImage source={editAvatar} style={s.avatarEditImg} contentFit="cover" transition={100} />
 
             <View style={s.pickers}>
-              <Pressable onPress={() => pickAvatar(true)} style={[s.pickerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Pressable
+                onPress={() => pickAvatar(true)}
+                style={[s.pickerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              >
                 <Camera size={16} color={colors.icon} />
                 <Text style={{ color: colors.text, fontWeight: "700", fontSize: 11 }}>Tirar foto</Text>
               </Pressable>
-              <Pressable onPress={() => pickAvatar(false)} style={[s.pickerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Pressable
+                onPress={() => pickAvatar(false)}
+                style={[s.pickerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              >
                 <ImagePlus size={16} color={colors.icon} />
                 <Text style={{ color: colors.text, fontWeight: "700", fontSize: 11 }}>Galeria</Text>
               </Pressable>
@@ -259,6 +513,21 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
               value={editUsername}
               onChangeText={setEditUsername}
               placeholder="Nome de usuário (@)"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="none"
+              style={[s.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
+            />
+            <TextInput
+              value={editBio}
+              onChangeText={setEditBio}
+              placeholder="Bio (ex: Estilo minimalista & alfaiataria)"
+              placeholderTextColor={colors.muted}
+              style={[s.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
+            />
+            <TextInput
+              value={editWebsite}
+              onChangeText={setEditWebsite}
+              placeholder="Link / Website"
               placeholderTextColor={colors.muted}
               autoCapitalize="none"
               style={[s.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
@@ -281,7 +550,15 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
   );
 }
 
-export function SettingsView({ onBack, onOpen, onSignOut }: { onBack: () => void; onOpen: (x: string) => void; onSignOut?: () => void }) {
+export function SettingsView({
+  onBack,
+  onOpen,
+  onSignOut
+}: {
+  onBack: () => void;
+  onOpen: (x: string) => void;
+  onSignOut?: () => void;
+}) {
   const { colors, dark, toggle } = useAppTheme();
   const rows = [
     { id: "saved", l: "Salvos", i: Bookmark },
@@ -363,11 +640,35 @@ const s = StyleSheet.create({
   top: { flexDirection: "row", alignItems: "center", paddingHorizontal: 22, paddingTop: 12 },
   bigAvatar: { width: 88, height: 88, borderRadius: 44 },
   stats: { flex: 1, flexDirection: "row", justifyContent: "space-around" },
-  bio: { paddingHorizontal: 22, paddingTop: 14, gap: 3 },
+  bio: { paddingHorizontal: 22, paddingTop: 14, gap: 4 },
+  bioText: { fontSize: 13, lineHeight: 18, marginTop: 2 },
   display: { fontSize: 14, fontWeight: "900" },
   actions: { flexDirection: "row", gap: 8, paddingHorizontal: 22, marginTop: 14 },
-  btn: { flex: 1, minHeight: 38, borderRadius: 10, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 },
-  edit: { marginHorizontal: 22, marginTop: 14, minHeight: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  btn: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6
+  },
+  edit: {
+    marginHorizontal: 22,
+    marginTop: 14,
+    minHeight: 38,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  profileTabsBar: {
+    flexDirection: "row",
+    height: 48,
+    marginTop: 18,
+    borderTopWidth: 1,
+    borderBottomWidth: 1
+  },
+  tabItem: { flex: 1, alignItems: "center", justifyContent: "center" },
   tab: { height: 52, marginTop: 18, borderTopWidth: 1, alignItems: "center", justifyContent: "center" },
   grid: { flexDirection: "row", flexWrap: "wrap" },
   tileWrap: { width: "33.333%", aspectRatio: 1, borderWidth: 0.5, borderColor: "rgba(255,255,255,.2)" },
@@ -387,7 +688,24 @@ const s = StyleSheet.create({
   modalH: { fontSize: 20, fontWeight: "900" },
   avatarEditImg: { width: 90, height: 90, borderRadius: 45, marginVertical: 6 },
   pickers: { flexDirection: "row", gap: 10, marginBottom: 8, width: "100%" },
-  pickerBtn: { flex: 1, height: 40, borderWidth: 1, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  input: { width: "100%", height: 44, borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, fontSize: 13, marginBottom: 4 },
+  pickerBtn: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6
+  },
+  input: {
+    width: "100%",
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    marginBottom: 4
+  },
   saveBtn: { width: "100%", height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", marginTop: 8 }
 });

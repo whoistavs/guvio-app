@@ -5,7 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { OutfitStyle, STYLES, WardrobeItem } from "../data/mockData";
 import { StyleCard } from "./OutfitCard";
 import { useAppTheme } from "../context/AppTheme";
-import { generateSmartOutfit, AIOutfitRecommendation } from "../services/aiStyling";
+import { generateSmartOutfit, getWeatherRecommendationTip, AIOutfitRecommendation } from "../services/aiStyling";
 import { loadSavedWardrobe, saveWardrobe } from "../services/storage";
 import { WeatherData } from "../services/weather";
 import { getSavedAuthSession } from "../services/auth";
@@ -19,6 +19,8 @@ export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; cu
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
   const [selectedStyle, setSelectedStyle] = useState<OutfitStyle | null>(null);
   const [aiResult, setAiResult] = useState<AIOutfitRecommendation | null>(null);
+
+  const weatherTip = getWeatherRecommendationTip(currentWeather);
 
   // Add Item Modal state
   const [addModalVisible, setAddModalVisible] = useState(false);
@@ -112,6 +114,12 @@ export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; cu
   return (
     <>
       <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={s.c}>
+        {/* Banner Dica de Estilo da IA por Clima */}
+        <View style={[s.weatherTipBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Sparkles size={16} color="#007AFF" />
+          <Text style={[s.weatherTipText, { color: colors.text }]}>{weatherTip}</Text>
+        </View>
+
         <Text style={[s.badge, { color: colors.muted }]}>SELEÇÃO DE ESTILO</Text>
         <Text style={[s.h, { color: colors.text }]}>Qual estilo você quer hoje?</Text>
         <Text style={{ color: colors.muted, marginBottom: 18 }}>
@@ -274,6 +282,22 @@ export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; cu
 
 const s = StyleSheet.create({
   c: { padding: 22, paddingBottom: 120 },
+  weatherTipBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  weatherTipText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 16,
+  },
   badge: { fontSize: 10, fontWeight: "800", letterSpacing: 1.4, marginBottom: 5 },
   h: { fontSize: 25, fontWeight: "900", letterSpacing: -0.5, marginBottom: 6 },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
