@@ -1,5 +1,7 @@
 # GUVIO
 
+[![CI](https://github.com/whoistavs/guvio-app/actions/workflows/ci.yml/badge.svg)](https://github.com/whoistavs/guvio-app/actions/workflows/ci.yml)
+
 **Social fashion app with an interactive 3D globe.** Explore looks from cities around the world, build outfits from your wardrobe and share them with the community.
 
 Built with **React Native + Expo + TypeScript**, running on Android, iOS and the web.
@@ -72,6 +74,15 @@ Scan the QR code with Expo Go (Android) or the Camera app (iOS).
 | `npm run build:web` | Export the static web version to `dist/` |
 | `npm run build:apk` | Build an Android APK with EAS |
 | `npm run check` | Type-check with TypeScript |
+| `npm test` | Run the unit tests (Jest) |
+
+## 🧪 Tests
+
+Unit tests with **Jest** (`jest-expo` preset) cover the city/country search (API merging, de-duplication and failure handling), the weather-based outfit suggestions and password hashing. GitHub Actions runs the type-check and the tests on every push.
+
+```bash
+npm test
+```
 
 ## ⚙️ Environment variables
 
