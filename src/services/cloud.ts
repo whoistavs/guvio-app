@@ -617,3 +617,49 @@ export async function deleteMyAccount() {
   }
   check(await db().rpc("delete_my_account"));
 }
+
+// ---------------------------------------------------------------------
+// Alertas em tempo real para mim (curtidas, comentários, seguidores, direct)
+// ---------------------------------------------------------------------
+async function usernameOf(id: string): Promise<string> {
+  const { data } = await db().from("profiles").select("username").eq("id", id).maybeSingle();
+  return (data as any)?.username || "alguém";
+}
+
+export function subscribeMyAlerts(onAlert: (title: string, body: string, kind: "activity" | "message") => void): () => void {
+  const client = db();
+  let ch: ReturnType<typeof client.channel> | null = null;
+  let stopped = false;
+
+  cloudUserId().then(uid => {
+    if (!uid || stopped) return;
+    ch = client
+      .channel(`alerts-${uid}-${Date.now()}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${uid}` },
+        async payload => {
+          const n: any = payload.new;
+          const who = await usernameOf(n.actor_id);
+          if (n.type === "like") onAlert("Nova curtida ❤️", `@${who} curtiu seu look.`, "activity");
+          else if (n.type === "comment") onAlert("Novo comentário 💬", `@${who}: ${n.text || ""}`, "activity");
+          else if (n.type === "follow") onAlert("Novo seguidor ✨", `@${who} começou a seguir você.`, "activity");
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages", filter: `recipient_id=eq.${uid}` },
+        async payload => {
+          const m: any = payload.new;
+          const who = await usernameOf(m.sender_id);
+          onAlert(`@${who}`, m.text || "📷 Enviou uma foto", "message");
+        }
+      )
+      .subscribe();
+  });
+
+  return () => {
+    stopped = true;
+    if (ch) client.removeChannel(ch);
+  };
+}

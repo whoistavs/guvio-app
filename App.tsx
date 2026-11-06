@@ -28,7 +28,7 @@ import { requestNotificationPermissions, sendLocalNotification } from "./src/ser
 import { getSavedAuthSession, signOut, handleAuthRedirect, deleteAccount } from "./src/services/auth";
 import { FastStorage } from "./src/services/FastStorage";
 import { supabase, isCloud } from "./src/services/supabase";
-import { subscribeFeed, fetchPostCounts } from "./src/services/cloud";
+import { subscribeFeed, fetchPostCounts, subscribeMyAlerts } from "./src/services/cloud";
 
 type Route = "tabs" | "direct" | "activity" | "publicProfile" | "settings" | "settingsPage";
 
@@ -84,6 +84,7 @@ function Guvio() {
   useEffect(() => {
     if (!authenticated) return;
     let stop: (() => void) | undefined;
+    let stopAlerts: (() => void) | undefined;
     loadSavedPosts().then(setPosts);
     hasUnreadActivity().then(setUnread);
 
@@ -97,6 +98,10 @@ function Guvio() {
           );
         });
       };
+      stopAlerts = subscribeMyAlerts((title, body, kind) => {
+        sendLocalNotification(title, body);
+        if (kind === "activity") setUnread(true);
+      });
       stop = subscribeFeed({
         onNewPost: newPost =>
           setPosts(prev => (prev.some(p => p.id === newPost.id) ? prev : [newPost, ...prev])),
@@ -108,7 +113,10 @@ function Guvio() {
         }
       });
     });
-    return () => stop?.();
+    return () => {
+      stop?.();
+      stopAlerts?.();
+    };
   }, [authenticated]);
 
   const handleUpdatePosts = (action: React.SetStateAction<FeedPost[]>) => {
