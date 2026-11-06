@@ -1,0 +1,57 @@
+name: Gerar IPA iOS (sem assinatura)
+
+# Roda manualmente: Actions > "Gerar IPA iOS (sem assinatura)" > Run workflow
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-15
+    env:
+      CI: 1
+      # Opcional: cadastre em Settings > Secrets and variables > Actions
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Gerar projeto iOS nativo
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Compilar sem assinatura
+        run: |
+          cd ios
+          WS=$(ls -d *.xcworkspace | head -1)
+          SCHEME="${WS%.xcworkspace}"
+          echo "Workspace: $WS | Scheme: $SCHEME"
+          xcodebuild \
+            -workspace "$WS" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" | tail -n 200
+          exit ${PIPESTATUS[0]}
+
+      - name: Empacotar em .ipa
+        run: |
+          mkdir -p Payload
+          cp -R ios/build/Build/Products/Release-iphoneos/*.app Payload/
+          zip -qr GUVIO.ipa Payload
+          ls -lh GUVIO.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GUVIO-ipa
+          path: GUVIO.ipa
