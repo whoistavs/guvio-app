@@ -9,9 +9,10 @@ jobs:
     runs-on: macos-15
     env:
       CI: 1
-      # Opcional: cadastre em Settings > Secrets and variables > Actions
-      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      # Projeto Supabase do GUVIO. A chave "publishable" é pública por natureza (vai dentro do app);
+      # a segurança vem das regras RLS do supabase/schema.sql. Secrets com o mesmo nome têm prioridade.
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://kammkctketpkkdnukfme.supabase.co' }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_0B7Co6SegZB_VxJ61uHQCA_UgOuNOO5' }}
     steps:
       - uses: actions/checkout@v4
 
