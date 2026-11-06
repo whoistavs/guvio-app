@@ -7,7 +7,7 @@
 Built with **React Native + Expo + TypeScript**, running on Android, iOS and the web.
 
 🌐 **Live web demo:** https://wondrous-cocada-999321.netlify.app
-*(create any account to get in; in demo mode, accounts are stored only in your browser)*
+*(create an account with any e-mail to get in — it's the real backend, shared with the mobile app)*
 
 <p align="center">
   <img src="docs/guvio-demo.gif" alt="GUVIO 3D globe demo" width="300" />
