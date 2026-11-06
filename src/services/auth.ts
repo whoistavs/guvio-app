@@ -63,6 +63,20 @@ async function cloudSignIn(identifier: string, password: string): Promise<AuthSe
   return fromCloudSession(data.session);
 }
 
+/** Quais logins sociais estão ligados no painel do Supabase (demo: todos) */
+export async function getEnabledProviders(): Promise<{ google: boolean; apple: boolean }> {
+  const url = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
+  const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return { google: true, apple: true };
+  try {
+    const r = await fetch(`${url}/auth/v1/settings`, { headers: { apikey: key } });
+    const data = await r.json();
+    return { google: Boolean(data?.external?.google), apple: Boolean(data?.external?.apple) };
+  } catch (e) {
+    return { google: false, apple: false };
+  }
+}
+
 /** Trata o retorno do login com Google/Apple ou do link de confirmação de e-mail */
 export async function handleAuthRedirect(url: string | null): Promise<boolean> {
   if (!url || !supabase || !url.includes("auth/callback")) return false;

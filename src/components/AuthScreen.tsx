@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -11,7 +11,7 @@ import {
   View
 } from "react-native";
 import { Apple, AtSign, Check, User, X } from "lucide-react-native";
-import { authConfigured, signInEmail, signUpEmail, startOAuth, ConfirmEmailError } from "../services/auth";
+import { authConfigured, signInEmail, signUpEmail, startOAuth, ConfirmEmailError, getEnabledProviders } from "../services/auth";
 import { useAppTheme } from "../context/AppTheme";
 import { isUsernameTaken } from "../services/storage";
 
@@ -23,6 +23,11 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void })
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [providers, setProviders] = useState({ google: !authConfigured, apple: !authConfigured });
+
+  useEffect(() => {
+    getEnabledProviders().then(setProviders);
+  }, []);
 
   const cleanUsername = (text: string) => {
     return text.toLowerCase().replace(/[^a-z0-9._]/g, "");
@@ -175,27 +180,33 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void })
           )}
         </Pressable>
 
-        <View style={s.or}>
-          <View style={[s.line, { backgroundColor: colors.border }]} />
-          <Text style={{ color: colors.muted, fontSize: 11 }}>ou</Text>
-          <View style={[s.line, { backgroundColor: colors.border }]} />
-        </View>
+        {providers.google || providers.apple ? (
+          <View style={s.or}>
+            <View style={[s.line, { backgroundColor: colors.border }]} />
+            <Text style={{ color: colors.muted, fontSize: 11 }}>ou</Text>
+            <View style={[s.line, { backgroundColor: colors.border }]} />
+          </View>
+        ) : null}
 
-        <Pressable
-          onPress={() => oauth("google")}
-          style={[s.social, { borderColor: colors.border }]}
-        >
-          <Text style={{ color: colors.text, fontWeight: "800", fontSize: 16 }}>G</Text>
-          <Text style={{ color: colors.text, fontWeight: "800", fontSize: 13 }}>Continuar com Google</Text>
-        </Pressable>
+        {providers.google ? (
+          <Pressable
+            onPress={() => oauth("google")}
+            style={[s.social, { borderColor: colors.border }]}
+          >
+            <Text style={{ color: colors.text, fontWeight: "800", fontSize: 16 }}>G</Text>
+            <Text style={{ color: colors.text, fontWeight: "800", fontSize: 13 }}>Continuar com Google</Text>
+          </Pressable>
+        ) : null}
 
-        <Pressable
-          onPress={() => oauth("apple")}
-          style={[s.social, { borderColor: colors.border }]}
-        >
-          <Apple size={19} color={colors.icon} />
-          <Text style={{ color: colors.text, fontWeight: "800", fontSize: 13 }}>Continuar com Apple</Text>
-        </Pressable>
+        {providers.apple ? (
+          <Pressable
+            onPress={() => oauth("apple")}
+            style={[s.social, { borderColor: colors.border }]}
+          >
+            <Apple size={19} color={colors.icon} />
+            <Text style={{ color: colors.text, fontWeight: "800", fontSize: 13 }}>Continuar com Apple</Text>
+          </Pressable>
+        ) : null}
 
         <Pressable onPress={() => setSignup(!signup)} hitSlop={10}>
           <Text style={[s.switch, { color: colors.muted }]}>
