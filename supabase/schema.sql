@@ -326,3 +326,19 @@ begin
     end if;
   end loop;
 end $$;
+
+-- ---------------------------------------------------------------------
+-- PERFIS PARA CONTAS QUE JÁ EXISTIAM antes deste schema
+-- (cria um perfil para cada usuário do Auth que ainda não tem; o @ pode ser trocado no app)
+-- ---------------------------------------------------------------------
+insert into public.profiles (id, username, display_name, bio)
+select
+  u.id,
+  left(lower(regexp_replace(coalesce(u.raw_user_meta_data->>'username', split_part(u.email, '@', 1)),
+                            '[^a-zA-Z0-9._]', '', 'g')), 20)
+    || '_' || left(replace(u.id::text, '-', ''), 4),
+  coalesce(nullif(u.raw_user_meta_data->>'display_name', ''), split_part(u.email, '@', 1), 'Membro Guvio'),
+  'Novo criador de estilo na comunidade Guvio ✨'
+from auth.users u
+where not exists (select 1 from public.profiles p where p.id = u.id)
+on conflict do nothing;
