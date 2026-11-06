@@ -1,10 +1,14 @@
-import { Linking, Platform } from "react-native";
+import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { FastStorage } from "./FastStorage";
 import { registerNewProfile, isUsernameTaken, loadSavedProfile } from "./storage";
 import { supabase, supabaseConfigured } from "./supabase";
 import type { Session } from "@supabase/supabase-js";
+import * as WebBrowser from "expo-web-browser";
+import { deleteMyAccount as cloudDeleteMyAccount } from "./cloud";
+
+WebBrowser.maybeCompleteAuthSession();
 
 export const authConfigured = supabaseConfigured;
 export const AUTH_REDIRECT = "guvio://auth/callback";
@@ -316,7 +320,27 @@ export async function startOAuth(provider: "google" | "apple") {
     options: { redirectTo: AUTH_REDIRECT, skipBrowserRedirect: Platform.OS !== "web" }
   });
   if (error) throw new Error(translateAuthError(error.message));
-  if (data?.url && Platform.OS !== "web") await Linking.openURL(data.url);
+  if (data?.url && Platform.OS !== "web") {
+    // abre o login dentro do app e volta sozinho para guvio://auth/callback
+    const result = await WebBrowser.openAuthSessionAsync(data.url, AUTH_REDIRECT);
+    if (result.type === "success") {
+      const ok = await handleAuthRedirect(result.url);
+      if (!ok) throw new Error("Não foi possível concluir o login.");
+    }
+  }
+}
+
+/** Apaga a conta logada e tudo dela, depois sai */
+export async function deleteAccount(): Promise<void> {
+  if (supabase) {
+    await cloudDeleteMyAccount();
+    await signOut();
+    return;
+  }
+  const session = await getSavedAuthSession();
+  const accounts = await getStoredAccounts();
+  await saveStoredAccounts(accounts.filter(a => a.id !== session?.user.id));
+  await signOut();
 }
 
 export async function saveAuthSession(session: AuthSession): Promise<void> {

@@ -16,6 +16,7 @@ import {
   Moon,
   Settings,
   Tag,
+  Trash2,
   UserCheck,
   UserPlus,
   UserX,
@@ -599,11 +600,13 @@ export function MyProfileView({ onSettings, postsVersion = 0 }: { onSettings: ()
 export function SettingsView({
   onBack,
   onOpen,
-  onSignOut
+  onSignOut,
+  onDeleteAccount
 }: {
   onBack: () => void;
   onOpen: (x: string) => void;
   onSignOut?: () => void;
+  onDeleteAccount?: () => Promise<void>;
 }) {
   const { colors, dark, toggle } = useAppTheme();
   const rows = [
@@ -617,6 +620,41 @@ export function SettingsView({
       { text: "Cancelar", style: "cancel" },
       { text: "Sair", style: "destructive", onPress: onSignOut }
     ]);
+  };
+
+  const [deleting, setDeleting] = useState(false);
+
+  const handleConfirmDelete = () => {
+    Alert.alert(
+      "Apagar sua conta?",
+      "Seu perfil, posts, comentários, mensagens, stories e guarda-roupa serão apagados para sempre. Isso não pode ser desfeito.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Continuar",
+          style: "destructive",
+          onPress: () =>
+            Alert.alert("Tem certeza absoluta?", "Última confirmação: sua conta será apagada agora.", [
+              { text: "Cancelar", style: "cancel" },
+              {
+                text: "Apagar minha conta",
+                style: "destructive",
+                onPress: async () => {
+                  if (!onDeleteAccount) return;
+                  setDeleting(true);
+                  try {
+                    await onDeleteAccount();
+                  } catch (e: any) {
+                    Alert.alert("Não foi possível apagar", e?.message || "Tente novamente.");
+                  } finally {
+                    setDeleting(false);
+                  }
+                }
+              }
+            ])
+        }
+      ]
+    );
   };
 
   return (
@@ -640,6 +678,18 @@ export function SettingsView({
         <Pressable onPress={handleConfirmSignOut} style={[s.setting, { borderBottomColor: colors.border, marginTop: 12 }]}>
           <LogOut size={21} color="#FF3B30" />
           <Text style={[s.settingText, { color: "#FF3B30", fontWeight: "800" }]}>Sair da conta</Text>
+        </Pressable>
+      ) : null}
+      {onDeleteAccount ? (
+        <Pressable
+          onPress={handleConfirmDelete}
+          disabled={deleting}
+          style={[s.setting, { borderBottomColor: colors.border, opacity: deleting ? 0.5 : 1 }]}
+        >
+          <Trash2 size={21} color="#FF3B30" />
+          <Text style={[s.settingText, { color: "#FF3B30" }]}>
+            {deleting ? "Apagando conta..." : "Apagar minha conta"}
+          </Text>
         </Pressable>
       ) : null}
     </View>

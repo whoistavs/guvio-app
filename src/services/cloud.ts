@@ -603,3 +603,17 @@ export async function fetchPostCounts(postId: string): Promise<{ likes: number; 
   ) as any;
   return row ? { likes: row.likes_count, comments: row.comments_count } : null;
 }
+
+// ---------------------------------------------------------------------
+// Apagar conta
+// ---------------------------------------------------------------------
+export async function deleteMyAccount() {
+  const uid = await me();
+  const bucket = db().storage.from("media");
+  for (const folder of ["posts", "avatar", "stories", "direct", "wardrobe"]) {
+    const { data } = await bucket.list(`${uid}/${folder}`, { limit: 1000 });
+    const paths = (data || []).map(f => `${uid}/${folder}/${f.name}`);
+    if (paths.length) await bucket.remove(paths);
+  }
+  check(await db().rpc("delete_my_account"));
+}

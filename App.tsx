@@ -25,7 +25,7 @@ import {
 } from "./src/services/storage";
 import { fetchCityWeather, WeatherData } from "./src/services/weather";
 import { requestNotificationPermissions, sendLocalNotification } from "./src/services/notifications";
-import { getSavedAuthSession, signOut, handleAuthRedirect } from "./src/services/auth";
+import { getSavedAuthSession, signOut, handleAuthRedirect, deleteAccount } from "./src/services/auth";
 import { FastStorage } from "./src/services/FastStorage";
 import { supabase, isCloud } from "./src/services/supabase";
 import { subscribeFeed, fetchPostCounts } from "./src/services/cloud";
@@ -245,6 +245,14 @@ function Guvio() {
             setRoute("settingsPage");
           }}
           onSignOut={handleSignOut}
+          onDeleteAccount={async () => {
+            await deleteAccount();
+            setAuthenticated(false);
+            setPosts([]);
+            setRoute("tabs");
+            setTab("home");
+            Alert.alert("Conta apagada", "Sua conta e seus dados foram removidos do Guvio.");
+          }}
         />
       </SafeAreaView>
     );

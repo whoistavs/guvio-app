@@ -342,3 +342,18 @@ select
 from auth.users u
 where not exists (select 1 from public.profiles p where p.id = u.id)
 on conflict do nothing;
+
+-- ---------------------------------------------------------------------
+-- APAGAR MINHA CONTA (exigido pela App Store)
+-- Apaga o usuário logado e, em cascata, tudo dele (perfil, posts, mensagens...).
+-- As fotos são apagadas pelo app via Storage API antes de chamar esta função.
+-- ---------------------------------------------------------------------
+create or replace function public.delete_my_account()
+returns void language plpgsql security definer set search_path = public, auth as $$
+declare uid uuid := auth.uid();
+begin
+  if uid is null then raise exception 'not authenticated'; end if;
+  delete from auth.users where id = uid;
+end $$;
+revoke all on function public.delete_my_account() from public, anon;
+grant execute on function public.delete_my_account() to authenticated;
