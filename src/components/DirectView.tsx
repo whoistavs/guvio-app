@@ -1,61 +1,68 @@
-import React, { useState, useEffect } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Image as ImageIcon, MessageCircle, Search, Send, Heart } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
-import { MOCK_DIRECTS, DirectThread } from "../data/mockData";
+import { DirectThread } from "../data/mockData";
 import { ScreenHeader } from "./ScreenHeader";
 import { useAppTheme } from "../context/AppTheme";
-import { loadDirectMessages, saveDirectMessages } from "../services/storage";
+import {
+  ChatMessage,
+  loadThreads,
+  loadChat,
+  sendChatMessage,
+  setChatReaction
+} from "../services/storage";
+import { isCloud } from "../services/supabase";
+import { subscribeMessages } from "../services/cloud";
 
-interface ChatMessage {
-  id: string;
-  text?: string;
-  image?: string;
-  reaction?: string;
-  sender: "me" | "other";
-}
-
-export function DirectView({ onBack }: { onBack: () => void }) {
+export function DirectView({ onBack, initialThread }: { onBack: () => void; initialThread?: DirectThread | null }) {
   const { colors } = useAppTheme();
-  const [threads, setThreads] = useState<DirectThread[]>(MOCK_DIRECTS);
-  const [open, setOpen] = useState<DirectThread | null>(null);
+  const [threads, setThreads] = useState<DirectThread[]>([]);
+  const [open, setOpen] = useState<DirectThread | null>(initialThread || null);
   const [query, setQuery] = useState("");
   const [msgText, setMsgText] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [sending, setSending] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
-    if (open) {
-      loadDirectMessages(open.id).then(loaded => {
-        if (loaded.length === 0) {
-          const initial: ChatMessage[] = open.lastMessage
-            ? [{ id: "init-1", text: open.lastMessage, sender: "other" }]
-            : [];
-          setMessages(initial);
-        } else {
-          // Converter mensagens string para ChatMessage se necessário
-          const parsed: ChatMessage[] = loaded.map((item: any, idx: number) => {
-            if (typeof item === "string") {
-              return { id: `m-${idx}`, text: item, sender: "me" };
-            }
-            return item;
-          });
-          setMessages(parsed);
-        }
-      });
-    }
+    if (!open) loadThreads().then(setThreads);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    let stop: (() => void) | undefined;
+    loadChat(open).then(setMessages).catch(() => setMessages([]));
+    isCloud().then(cloud => {
+      if (!cloud) return;
+      stop = subscribeMessages(open.profileId, m =>
+        setMessages(prev => (prev.some(x => x.id === m.id) ? prev.map(x => (x.id === m.id ? m : x)) : [...prev, m]))
+      );
+    });
+    return () => stop?.();
+  }, [open]);
+
+  useEffect(() => {
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+  }, [messages.length]);
+
+  const send = async (msg: { text?: string; image?: string }) => {
+    if (!open) return;
+    setSending(true);
+    try {
+      setMessages(await sendChatMessage(open, messages, msg));
+    } catch (e: any) {
+      Alert.alert("Mensagem não enviada", e?.message || "Tente novamente.");
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleSendText = () => {
-    if (!open || !msgText.trim()) return;
-    const newMsg: ChatMessage = {
-      id: `m-${Date.now()}`,
-      text: msgText.trim(),
-      sender: "me",
-    };
-    const updated = [...messages, newMsg];
-    setMessages(updated);
-    saveDirectMessages(open.id, updated as any);
+    if (!open || !msgText.trim() || sending) return;
+    const text = msgText.trim();
     setMsgText("");
+    send({ text });
   };
 
   const handlePickImage = async () => {
@@ -69,28 +76,16 @@ export function DirectView({ onBack }: { onBack: () => void }) {
         allowsEditing: true,
       });
       if (!res.canceled && res.assets?.[0]?.uri) {
-        const newMsg: ChatMessage = {
-          id: `m-img-${Date.now()}`,
-          image: res.assets[0].uri,
-          sender: "me",
-        };
-        const updated = [...messages, newMsg];
-        setMessages(updated);
-        saveDirectMessages(open.id, updated as any);
+        send({ image: res.assets[0].uri });
       }
     } catch (e) {}
   };
 
-  const handleToggleReaction = (id: string, emoji: string) => {
+  const handleToggleReaction = async (id: string, emoji: string) => {
     if (!open) return;
-    const updated = messages.map(m => {
-      if (m.id === id) {
-        return { ...m, reaction: m.reaction === emoji ? undefined : emoji };
-      }
-      return m;
-    });
-    setMessages(updated);
-    saveDirectMessages(open.id, updated as any);
+    try {
+      setMessages(await setChatReaction(open, messages, id, emoji));
+    } catch (e) {}
   };
 
   const filteredThreads = threads.filter(d => 
@@ -101,8 +96,14 @@ export function DirectView({ onBack }: { onBack: () => void }) {
   if (open) {
     return (
       <View style={[s.full, { backgroundColor: colors.bg }]}>
-        <ScreenHeader title={`@${open.username}`} onBack={() => setOpen(null)} />
-        <ScrollView contentContainerStyle={s.chat}>
+        <ScreenHeader
+          title={`@${open.username}`}
+          onBack={() => {
+            if (initialThread && open.id === initialThread.id) onBack();
+            else setOpen(null);
+          }}
+        />
+        <ScrollView ref={scrollRef} contentContainerStyle={s.chat}>
           {messages.map(m => {
             const isMe = m.sender === "me";
             return (

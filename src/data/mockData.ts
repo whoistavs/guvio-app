@@ -39,6 +39,8 @@ export interface FeedPost {
   id: string;
   userId?: string;
   creatorName: string;
+  creatorUsername?: string;
+  createdAt?: string;
   creatorAvatar: string;
   city: string;
   country: string;

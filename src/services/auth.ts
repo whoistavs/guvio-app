@@ -3,10 +3,85 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { FastStorage } from "./FastStorage";
 import { registerNewProfile, isUsernameTaken, loadSavedProfile } from "./storage";
+import { supabase, supabaseConfigured } from "./supabase";
+import type { Session } from "@supabase/supabase-js";
 
-const URL = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
-const KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-export const authConfigured = Boolean(URL && KEY);
+export const authConfigured = supabaseConfigured;
+export const AUTH_REDIRECT = "guvio://auth/callback";
+
+/** Erro especial: conta criada, mas o Supabase exige confirmar o e-mail */
+export class ConfirmEmailError extends Error {}
+
+function fromCloudSession(s: Session): AuthSession {
+  const meta: any = s.user.user_metadata || {};
+  const email = s.user.email || "";
+  return {
+    user: {
+      id: s.user.id,
+      email,
+      username: meta.username || email.split("@")[0],
+      displayName: meta.display_name || meta.full_name || meta.username || email.split("@")[0]
+    },
+    access_token: s.access_token
+  };
+}
+
+function translateAuthError(msg?: string): string {
+  const m = (msg || "").toLowerCase();
+  if (m.includes("invalid login")) return "E-mail ou senha incorretos.";
+  if (m.includes("email not confirmed")) return "Confirme seu e-mail pelo link que enviamos antes de entrar.";
+  if (m.includes("already registered") || m.includes("already been registered")) return "Este e-mail já está cadastrado. Faça login na sua conta.";
+  if (m.includes("password")) return "A senha precisa ter pelo menos 6 caracteres.";
+  if (m.includes("rate limit")) return "Muitas tentativas. Aguarde um minuto e tente de novo.";
+  if (m.includes("network") || m.includes("fetch")) return "Sem conexão com o servidor. Verifique sua internet.";
+  return msg || "Não foi possível autenticar.";
+}
+
+async function cloudSignUp(email: string, password: string, username: string, displayName: string): Promise<AuthSession> {
+  const { data: free } = await supabase!.rpc("username_available", { name: username });
+  if (free === false) throw new Error(`O @${username} já está em uso. Por favor, escolha outro nome de usuário.`);
+  const { data, error } = await supabase!.auth.signUp({
+    email,
+    password,
+    options: { data: { username, display_name: displayName }, emailRedirectTo: AUTH_REDIRECT }
+  });
+  if (error) throw new Error(translateAuthError(error.message));
+  if (!data.session) {
+    throw new ConfirmEmailError(
+      `Conta criada! Enviamos um link de confirmação para ${email}. Abra o e-mail, confirme e depois faça login.`
+    );
+  }
+  return fromCloudSession(data.session);
+}
+
+async function cloudSignIn(identifier: string, password: string): Promise<AuthSession> {
+  if (!identifier.includes("@") || identifier.startsWith("@")) {
+    throw new Error("Para entrar, use o e-mail da sua conta.");
+  }
+  const { data, error } = await supabase!.auth.signInWithPassword({ email: identifier, password });
+  if (error || !data.session) throw new Error(translateAuthError(error?.message));
+  return fromCloudSession(data.session);
+}
+
+/** Trata o retorno do login com Google/Apple ou do link de confirmação de e-mail */
+export async function handleAuthRedirect(url: string | null): Promise<boolean> {
+  if (!url || !supabase || !url.includes("auth/callback")) return false;
+  const hash = url.split("#")[1] || "";
+  const query = (url.split("?")[1] || "").split("#")[0];
+  const params = new URLSearchParams(hash || query);
+  const access_token = params.get("access_token");
+  const refresh_token = params.get("refresh_token");
+  const code = new URLSearchParams(query).get("code");
+  if (access_token && refresh_token) {
+    const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+    return !error;
+  }
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    return !error;
+  }
+  return false;
+}
 
 const SESSION_KEY = "guvio_auth_session_v2";
 const ACCOUNTS_KEY = "guvio_auth_accounts_v2";
@@ -84,21 +159,6 @@ export async function hashPassword(password: string): Promise<string> {
   return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
 }
 
-async function authFetch(path: string, body: any) {
-  if (!URL || !KEY) throw new Error("Supabase ainda não configurado");
-  const r = await fetch(`${URL}/auth/v1/${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", apikey: KEY, Authorization: `Bearer ${KEY}` },
-    body: JSON.stringify(body),
-  });
-  const data = await r.json();
-  if (!r.ok) {
-    const errorMsg = data?.msg || data?.error_description || data?.message || "Falha na autenticação";
-    throw new Error(errorMsg);
-  }
-  return data;
-}
-
 export async function getStoredAccounts(): Promise<StoredAccount[]> {
   return FastStorage.getItemSync(ACCOUNTS_KEY, []);
 }
@@ -117,6 +177,10 @@ export async function signUpEmail(
   const cleanUsername = (username || email.split("@")[0]).trim().toLowerCase().replace(/[^a-z0-9._]/g, "");
   const cleanDisplayName = (displayName || cleanUsername).trim();
 
+  if (supabaseConfigured) {
+    return cloudSignUp(cleanEmail, password, cleanUsername, cleanDisplayName);
+  }
+
   // Check if username is already taken
   const taken = await isUsernameTaken(cleanUsername);
   if (taken) {
@@ -130,27 +194,7 @@ export async function signUpEmail(
     throw new Error("Este e-mail já está cadastrado. Faça login na sua conta.");
   }
 
-  let cloudUserId: string | null = null;
-  let accessToken: string | undefined = undefined;
-
-  if (authConfigured) {
-    try {
-      const data = await authFetch("signup", {
-        email: cleanEmail,
-        password,
-        data: {
-          username: cleanUsername,
-          display_name: cleanDisplayName
-        }
-      });
-      cloudUserId = data.user?.id;
-      accessToken = data.access_token;
-    } catch (e) {
-      // If cloud signup fails, continue with local creation
-    }
-  }
-
-  const userId = cloudUserId || `user-${Date.now()}`;
+  const userId = `user-${Date.now()}`;
   const defaultAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200";
 
   // Gerar hash seguro da senha
@@ -191,7 +235,7 @@ export async function signUpEmail(
       username: cleanUsername,
       displayName: cleanDisplayName
     },
-    access_token: accessToken || "local-token"
+    access_token: "local-token"
   };
 
   await saveAuthSession(session);
@@ -201,25 +245,8 @@ export async function signUpEmail(
 export async function signInEmail(loginIdentifier: string, password: string): Promise<AuthSession> {
   const cleanId = loginIdentifier.trim().toLowerCase().replace(/^@/, "");
 
-  if (authConfigured && cleanId.includes("@")) {
-    try {
-      const data = await authFetch("token?grant_type=password", { email: cleanId, password });
-      const session: AuthSession = {
-        user: {
-          id: data.user?.id || `user-${Date.now()}`,
-          email: data.user?.email || cleanId,
-          username: data.user?.user_metadata?.username || cleanId.split("@")[0],
-          displayName: data.user?.user_metadata?.display_name || cleanId.split("@")[0]
-        },
-        access_token: data.access_token
-      };
-      await saveAuthSession(session);
-      return session;
-    } catch (e: any) {
-      if (e.message?.includes("Invalid login credentials")) {
-        throw new Error("E-mail ou senha incorretos.");
-      }
-    }
+  if (supabaseConfigured) {
+    return cloudSignIn(cleanId, password);
   }
 
   // Validate against stored local accounts database
@@ -269,9 +296,13 @@ export async function signInEmail(loginIdentifier: string, password: string): Pr
 }
 
 export async function startOAuth(provider: "google" | "apple") {
-  if (!URL) throw new Error("Supabase ainda não configurado");
-  const redirect = "guvio://auth/callback";
-  await Linking.openURL(`${URL}/auth/v1/authorize?provider=${provider}&redirect_to=${encodeURIComponent(redirect)}`);
+  if (!supabase) throw new Error("Login com Google/Apple precisa do servidor configurado.");
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: { redirectTo: AUTH_REDIRECT, skipBrowserRedirect: Platform.OS !== "web" }
+  });
+  if (error) throw new Error(translateAuthError(error.message));
+  if (data?.url && Platform.OS !== "web") await Linking.openURL(data.url);
 }
 
 export async function saveAuthSession(session: AuthSession): Promise<void> {
@@ -281,6 +312,10 @@ export async function saveAuthSession(session: AuthSession): Promise<void> {
 }
 
 export async function getSavedAuthSession(): Promise<AuthSession | null> {
+  if (supabase) {
+    const { data } = await supabase.auth.getSession();
+    return data.session ? fromCloudSession(data.session) : null;
+  }
   try {
     const raw = await getSecureItem(SESSION_KEY);
     return raw ? JSON.parse(raw) : null;
@@ -290,6 +325,11 @@ export async function getSavedAuthSession(): Promise<AuthSession | null> {
 }
 
 export async function signOut(): Promise<void> {
+  if (supabase) {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {}
+  }
   try {
     await deleteSecureItem(SESSION_KEY);
   } catch (e) {}

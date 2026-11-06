@@ -15,7 +15,7 @@ export function ActivityView({
   onOpenProfile?: (username: string) => void;
 }) {
   const { colors } = useAppTheme();
-  const [activities, setActivities] = useState<ActivityItem[]>(MOCK_ACTIVITIES);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [followedIds, setFollowedIds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -106,6 +106,14 @@ export function ActivityView({
     <View style={[s.container, { backgroundColor: colors.bg }]}>
       <ScreenHeader title="Notificações" onBack={onBack} />
       <ScrollView contentContainerStyle={s.content}>
+        {activities.length === 0 && (
+          <View style={{ alignItems: "center", paddingTop: 60, gap: 8 }}>
+            <Text style={{ color: colors.text, fontWeight: "800", fontSize: 16 }}>Nada por aqui ainda</Text>
+            <Text style={{ color: colors.muted, textAlign: "center", fontSize: 12 }}>
+              Curtidas, comentários e novos seguidores aparecerão aqui.
+            </Text>
+          </View>
+        )}
         {todayActivities.length > 0 && (
           <View style={s.section}>
             <Text style={[s.sectionTitle, { color: colors.text }]}>Hoje</Text>

@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Check, Search, Send, X } from "lucide-react-native";
-import { FeedPost, MOCK_DIRECTS, DirectThread } from "../data/mockData";
+import { FeedPost, DirectThread } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
 import { FastImage } from "./FastImage";
-import { saveDirectMessages, loadDirectMessages } from "../services/storage";
+import { loadThreads, loadChat, sendChatMessage } from "../services/storage";
 
 export function SharePostModal({
   visible,
@@ -19,12 +19,23 @@ export function SharePostModal({
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [sentMap, setSentMap] = useState<Record<string, boolean>>({});
+  const [threads, setThreads] = useState<DirectThread[]>([]);
+
+  useEffect(() => {
+    if (visible) loadThreads().then(setThreads);
+  }, [visible]);
 
   if (!visible || !post) return null;
 
-  const filteredThreads = MOCK_DIRECTS.filter(d =>
+  const filteredThreads = threads.filter(d =>
     d.username.toLowerCase().includes(query.toLowerCase())
   );
+
+  const shareTo = async (thread: DirectThread) => {
+    const current = await loadChat(thread);
+    const text = `📷 Compartilhou um look de @${post.creatorUsername || post.creatorName} (${post.styleTag} em ${post.city})`;
+    await sendChatMessage(thread, current, { text, image: post.image });
+  };
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
@@ -33,11 +44,14 @@ export function SharePostModal({
   const handleSendToSelected = async () => {
     if (selectedIds.length === 0) return;
 
-    for (const threadId of selectedIds) {
-      const current = await loadDirectMessages(threadId);
-      const postShareMsg = `📷 Compartilhou um look de @${post.creatorName} (${post.styleTag} em ${post.city})`;
-      const updated = [...current, postShareMsg];
-      await saveDirectMessages(threadId, updated);
+    try {
+      for (const threadId of selectedIds) {
+        const thread = threads.find(t => t.id === threadId);
+        if (thread) await shareTo(thread);
+      }
+    } catch (e: any) {
+      Alert.alert("Falha ao enviar", e?.message || "Tente novamente.");
+      return;
     }
 
     Alert.alert("Enviado com sucesso!", `Look compartilhado via Direct com ${selectedIds.length} amigo(s).`);
@@ -46,11 +60,12 @@ export function SharePostModal({
   };
 
   const handleQuickSend = async (thread: DirectThread) => {
-    const current = await loadDirectMessages(thread.id);
-    const postShareMsg = `📷 Compartilhou um look de @${post.creatorName} (${post.styleTag} em ${post.city})`;
-    const updated = [...current, postShareMsg];
-    await saveDirectMessages(thread.id, updated);
-
+    try {
+      await shareTo(thread);
+    } catch (e: any) {
+      Alert.alert("Falha ao enviar", e?.message || "Tente novamente.");
+      return;
+    }
     setSentMap(prev => ({ ...prev, [thread.id]: true }));
   };
 

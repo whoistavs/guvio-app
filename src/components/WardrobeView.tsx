@@ -6,7 +6,7 @@ import { OutfitStyle, STYLES, WardrobeItem } from "../data/mockData";
 import { StyleCard } from "./OutfitCard";
 import { useAppTheme } from "../context/AppTheme";
 import { generateSmartOutfit, getWeatherRecommendationTip, AIOutfitRecommendation } from "../services/aiStyling";
-import { loadSavedWardrobe, saveWardrobe } from "../services/storage";
+import { loadSavedWardrobe, addWardrobeItem, removeWardrobeItem } from "../services/storage";
 import { WeatherData } from "../services/weather";
 import { getSavedAuthSession } from "../services/auth";
 import { FastImage, preloadImages } from "./FastImage";
@@ -74,7 +74,10 @@ export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; cu
     }
   };
 
-  const handleSaveItem = () => {
+  const [savingItem, setSavingItem] = useState(false);
+
+  const handleSaveItem = async () => {
+    if (savingItem) return;
     if (!newName.trim()) {
       Alert.alert("Nome da peça", "Por favor informe o nome da peça de roupa.");
       return;
@@ -86,10 +89,17 @@ export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; cu
       colorTag: newColorTag,
       image: newImageUri
     };
-    const updated = [newItem, ...items];
-    setItems(updated);
-    saveWardrobe(updated, currentUserId);
-    preloadImages([newImageUri]);
+    setSavingItem(true);
+    try {
+      const updated = await addWardrobeItem(newItem, items, currentUserId);
+      setItems(updated);
+      preloadImages([updated[0].image]);
+    } catch (e: any) {
+      Alert.alert("Não foi possível salvar", e?.message || "Tente novamente.");
+      return;
+    } finally {
+      setSavingItem(false);
+    }
 
     setNewName("");
     setNewImageUri(DEFAULT_CLOTH);
@@ -102,10 +112,12 @@ export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; cu
       {
         text: "Excluir",
         style: "destructive",
-        onPress: () => {
-          const updated = items.filter(i => i.id !== id);
-          setItems(updated);
-          saveWardrobe(updated, currentUserId);
+        onPress: async () => {
+          try {
+            setItems(await removeWardrobeItem(id, items, currentUserId));
+          } catch (e: any) {
+            Alert.alert("Erro", e?.message || "Não foi possível remover.");
+          }
         }
       }
     ]);

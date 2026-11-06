@@ -29,9 +29,13 @@ import {
   loadSavedProfile,
   saveProfile,
   INITIAL_USER_PROFILE,
-  loadSavedPosts,
   loadFollowedUsers,
-  saveFollowedUsers
+  saveFollowedUsers,
+  loadUserPosts,
+  loadMyPosts,
+  loadSavedOnlyPosts,
+  loadBlocked,
+  setBlocked
 } from "../services/storage";
 import { getSavedAuthSession } from "../services/auth";
 import { FastImage, preloadImages } from "./FastImage";
@@ -91,17 +95,40 @@ export function PublicProfileView({
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [selectedPost, setSelectedPost] = useState<FeedPost | null>(null);
 
+  const [initiallyFollowed, setInitiallyFollowed] = useState(false);
   const isFollowed = followedIds.includes(profile.id || profile.username);
 
   useEffect(() => {
-    loadFollowedUsers().then(setFollowedIds);
-    loadSavedPosts().then(allPosts => {
-      const userLooks = allPosts.filter(
-        p => p.creatorName === profile.displayName || p.creatorName === profile.username
-      );
-      setPosts(userLooks);
+    loadFollowedUsers().then(ids => {
+      setFollowedIds(ids);
+      setInitiallyFollowed(ids.includes(profile.id || profile.username));
     });
+    loadUserPosts(profile).then(setPosts);
   }, [profile]);
+
+  const handleBlock = () => {
+    Alert.alert(
+      `Bloquear @${profile.username}?`,
+      "Essa pessoa não poderá mais te enviar mensagens e você deixará de segui-la.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Bloquear",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await setBlocked(profile, true);
+              setFollowedIds(prev => prev.filter(id => id !== profile.id));
+              Alert.alert("Bloqueado", `@${profile.username} foi bloqueado.`);
+              onBack();
+            } catch (e: any) {
+              Alert.alert("Erro", e?.message || "Não foi possível bloquear.");
+            }
+          }
+        }
+      ]
+    );
+  };
 
   const toggleFollow = async () => {
     const targetId = profile.id || profile.username;
@@ -112,12 +139,20 @@ export function PublicProfileView({
     await saveFollowedUsers(updated);
   };
 
-  const followersCount = (profile.followers || 0) + (isFollowed ? 1 : 0);
+  const followersCount = Math.max(0, (profile.followers || 0) - (initiallyFollowed ? 1 : 0) + (isFollowed ? 1 : 0));
 
   return (
     <>
       <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: 110 }}>
-        <ScreenHeader title={`@${profile.username}`} onBack={onBack} />
+        <ScreenHeader
+          title={`@${profile.username}`}
+          onBack={onBack}
+          right={
+            <Pressable onPress={handleBlock} hitSlop={10}>
+              <UserX size={22} color={colors.icon} />
+            </Pressable>
+          }
+        />
         <View style={s.top}>
           <FastImage
             source={profile.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200"}
@@ -128,7 +163,7 @@ export function PublicProfileView({
           <View style={s.stats}>
             <Stat v={posts.length.toString()} l="posts" colors={colors} />
             <Stat v={followersCount.toLocaleString("pt-BR")} l="seguidores" colors={colors} />
-            <Stat v={(profile.following || 12).toString()} l="seguindo" colors={colors} />
+            <Stat v={(profile.following || 0).toString()} l="seguindo" colors={colors} />
           </View>
         </View>
 
@@ -241,7 +276,7 @@ function Stat({ v, l, colors }: { v: string; l: string; colors: any }) {
   );
 }
 
-export function MyProfileView({ onSettings }: { onSettings: () => void }) {
+export function MyProfileView({ onSettings, postsVersion = 0 }: { onSettings: () => void; postsVersion?: number }) {
   const { colors } = useAppTheme();
   const [profile, setProfileState] = useState<UserProfile>(INITIAL_USER_PROFILE);
   const [userPosts, setUserPosts] = useState<FeedPost[]>([]);
@@ -251,6 +286,7 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<"posts" | "saved" | "tagged">("posts");
   const [followingCount, setFollowingCount] = useState(0);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   // Edit fields
   const [editName, setEditName] = useState("");
@@ -275,15 +311,15 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
       });
     });
 
-    loadSavedPosts().then(allPosts => {
-      setUserPosts(allPosts);
-      setSavedPosts(allPosts.filter(p => p.isSaved));
-    });
-
     loadFollowedUsers().then(ids => {
       setFollowingCount(ids.length);
     });
   }, []);
+
+  useEffect(() => {
+    loadMyPosts().then(setUserPosts).catch(() => {});
+    loadSavedOnlyPosts().then(setSavedPosts).catch(() => {});
+  }, [postsVersion]);
 
   const pickAvatar = async (useCamera: boolean) => {
     try {
@@ -313,7 +349,8 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
     }
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
+    if (savingProfile) return;
     const updated: UserProfile = {
       ...profile,
       displayName: editName.trim() || profile.displayName,
@@ -323,9 +360,18 @@ export function MyProfileView({ onSettings }: { onSettings: () => void }) {
       location: editLocation.trim() || profile.location,
       avatar: editAvatar || profile.avatar
     };
-    setProfileState(updated);
-    saveProfile(updated, currentUserId);
-    setEditModalVisible(false);
+    setSavingProfile(true);
+    try {
+      const saved = await saveProfile(updated, currentUserId);
+      setProfileState(saved);
+      setEditAvatar(saved.avatar);
+      setEditUsername(saved.username);
+      setEditModalVisible(false);
+    } catch (e: any) {
+      Alert.alert("Não foi possível salvar", e?.message || "Tente novamente.");
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   return (
@@ -603,14 +649,21 @@ export function SettingsView({
 export function SimpleSettingsPage({ kind, onBack }: { kind: string; onBack: () => void }) {
   const { colors } = useAppTheme();
   const [savedPosts, setSavedPosts] = useState<FeedPost[]>([]);
+  const [blocked, setBlockedList] = useState<UserProfile[]>([]);
 
   useEffect(() => {
-    if (kind === "saved") {
-      loadSavedPosts().then(posts => {
-        setSavedPosts(posts.filter(p => p.isSaved));
-      });
-    }
+    if (kind === "saved") loadSavedOnlyPosts().then(setSavedPosts);
+    if (kind === "blocked") loadBlocked().then(setBlockedList);
   }, [kind]);
+
+  const unblock = async (p: UserProfile) => {
+    try {
+      await setBlocked(p, false);
+      setBlockedList(prev => prev.filter(x => x.id !== p.id));
+    } catch (e: any) {
+      Alert.alert("Erro", e?.message || "Não foi possível desbloquear.");
+    }
+  };
 
   const title = kind === "saved" ? "Salvos" : kind === "activity" ? "Sua atividade" : "Bloqueados";
 
@@ -625,11 +678,25 @@ export function SimpleSettingsPage({ kind, onBack }: { kind: string; onBack: () 
           <Text style={[s.infoBig, { color: colors.text }]}>0 min</Text>
           <Text style={{ color: colors.muted, textAlign: "center" }}>Sua atividade no Guvio iniciou agora</Text>
         </View>
+      ) : blocked.length > 0 ? (
+        <View style={{ paddingVertical: 8 }}>
+          {blocked.map(p => (
+            <View key={p.id} style={[s.setting, { borderBottomColor: colors.border }]}>
+              <FastImage source={p.avatar} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
+              <Text style={[s.settingText, { color: colors.text }]}>@{p.username}</Text>
+              <Pressable onPress={() => unblock(p)} style={[s.unblockBtn, { backgroundColor: colors.surface }]}>
+                <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>Desbloquear</Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
       ) : (
         <View style={s.info}>
           <UserX size={38} color={colors.icon} />
           <Text style={[s.infoBig, { color: colors.text }]}>Nenhum usuário bloqueado</Text>
-          <Text style={{ color: colors.muted, textAlign: "center" }}>Perfis bloqueados aparecerão aqui.</Text>
+          <Text style={{ color: colors.muted, textAlign: "center" }}>
+            Para bloquear alguém, abra o perfil da pessoa e toque no ícone no canto superior.
+          </Text>
         </View>
       )}
     </ScrollView>
@@ -707,5 +774,6 @@ const s = StyleSheet.create({
     fontSize: 13,
     marginBottom: 4
   },
+  unblockBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
   saveBtn: { width: "100%", height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", marginTop: 8 }
 });

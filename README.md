@@ -34,7 +34,7 @@ Built with **React Native + Expo + TypeScript**, running on Android, iOS and the
 | Framework | React Native 0.81 · Expo SDK 54 · React 19 |
 | Language | TypeScript |
 | 3D | Three.js · React Three Fiber · expo-gl |
-| Backend | Supabase (Auth REST + Realtime) |
+| Backend | Supabase (Auth, Postgres + RLS, Storage, Realtime) |
 | Storage | AsyncStorage · expo-secure-store |
 | Build & delivery | EAS Build · EAS Update · Netlify (web) |
 | Other | expo-image · expo-notifications · expo-image-picker · expo-blur · Lucide icons |
@@ -92,6 +92,12 @@ npm test
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Your Supabase anon key |
 
 Both are optional. Without them the app runs in demo mode with local data.
+
+To turn on the real backend (accounts, feed, likes, comments, follows, stories, DMs, wardrobe, notifications and photo uploads shared between users in real time), follow [`supabase/SETUP.md`](supabase/SETUP.md) — it creates everything from a single [`supabase/schema.sql`](supabase/schema.sql).
+
+### iOS build without a Mac
+
+The **Gerar IPA iOS (sem assinatura)** workflow builds an unsigned `GUVIO.ipa` on GitHub Actions. Download it from the run's artifacts and install it with Sideloadly using your Apple ID.
 
 ## 👥 Authors
 

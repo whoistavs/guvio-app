@@ -14,6 +14,8 @@ import {
   UserPlus
 } from "lucide-react-native";
 import { FeedPost, UserStoryGroup, MOCK_PROFILES, UserProfile, ClothingTag } from "../data/mockData";
+import { loadAllRegisteredProfiles, loadSavedProfile } from "../services/storage";
+import { isCloud } from "../services/supabase";
 import { CommentsModal } from "./CommentsModal";
 import { StoryViewerModal, CreateStoryModal } from "./StoryViewerModal";
 import { SharePostModal } from "./SharePostModal";
@@ -61,10 +63,19 @@ export function HomeFeed({
   const heartOpacity = useRef(new Animated.Value(0)).current;
   const lastTap = useRef<Record<string, number>>({});
 
+  const [myId, setMyId] = useState<string | null>(null);
+  const [suggested, setSuggested] = useState<UserProfile[]>(MOCK_PROFILES);
+
   useEffect(() => {
     loadStories().then(setStories);
     loadFollowedUsers().then(setFollowedUserIds);
+    loadSavedProfile().then(p => setMyId(p.id));
+    isCloud().then(cloud => {
+      if (cloud) loadAllRegisteredProfiles().then(list => setSuggested(list.slice(0, 15)));
+    });
   }, []);
+
+  const isMine = (p: FeedPost) => p.creatorName === "Você" || (!!myId && p.userId === myId);
 
   useEffect(() => {
     // Native image prefetching
@@ -142,8 +153,14 @@ export function HomeFeed({
     });
 
     setStories(updatedStories);
-    await saveStories(updatedStories);
-    Alert.alert("Story Publicado! ✨", "Seu look agora está visível no carrossel de stories.");
+    try {
+      await saveStories(updatedStories);
+      if (await isCloud()) loadStories().then(setStories);
+      Alert.alert("Story Publicado! ✨", "Seu look agora está visível no carrossel de stories.");
+    } catch (e: any) {
+      setStories(stories);
+      Alert.alert("Story não publicado", e?.message || "Tente novamente.");
+    }
   };
 
   const handleDeletePost = (id: string) => {
@@ -167,7 +184,7 @@ export function HomeFeed({
     visiblePosts = visiblePosts.filter(p => p.country === countryFilter);
   } else if (feedTab === "following") {
     visiblePosts = visiblePosts.filter(
-      p => followedUserIds.includes(p.userId || "") || p.creatorName === "Você"
+      p => followedUserIds.includes(p.userId || "") || isMine(p)
     );
   }
 
@@ -296,7 +313,7 @@ export function HomeFeed({
                 {/* Post Header */}
                 <View style={s.ph}>
                   <Pressable
-                    onPress={() => onOpenProfile?.(p.creatorName)}
+                    onPress={() => onOpenProfile?.(p.creatorUsername || p.creatorName)}
                     style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
                   >
                     <View style={s.avatarStoryRing}>
@@ -317,7 +334,7 @@ export function HomeFeed({
                     <View style={[s.styleTag, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                       <Text style={{ color: colors.text, fontSize: 10, fontWeight: "800" }}>{p.styleTag}</Text>
                     </View>
-                    {p.creatorName === "Você" ? (
+                    {isMine(p) ? (
                       <Pressable onPress={() => handleDeletePost(p.id)} hitSlop={10}>
                         <Trash2 size={16} color={colors.muted} />
                       </Pressable>
@@ -435,7 +452,7 @@ export function HomeFeed({
                 <View style={[s.suggestionsSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <Text style={[s.suggestionsTitle, { color: colors.text }]}>Sugestões para você seguir</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.suggestionsScroll}>
-                    {MOCK_PROFILES.map(prof => {
+                    {suggested.filter(prof => prof.id !== myId).map(prof => {
                       const isF = followedUserIds.includes(prof.id);
                       return (
                         <View key={prof.id} style={[s.suggestedCard, { backgroundColor: colors.bg, borderColor: colors.border }]}>
@@ -469,7 +486,14 @@ export function HomeFeed({
       )}
 
       {/* Modals */}
-      <CommentsModal post={commentPost} visible={!!commentPost} onClose={() => setCommentPost(null)} />
+      <CommentsModal
+        post={commentPost}
+        visible={!!commentPost}
+        onClose={() => setCommentPost(null)}
+        onCommented={(postId, total) =>
+          setPosts(prev => prev.map(p => (p.id === postId ? { ...p, commentsCount: total } : p)))
+        }
+      />
       <SharePostModal post={sharePost} visible={!!sharePost} onClose={() => setSharePost(null)} />
       <StoryViewerModal
         visible={activeStoryIdx !== null}

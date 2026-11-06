@@ -11,7 +11,7 @@ import {
   View
 } from "react-native";
 import { Apple, AtSign, Check, User, X } from "lucide-react-native";
-import { authConfigured, signInEmail, signUpEmail, startOAuth } from "../services/auth";
+import { authConfigured, signInEmail, signUpEmail, startOAuth, ConfirmEmailError } from "../services/auth";
 import { useAppTheme } from "../context/AppTheme";
 import { isUsernameTaken } from "../services/storage";
 
@@ -69,9 +69,27 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void })
       }
       onAuthenticated();
     } catch (e: any) {
-      Alert.alert("Acesso", e.message || "Não foi possível autenticar.");
+      if (e instanceof ConfirmEmailError) {
+        setSignup(false);
+        setPassword("");
+        Alert.alert("Confirme seu e-mail 📩", e.message);
+      } else {
+        Alert.alert("Acesso", e.message || "Não foi possível autenticar.");
+      }
     } finally {
       setBusy(false);
+    }
+  };
+
+  const oauth = async (provider: "google" | "apple") => {
+    if (!authConfigured) {
+      onAuthenticated();
+      return;
+    }
+    try {
+      await startOAuth(provider);
+    } catch (e: any) {
+      Alert.alert("Login", e?.message || "Não foi possível abrir o login.");
     }
   };
 
@@ -132,7 +150,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void })
           onChangeText={setEmail}
           autoCapitalize="none"
           keyboardType={signup ? "email-address" : "default"}
-          placeholder={signup ? "E-mail" : "E-mail ou @username"}
+          placeholder={signup || authConfigured ? "E-mail" : "E-mail ou @username"}
           placeholderTextColor={colors.muted}
           style={[s.plainInput, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
         />
@@ -164,7 +182,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void })
         </View>
 
         <Pressable
-          onPress={() => (authConfigured ? startOAuth("google") : onAuthenticated())}
+          onPress={() => oauth("google")}
           style={[s.social, { borderColor: colors.border }]}
         >
           <Text style={{ color: colors.text, fontWeight: "800", fontSize: 16 }}>G</Text>
@@ -172,7 +190,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void })
         </Pressable>
 
         <Pressable
-          onPress={() => (authConfigured ? startOAuth("apple") : onAuthenticated())}
+          onPress={() => oauth("apple")}
           style={[s.social, { borderColor: colors.border }]}
         >
           <Apple size={19} color={colors.icon} />

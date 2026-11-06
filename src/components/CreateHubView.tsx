@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Camera, ImagePlus, Share2, Shirt, Sparkles, Upload } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useAppTheme } from "../context/AppTheme";
@@ -7,7 +7,15 @@ import { OutfitPromoExporter } from "./OutfitPromoExporter";
 
 const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?q=80&w=800&auto=format&fit=crop";
 
-export function CreateHubView({ onPublish, onWardrobe }: { onPublish: (p: { image: string; caption: string }) => void; onWardrobe: () => void }) {
+export function CreateHubView({
+  onPublish,
+  onWardrobe,
+  publishing = false
+}: {
+  onPublish: (p: { image: string; caption: string }) => void | boolean | Promise<void | boolean>;
+  onWardrobe: () => void;
+  publishing?: boolean;
+}) {
   const { colors } = useAppTheme();
   const [mode, setMode] = useState<"hub" | "post">("hub");
   const [caption, setCaption] = useState("");
@@ -123,15 +131,21 @@ export function CreateHubView({ onPublish, onWardrobe }: { onPublish: (p: { imag
       />
       
       <Pressable
-        onPress={() => {
-          onPublish({ image: imageUri, caption: caption || "Novo look no Guvio." });
+        disabled={publishing}
+        onPress={async () => {
+          const ok = await onPublish({ image: imageUri, caption: caption || "Novo look no Guvio." });
+          if (ok === false) return;
           setCaption("");
           setImageUri(DEFAULT_IMAGE);
           setMode("hub");
         }}
-        style={[s.publish, { backgroundColor: colors.text }]}
+        style={[s.publish, { backgroundColor: colors.text, opacity: publishing ? 0.6 : 1 }]}
       >
-        <Text style={{ color: colors.bg, fontWeight: "900" }}>Publicar</Text>
+        {publishing ? (
+          <ActivityIndicator color={colors.bg} />
+        ) : (
+          <Text style={{ color: colors.bg, fontWeight: "900" }}>Publicar</Text>
+        )}
       </Pressable>
     </ScrollView>
   );
