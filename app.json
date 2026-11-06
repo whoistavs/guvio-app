@@ -38,7 +38,20 @@
     },
     "plugins": [
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "O Guvio usa sua localização para marcar a cidade dos seus looks e mostrar o clima."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O Guvio acessa suas fotos para você publicar looks, stories e peças do guarda-roupa.",
+          "cameraPermission": "O Guvio usa a câmera para você fotografar seus looks."
+        }
+      ]
     ]
   }
 }

@@ -10,12 +10,20 @@ import {
   TextInput,
   View,
   Alert,
-  Animated
+  Animated,
+  ScrollView
 } from "react-native";
-import { Camera, ChevronLeft, Heart, ImagePlus, Plus, Send, X } from "lucide-react-native";
+import { Camera, ChevronLeft, Eye, Heart, ImagePlus, Plus, Send, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { UserStoryGroup, StoryItem } from "../data/mockData";
 import { FastImage } from "./FastImage";
+import {
+  markStorySeen,
+  deleteMyStory,
+  loadStoryViewers,
+  loadChat,
+  sendChatMessage
+} from "../services/storage";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const STORY_DURATION = 5000; // 5 seconds per story
@@ -25,13 +33,17 @@ export function StoryViewerModal({
   onClose,
   storyGroups,
   initialGroupIndex = 0,
-  onAddStory
+  onAddStory,
+  onStorySeen,
+  onStoryDeleted
 }: {
   visible: boolean;
   onClose: () => void;
   storyGroups: UserStoryGroup[];
   initialGroupIndex?: number;
   onAddStory?: (imageUri: string, caption?: string) => void;
+  onStorySeen?: (storyId: string) => void;
+  onStoryDeleted?: (storyId: string) => void;
 }) {
   const [groupIndex, setGroupIndex] = useState(initialGroupIndex);
   const [storyIndex, setStoryIndex] = useState(0);
@@ -40,6 +52,7 @@ export function StoryViewerModal({
   const [reactionHeart, setReactionHeart] = useState(false);
 
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const [viewers, setViewers] = useState<{ username: string; avatar: string; time: string }[] | null>(null);
 
   // Filter groups that have stories
   const activeGroups = storyGroups.filter(g => g.stories && g.stories.length > 0);
@@ -99,16 +112,73 @@ export function StoryViewerModal({
     }
   };
 
+  // marca como visto quando o story aparece na tela
+  useEffect(() => {
+    if (!visible || !currentStory || !currentGroup || currentGroup.isMe || currentStory.seen) return;
+    markStorySeen(currentStory.id);
+    onStorySeen?.(currentStory.id);
+  }, [visible, currentStory?.id]);
+
+  // respostas e reações viram mensagens de verdade no Direct
+  const sendToAuthor = async (text: string) => {
+    if (!currentGroup || !currentStory) return;
+    const thread = {
+      id: currentGroup.id,
+      profileId: currentGroup.id,
+      username: currentGroup.username,
+      avatar: currentGroup.avatar,
+      lastMessage: "",
+      time: ""
+    };
+    const current = await loadChat(thread).catch(() => []);
+    await sendChatMessage(thread, current, { text, image: currentStory.image });
+  };
+
   const handleSendReaction = (emoji: string) => {
     setReactionHeart(true);
     setTimeout(() => setReactionHeart(false), 900);
-    Alert.alert("Reação Enviada", `Você enviou ${emoji} para @${currentGroup?.username}`);
+    sendToAuthor(`${emoji} Reagiu ao seu story`).catch(() => {});
   };
 
-  const handleSendReply = () => {
+  const handleSendReply = async () => {
     if (!replyText.trim()) return;
-    Alert.alert("Mensagem Enviada", `Resposta enviada para @${currentGroup?.username}`);
+    const text = replyText.trim();
     setReplyText("");
+    try {
+      await sendToAuthor(`Respondeu ao seu story: ${text}`);
+      Alert.alert("Enviado", `Sua resposta foi para o Direct de @${currentGroup?.username}.`);
+    } catch (e: any) {
+      Alert.alert("Não enviado", e?.message || "Tente novamente.");
+    }
+  };
+
+  const openViewers = async () => {
+    if (!currentStory) return;
+    setIsPaused(true);
+    setViewers([]);
+    setViewers(await loadStoryViewers(currentStory.id));
+  };
+
+  const handleDeleteStory = () => {
+    if (!currentStory) return;
+    setIsPaused(true);
+    Alert.alert("Apagar story?", "Ele some para todo mundo.", [
+      { text: "Cancelar", style: "cancel", onPress: () => setIsPaused(false) },
+      {
+        text: "Apagar",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deleteMyStory(currentStory.id);
+            onStoryDeleted?.(currentStory.id);
+            onClose();
+          } catch (e: any) {
+            Alert.alert("Erro", e?.message || "Não foi possível apagar.");
+            setIsPaused(false);
+          }
+        }
+      }
+    ]);
   };
 
   if (!visible || !currentGroup || !currentStory) return null;
@@ -195,33 +265,77 @@ export function StoryViewerModal({
             </View>
           ) : null}
 
-          {/* Bottom Direct Reply & Quick Reactions */}
-          <View style={s.bottomBar}>
-            <View style={s.replyInputWrapper}>
-              <TextInput
-                value={replyText}
-                onChangeText={setReplyText}
-                placeholder={`Responder a @${currentGroup.username}...`}
-                placeholderTextColor="rgba(255,255,255,0.6)"
-                style={s.replyInput}
-                onFocus={() => setIsPaused(true)}
-                onBlur={() => setIsPaused(false)}
-              />
-              {replyText.trim() ? (
-                <Pressable onPress={handleSendReply} style={s.sendBtn}>
-                  <Send size={18} color="#FFF" />
-                </Pressable>
-              ) : null}
+          {currentGroup.isMe ? (
+            <View style={s.ownerBar}>
+              <Pressable onPress={openViewers} style={s.ownerBtn} hitSlop={8}>
+                <Eye size={20} color="#FFF" />
+                <Text style={s.ownerText}>Quem viu</Text>
+              </Pressable>
+              <Pressable onPress={handleDeleteStory} style={s.ownerBtn} hitSlop={8}>
+                <Trash2 size={20} color="#FFF" />
+                <Text style={s.ownerText}>Apagar</Text>
+              </Pressable>
             </View>
+          ) : (
+            <View style={s.bottomBar}>
+              <View style={s.replyInputWrapper}>
+                <TextInput
+                  value={replyText}
+                  onChangeText={setReplyText}
+                  placeholder={`Responder a @${currentGroup.username}...`}
+                  placeholderTextColor="rgba(255,255,255,0.6)"
+                  style={s.replyInput}
+                  onFocus={() => setIsPaused(true)}
+                  onBlur={() => setIsPaused(false)}
+                />
+                {replyText.trim() ? (
+                  <Pressable onPress={handleSendReply} style={s.sendBtn}>
+                    <Send size={18} color="#FFF" />
+                  </Pressable>
+                ) : null}
+              </View>
 
-            <View style={s.reactionsRow}>
-              {["❤️", "🔥", "✨", "👏"].map(emoji => (
-                <Pressable key={emoji} onPress={() => handleSendReaction(emoji)} style={s.emojiBtn}>
-                  <Text style={s.emojiText}>{emoji}</Text>
-                </Pressable>
-              ))}
+              <View style={s.reactionsRow}>
+                {["❤️", "🔥", "✨", "👏"].map(emoji => (
+                  <Pressable key={emoji} onPress={() => handleSendReaction(emoji)} style={s.emojiBtn}>
+                    <Text style={s.emojiText}>{emoji}</Text>
+                  </Pressable>
+                ))}
+              </View>
             </View>
-          </View>
+          )}
+
+          {viewers !== null ? (
+            <View style={s.viewersSheet}>
+              <View style={s.viewersHead}>
+                <Text style={s.viewersTitle}>Visto por {viewers.length}</Text>
+                <Pressable
+                  onPress={() => {
+                    setViewers(null);
+                    setIsPaused(false);
+                  }}
+                  hitSlop={10}
+                >
+                  <X size={22} color="#FFF" />
+                </Pressable>
+              </View>
+              <ScrollView>
+                {viewers.length === 0 ? (
+                  <Text style={{ color: "rgba(255,255,255,.7)", textAlign: "center", marginTop: 20 }}>
+                    Ninguém viu ainda.
+                  </Text>
+                ) : (
+                  viewers.map(v => (
+                    <View key={v.username} style={s.viewerRow}>
+                      <FastImage source={v.avatar} style={s.viewerAvatar} />
+                      <Text style={{ color: "#FFF", fontWeight: "800", flex: 1 }}>@{v.username}</Text>
+                      <Text style={{ color: "rgba(255,255,255,.6)", fontSize: 11 }}>{v.time}</Text>
+                    </View>
+                  ))
+                )}
+              </ScrollView>
+            </View>
+          ) : null}
         </SafeAreaView>
       </View>
     </Modal>
@@ -329,6 +443,24 @@ export function CreateStoryModal({
 }
 
 const s = StyleSheet.create({
+  ownerBar: { position: "absolute", bottom: 34, left: 0, right: 0, flexDirection: "row", justifyContent: "center", gap: 40 },
+  ownerBtn: { alignItems: "center", gap: 4 },
+  ownerText: { color: "#FFF", fontSize: 11, fontWeight: "800" },
+  viewersSheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: SCREEN_HEIGHT * 0.45,
+    backgroundColor: "rgba(15,15,15,.96)",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 18
+  },
+  viewersHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  viewersTitle: { color: "#FFF", fontWeight: "900", fontSize: 15 },
+  viewerRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 },
+  viewerAvatar: { width: 36, height: 36, borderRadius: 18 },
   container: { flex: 1, backgroundColor: "#000" },
   storyImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
   topOverlay: {

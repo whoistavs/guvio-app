@@ -19,6 +19,9 @@ Sem as chaves, o app continua funcionando em modo demo (tudo só no aparelho).
 
 Pode rodar de novo sempre que o arquivo mudar; ele não apaga dados.
 
+**Já tinha rodado uma versão antiga?** Rode também os arquivos `migration_*.sql` desta pasta, em ordem
+(ex.: `migration_002_mutirao.sql`). Eles só adicionam o que falta.
+
 ## 3. Configurar o login
 
 Em **Authentication** > **URL Configuration**:

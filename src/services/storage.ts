@@ -101,6 +101,8 @@ export async function publishPost(input: {
   city: string;
   country: string;
   styleTag: string;
+  lat?: number;
+  lng?: number;
 }): Promise<FeedPost> {
   if (await isCloud()) {
     const post = await cloud.createPost(input);
@@ -123,9 +125,79 @@ export async function publishPost(input: {
     commentsCount: 0,
     timeAgo: "agora",
     createdAt: new Date().toISOString(),
+    lat: input.lat,
+    lng: input.lng,
     isLiked: false,
     isSaved: false
   };
+}
+
+// ---------------------------------------------------------------------
+// Post único, Explorar, busca, edição e denúncia
+// ---------------------------------------------------------------------
+function localPosts(): FeedPost[] {
+  return FastStorage.getItemSync(KEYS.POSTS, []);
+}
+
+export async function loadPost(id: string): Promise<FeedPost | null> {
+  if (await isCloud()) return cloud.fetchPost(id).catch(() => null);
+  return localPosts().find(p => p.id === id) || null;
+}
+
+export async function loadExplore(): Promise<FeedPost[]> {
+  if (await isCloud()) return cloud.fetchExplore().catch(() => []);
+  return [...localPosts()].sort((a, b) => b.likes - a.likes);
+}
+
+export async function searchLooks(query: string): Promise<FeedPost[]> {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  if (await isCloud()) return cloud.searchPosts(q).catch(() => []);
+  return localPosts().filter(p =>
+    [p.city, p.country, p.styleTag, p.caption].some(v => (v || "").toLowerCase().includes(q))
+  );
+}
+
+export async function editCaption(postId: string, caption: string): Promise<void> {
+  if (await isCloud()) return cloud.updateCaption(postId, caption);
+  FastStorage.setItemSync(
+    KEYS.POSTS,
+    localPosts().map(p => (p.id === postId ? { ...p, caption } : p))
+  );
+}
+
+export async function setPostLike(post: FeedPost, on: boolean): Promise<void> {
+  if (await isCloud()) {
+    await cloud.setLike(post.id, on);
+    postSnapshot.set(post.id, { ...(postSnapshot.get(post.id) || { isSaved: !!post.isSaved }), isLiked: on, userId: post.userId });
+    return;
+  }
+  FastStorage.setItemSync(
+    KEYS.POSTS,
+    localPosts().map(p => (p.id === post.id ? { ...p, isLiked: on, likes: Math.max(0, p.likes + (on ? 1 : -1)) } : p))
+  );
+}
+
+export async function setPostSave(post: FeedPost, on: boolean): Promise<void> {
+  if (await isCloud()) {
+    await cloud.setSave(post.id, on);
+    postSnapshot.set(post.id, { ...(postSnapshot.get(post.id) || { isLiked: !!post.isLiked }), isSaved: on, userId: post.userId });
+    return;
+  }
+  FastStorage.setItemSync(KEYS.POSTS, localPosts().map(p => (p.id === post.id ? { ...p, isSaved: on } : p)));
+}
+
+export async function removePost(post: FeedPost): Promise<void> {
+  if (await isCloud()) {
+    await cloud.deletePost(post.id);
+    postSnapshot.delete(post.id);
+    return;
+  }
+  FastStorage.setItemSync(KEYS.POSTS, localPosts().filter(p => p.id !== post.id));
+}
+
+export async function reportPost(postId: string, reason: string): Promise<void> {
+  if (await isCloud()) return cloud.reportPost(postId, reason);
 }
 
 /** Posts de um perfil específico */
@@ -245,6 +317,17 @@ export async function registerNewProfile(profile: UserProfile): Promise<void> {
   FastStorage.setItemSync(KEYS.PROFILE, formattedProfile);
 }
 
+/** Seguidores ou seguindo de um perfil */
+export async function loadFollowList(profile: UserProfile, kind: "followers" | "following"): Promise<UserProfile[]> {
+  if (await isCloud()) return cloud.fetchFollowList(profile.id, kind).catch(() => []);
+  const all = await loadAllRegisteredProfiles();
+  if (kind === "following") {
+    const ids = await loadFollowedUsers();
+    return all.filter(p => ids.includes(p.id));
+  }
+  return [];
+}
+
 /** Busca um perfil público pelo id ou @username */
 export async function findProfile(idOrUsername: string): Promise<UserProfile | null> {
   const clean = idOrUsername.replace(/^@/, "").toLowerCase();
@@ -350,6 +433,28 @@ export async function loadStories(): Promise<UserStoryGroup[]> {
   return FastStorage.getItemSync(KEYS.STORIES, INITIAL_STORIES);
 }
 
+export async function markStorySeen(storyId: string): Promise<void> {
+  if (await isCloud()) await cloud.markStorySeen(storyId).catch(() => {});
+}
+
+export async function deleteMyStory(storyId: string): Promise<void> {
+  if (await isCloud()) {
+    await cloud.deleteStory(storyId);
+    storySnapshot.delete(storyId);
+    return;
+  }
+  const groups: UserStoryGroup[] = FastStorage.getItemSync(KEYS.STORIES, INITIAL_STORIES);
+  FastStorage.setItemSync(
+    KEYS.STORIES,
+    groups.map(g => (g.isMe ? { ...g, stories: g.stories.filter(st => st.id !== storyId) } : g))
+  );
+}
+
+export async function loadStoryViewers(storyId: string) {
+  if (await isCloud()) return cloud.fetchStoryViewers(storyId).catch(() => []);
+  return [] as { username: string; avatar: string; time: string }[];
+}
+
 /** Salva stories. Na nuvem, publica os stories novos do meu grupo. */
 export async function saveStories(stories: UserStoryGroup[]): Promise<void> {
   if (await isCloud()) {
@@ -386,6 +491,17 @@ export async function loadComments(postId: string): Promise<CommentItem[]> {
   return all.filter(c => c.postId === postId);
 }
 
+export async function deleteComment(postId: string, commentId: string): Promise<CommentItem[]> {
+  if (await isCloud()) {
+    await cloud.deleteComment(commentId);
+    return cloud.fetchComments(postId);
+  }
+  const all: CommentItem[] = FastStorage.getItemSync(KEYS.COMMENTS, MOCK_COMMENTS);
+  const rest = all.filter(c => c.id !== commentId);
+  FastStorage.setItemSync(KEYS.COMMENTS, rest);
+  return rest.filter(c => c.postId === postId);
+}
+
 export async function addComment(postId: string, text: string): Promise<CommentItem[]> {
   if (await isCloud()) {
     await cloud.addComment(postId, text);
@@ -400,7 +516,8 @@ export async function addComment(postId: string, text: string): Promise<CommentI
     avatar: me.avatar,
     text,
     createdAt: "agora",
-    likes: 0
+    likes: 0,
+    canDelete: true
   };
   FastStorage.setItemSync(KEYS.COMMENTS, [...all, item]);
   return [...all, item].filter(c => c.postId === postId);
@@ -461,6 +578,15 @@ export async function setChatReaction(
   }
   await saveDirectMessages(thread.id, updated as any);
   return updated;
+}
+
+export async function markThreadRead(thread: DirectThread): Promise<void> {
+  if (await isCloud()) await cloud.markThreadRead(thread.profileId).catch(() => {});
+}
+
+export async function unreadMessages(): Promise<number> {
+  if (await isCloud()) return cloud.unreadMessagesCount().catch(() => 0);
+  return 0;
 }
 
 /** Monta uma conversa (nova ou existente) com um perfil */

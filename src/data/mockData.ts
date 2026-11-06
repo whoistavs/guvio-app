@@ -41,6 +41,8 @@ export interface FeedPost {
   creatorName: string;
   creatorUsername?: string;
   createdAt?: string;
+  lat?: number;
+  lng?: number;
   creatorAvatar: string;
   city: string;
   country: string;
@@ -68,6 +70,7 @@ export interface StoryItem {
   image: string;
   timestamp: string;
   caption?: string;
+  seen?: boolean;
 }
 
 export interface UserStoryGroup {
@@ -90,6 +93,7 @@ export interface ActivityItem {
   message: string;
   timeAgo: string;
   postImage?: string;
+  postId?: string;
   isFollowing?: boolean;
   timeCategory: "today" | "week" | "earlier";
 }
@@ -452,7 +456,7 @@ export const MOCK_ACTIVITIES: ActivityItem[] = [
   }
 ];
 
-export interface CommentItem { id: string; postId: string; username: string; avatar: string; text: string; createdAt: string; likes: number; }
+export interface CommentItem { id: string; postId: string; userId?: string; username: string; avatar: string; text: string; createdAt: string; likes: number; canDelete?: boolean; }
 export interface DirectThread { id: string; profileId: string; username: string; avatar: string; lastMessage: string; time: string; unread?: number; }
 
 export const MOCK_COMMENTS: CommentItem[] = [];

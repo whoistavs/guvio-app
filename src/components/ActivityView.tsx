@@ -9,10 +9,12 @@ import { loadActivities, saveActivities, loadFollowedUsers, saveFollowedUsers } 
 
 export function ActivityView({
   onBack,
-  onOpenProfile
+  onOpenProfile,
+  onOpenPost
 }: {
   onBack: () => void;
   onOpenProfile?: (username: string) => void;
+  onOpenPost?: (postId: string) => void;
 }) {
   const { colors } = useAppTheme();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -37,8 +39,13 @@ export function ActivityView({
   const renderActivityRow = (item: ActivityItem) => {
     const isFollowing = followedIds.includes(item.userId);
 
+    const openItem = () => {
+      if (item.type !== "follow" && item.postId) onOpenPost?.(item.postId);
+      else onOpenProfile?.(item.username);
+    };
+
     return (
-      <View key={item.id} style={s.activityRow}>
+      <Pressable key={item.id} style={s.activityRow} onPress={openItem}>
         {/* User Avatar with Type Badge */}
         <Pressable onPress={() => onOpenProfile?.(item.username)} style={s.avatarContainer}>
           <FastImage source={item.userAvatar} style={s.avatar} contentFit="cover" />
@@ -98,7 +105,7 @@ export function ActivityView({
         ) : item.postImage ? (
           <FastImage source={item.postImage} style={s.postThumb} contentFit="cover" />
         ) : null}
-      </View>
+      </Pressable>
     );
   };
 

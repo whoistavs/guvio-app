@@ -21,8 +21,12 @@ import {
   publishPost,
   findProfile,
   hasUnreadActivity,
-  threadForProfile
+  threadForProfile,
+  unreadMessages
 } from "./src/services/storage";
+import { getCurrentPlace, CurrentPlace } from "./src/services/location";
+import { PostDetailView } from "./src/components/PostDetailView";
+import { FollowListView } from "./src/components/FollowListView";
 import { fetchCityWeather, WeatherData } from "./src/services/weather";
 import { requestNotificationPermissions, sendLocalNotification } from "./src/services/notifications";
 import { getSavedAuthSession, signOut, handleAuthRedirect, deleteAccount } from "./src/services/auth";
@@ -30,7 +34,14 @@ import { FastStorage } from "./src/services/FastStorage";
 import { supabase, isCloud } from "./src/services/supabase";
 import { subscribeFeed, fetchPostCounts, subscribeMyAlerts } from "./src/services/cloud";
 
-type Route = "tabs" | "direct" | "activity" | "publicProfile" | "settings" | "settingsPage";
+type Screen =
+  | { name: "direct"; thread?: DirectThread | null }
+  | { name: "activity" }
+  | { name: "publicProfile"; profile: UserProfile }
+  | { name: "settings" }
+  | { name: "settingsPage"; kind: string }
+  | { name: "post"; postId: string }
+  | { name: "follows"; profile: UserProfile; kind: "followers" | "following" };
 
 function Guvio() {
   const { colors, dark } = useAppTheme();
@@ -40,12 +51,15 @@ function Guvio() {
   const [authenticated, setAuthenticated] = useState(false);
   const [booting, setBooting] = useState(true);
   const [tab, setTab] = useState("home");
-  const [route, setRoute] = useState<Route>("tabs");
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [directTarget, setDirectTarget] = useState<DirectThread | null>(null);
-  const [settingsPage, setSettingsPage] = useState("saved");
+  // pilha de telas abertas por cima das abas (voltar = tirar a de cima)
+  const [stack, setStack] = useState<Screen[]>([]);
+  const push = (sc: Screen) => setStack(prev => [...prev, sc]);
+  const back = () => setStack(prev => prev.slice(0, -1));
+  const top = stack[stack.length - 1];
+  const [place, setPlace] = useState<CurrentPlace | null>(null);
+  const [unreadDm, setUnreadDm] = useState(0);
   const [posts, setPosts] = useState<FeedPost[]>(MOCK_FEED_POSTS);
-  const [location, setLocation] = useState("Campinas, SP");
+  const [location, setLocation] = useState("Sua cidade");
   const [filterCity, setFilterCity] = useState<string | null>(null);
   const [filterCountry, setFilterCountry] = useState<string | null>(null);
   const [focus, setFocus] = useState<GlobeFocusTarget | null>(null);
@@ -64,7 +78,7 @@ function Guvio() {
     });
 
     requestNotificationPermissions();
-    fetchCityWeather(-22.9056, -47.0608).then(setWeather);
+    fetchCityWeather(41.5388, -8.6151).then(setWeather);
 
     const linkSub = Linking.addEventListener("url", ({ url }) => {
       handleAuthRedirect(url).then(ok => ok && setAuthenticated(true));
@@ -87,6 +101,13 @@ function Guvio() {
     let stopAlerts: (() => void) | undefined;
     loadSavedPosts().then(setPosts);
     hasUnreadActivity().then(setUnread);
+    unreadMessages().then(setUnreadDm);
+    getCurrentPlace().then(pl => {
+      if (!pl) return;
+      setPlace(pl);
+      if (pl.city) setLocation([pl.city, pl.region || pl.country].filter(Boolean).join(", "));
+      fetchCityWeather(pl.lat, pl.lng).then(setWeather);
+    });
 
     isCloud().then(cloud => {
       if (!cloud) return;
@@ -101,6 +122,7 @@ function Guvio() {
       stopAlerts = subscribeMyAlerts((title, body, kind) => {
         sendLocalNotification(title, body);
         if (kind === "activity") setUnread(true);
+        else setUnreadDm(n => n + 1);
       });
       stop = subscribeFeed({
         onNewPost: newPost =>
@@ -131,7 +153,7 @@ function Guvio() {
     await signOut();
     setAuthenticated(false);
     setPosts([]);
-    setRoute("tabs");
+    setStack([]);
     setTab("home");
   };
 
@@ -142,9 +164,11 @@ function Guvio() {
       const p = await publishPost({
         image: x.image,
         caption: x.caption,
-        city: filterCity || location.split(",")[0] || "Campinas",
-        country: filterCountry || "Brasil",
-        styleTag: "Novo look"
+        city: place?.city || location.split(",")[0] || "",
+        country: place?.country || filterCountry || "",
+        styleTag: "Novo look",
+        lat: place?.lat,
+        lng: place?.lng
       });
       setPosts(prev => {
         const updated = prev.some(v => v.id === p.id) ? prev : [p, ...prev];
@@ -202,75 +226,83 @@ function Guvio() {
         following: 0,
         bio: `Criador(a) de estilo explorando tendências de moda no Guvio.`
       };
-    setProfile(p);
-    setRoute("publicProfile");
+    push({ name: "publicProfile", profile: p });
   };
 
-  if (route === "direct")
-    return (
-      <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
-        <DirectView
-          initialThread={directTarget}
-          onBack={() => {
-            setDirectTarget(null);
-            setRoute("tabs");
-          }}
-        />
-      </SafeAreaView>
-    );
+  const openProfileObj = (p: UserProfile) => push({ name: "publicProfile", profile: p });
+  const openPost = (postId: string) => push({ name: "post", postId });
+  const openFollows = (p: UserProfile, kind: "followers" | "following") => push({ name: "follows", profile: p, kind });
 
-  if (route === "activity")
-    return (
-      <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
-        <ActivityView
-          onBack={() => setRoute("tabs")}
-          onOpenProfile={openName}
-        />
-      </SafeAreaView>
-    );
-
-  if (route === "publicProfile" && profile)
-    return (
-      <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
-        <PublicProfileView
-          profile={profile}
-          onBack={() => setRoute("tabs")}
-          onMessage={() => {
-            setDirectTarget(threadForProfile(profile));
-            setRoute("direct");
-          }}
-        />
-      </SafeAreaView>
-    );
-
-  if (route === "settings")
-    return (
-      <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
-        <SettingsView
-          onBack={() => setRoute("tabs")}
-          onOpen={x => {
-            setSettingsPage(x);
-            setRoute("settingsPage");
-          }}
-          onSignOut={handleSignOut}
-          onDeleteAccount={async () => {
-            await deleteAccount();
-            setAuthenticated(false);
-            setPosts([]);
-            setRoute("tabs");
-            setTab("home");
-            Alert.alert("Conta apagada", "Sua conta e seus dados foram removidos do Guvio.");
-          }}
-        />
-      </SafeAreaView>
-    );
-
-  if (route === "settingsPage")
-    return (
-      <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
-        <SimpleSettingsPage kind={settingsPage} onBack={() => setRoute("settings")} />
-      </SafeAreaView>
-    );
+  if (top) {
+    let screen: React.ReactNode = null;
+    switch (top.name) {
+      case "direct":
+        screen = (
+          <DirectView
+            initialThread={top.thread || null}
+            onBack={() => {
+              back();
+              unreadMessages().then(setUnreadDm);
+            }}
+            onOpenProfile={openName}
+          />
+        );
+        break;
+      case "activity":
+        screen = <ActivityView onBack={back} onOpenProfile={openName} onOpenPost={openPost} />;
+        break;
+      case "publicProfile":
+        screen = (
+          <PublicProfileView
+            profile={top.profile}
+            onBack={back}
+            onMessage={() => push({ name: "direct", thread: threadForProfile(top.profile) })}
+            onOpenPost={openPost}
+            onOpenFollows={kind => openFollows(top.profile, kind)}
+          />
+        );
+        break;
+      case "post":
+        screen = (
+          <PostDetailView
+            postId={top.postId}
+            onBack={back}
+            onOpenProfile={openName}
+            onDeleted={id => {
+              setPosts(prev => prev.filter(p => p.id !== id));
+              back();
+            }}
+          />
+        );
+        break;
+      case "follows":
+        screen = (
+          <FollowListView profile={top.profile} kind={top.kind} onBack={back} onOpenProfile={openProfileObj} />
+        );
+        break;
+      case "settings":
+        screen = (
+          <SettingsView
+            onBack={back}
+            onOpen={x => push({ name: "settingsPage", kind: x })}
+            onSignOut={handleSignOut}
+            onDeleteAccount={async () => {
+              await deleteAccount();
+              setAuthenticated(false);
+              setPosts([]);
+              setStack([]);
+              setTab("home");
+              Alert.alert("Conta apagada", "Sua conta e seus dados foram removidos do Guvio.");
+            }}
+          />
+        );
+        break;
+      case "settingsPage":
+        screen = <SimpleSettingsPage kind={top.kind} onBack={back} onOpenPost={openPost} />;
+        break;
+    }
+    return <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>{screen}</SafeAreaView>;
+  }
 
   const weatherText = weather ? `${weather.condition} ${weather.temperature}°C` : undefined;
 
@@ -289,12 +321,13 @@ function Guvio() {
             <Header
               locationText={location}
               weatherText={weatherText}
-              onOpenDirect={() => setRoute("direct")}
+              onOpenDirect={() => push({ name: "direct" })}
               onOpenActivity={() => {
                 setUnread(false);
-                setRoute("activity");
+                push({ name: "activity" });
               }}
               hasUnreadActivity={unread}
+              unreadMessages={unreadDm}
             />
             <GlobeLocationSearch onSelect={search} />
             <View style={s.globeContainer}>
@@ -320,14 +353,14 @@ function Guvio() {
       ) : tab === "wardrobe" ? (
         <WardrobeView onAdd={() => setTab("add")} currentWeather={weather} />
       ) : tab === "search" ? (
-        <SearchProfilesView
-          onOpenProfile={p => {
-            setProfile(p);
-            setRoute("publicProfile");
-          }}
-        />
+        <SearchProfilesView onOpenProfile={openProfileObj} onOpenPost={openPost} />
       ) : tab === "profile" ? (
-        <MyProfileView onSettings={() => setRoute("settings")} postsVersion={posts.length} />
+        <MyProfileView
+          onSettings={() => push({ name: "settings" })}
+          postsVersion={posts.length}
+          onOpenPost={openPost}
+          onOpenFollows={openFollows}
+        />
       ) : (
         <CreateHubView
           onWardrobe={() => setTab("wardrobe")}

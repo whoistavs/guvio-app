@@ -11,10 +11,12 @@ import {
   Shirt,
   Tag,
   Trash2,
+  MoreHorizontal,
   UserPlus
 } from "lucide-react-native";
 import { FeedPost, UserStoryGroup, MOCK_PROFILES, UserProfile, ClothingTag } from "../data/mockData";
 import { loadAllRegisteredProfiles, loadSavedProfile } from "../services/storage";
+import { askReport, EditCaptionModal } from "./PostMenus";
 import { isCloud } from "../services/supabase";
 import { CommentsModal } from "./CommentsModal";
 import { StoryViewerModal, CreateStoryModal } from "./StoryViewerModal";
@@ -163,6 +165,29 @@ export function HomeFeed({
     }
   };
 
+  const [editingPost, setEditingPost] = useState<FeedPost | null>(null);
+
+  const openPostMenu = (p: FeedPost) => {
+    if (isMine(p)) {
+      Alert.alert("Seu look", undefined, [
+        { text: "Editar legenda", onPress: () => setEditingPost(p) },
+        { text: "Apagar", style: "destructive", onPress: () => handleDeletePost(p.id) },
+        { text: "Cancelar", style: "cancel" }
+      ]);
+    } else {
+      Alert.alert(`@${p.creatorUsername || p.creatorName}`, undefined, [
+        {
+          text: "Denunciar",
+          style: "destructive",
+          onPress: async () => {
+            if (await askReport(p)) setPosts(v => v.filter(x => x.id !== p.id));
+          }
+        },
+        { text: "Cancelar", style: "cancel" }
+      ]);
+    }
+  };
+
   const handleDeletePost = (id: string) => {
     Alert.alert("Excluir publicação", "Tem certeza que deseja apagar este look do feed?", [
       { text: "Cancelar", style: "cancel" },
@@ -202,7 +227,8 @@ export function HomeFeed({
                 if (st.isMe && !hasStories) {
                   setCreateStoryOpen(true);
                 } else if (hasStories) {
-                  setActiveStoryIdx(idx);
+                  // o visualizador só conta grupos que têm stories
+                  setActiveStoryIdx(stories.filter(g => g.stories.length > 0).findIndex(g => g.id === st.id));
                 }
               }}
             >
@@ -334,11 +360,9 @@ export function HomeFeed({
                     <View style={[s.styleTag, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                       <Text style={{ color: colors.text, fontSize: 10, fontWeight: "800" }}>{p.styleTag}</Text>
                     </View>
-                    {isMine(p) ? (
-                      <Pressable onPress={() => handleDeletePost(p.id)} hitSlop={10}>
-                        <Trash2 size={16} color={colors.muted} />
-                      </Pressable>
-                    ) : null}
+                    <Pressable onPress={() => openPostMenu(p)} hitSlop={10}>
+                      <MoreHorizontal size={18} color={colors.muted} />
+                    </Pressable>
                   </View>
                 </View>
 
@@ -486,6 +510,11 @@ export function HomeFeed({
       )}
 
       {/* Modals */}
+      <EditCaptionModal
+        post={editingPost}
+        onClose={() => setEditingPost(null)}
+        onSaved={(id, caption) => setPosts(v => v.map(x => (x.id === id ? { ...x, caption } : x)))}
+      />
       <CommentsModal
         post={commentPost}
         visible={!!commentPost}
@@ -500,6 +529,18 @@ export function HomeFeed({
         onClose={() => setActiveStoryIdx(null)}
         storyGroups={stories}
         initialGroupIndex={activeStoryIdx || 0}
+        onStorySeen={id =>
+          setStories(prev =>
+            prev.map(g => {
+              if (!g.stories.some(st => st.id === id)) return g;
+              const list = g.stories.map(st => (st.id === id ? { ...st, seen: true } : st));
+              return { ...g, stories: list, hasUnseen: list.some(st => !st.seen) };
+            })
+          )
+        }
+        onStoryDeleted={id =>
+          setStories(prev => prev.map(g => ({ ...g, stories: g.stories.filter(st => st.id !== id) })))
+        }
       />
       <CreateStoryModal
         visible={createStoryOpen}

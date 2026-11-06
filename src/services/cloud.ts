@@ -2,7 +2,7 @@
  * Acesso ao backend real (Supabase). Todas as funções assumem que o usuário
  * está logado na nuvem — quem decide entre nuvem e modo demo é o storage.ts.
  */
-import { Platform } from "react-native";
+import { Image as RNImage, Platform } from "react-native";
 import { supabase, cloudUserId } from "./supabase";
 import type {
   ActivityItem,
@@ -59,10 +59,36 @@ function isRemote(uri: string) {
   return /^https?:\/\//i.test(uri);
 }
 
+const MAX_SIDE = 1440;
+
+function imageSize(uri: string): Promise<{ width: number; height: number } | null> {
+  return new Promise(resolve =>
+    RNImage.getSize(uri, (width, height) => resolve({ width, height }), () => resolve(null))
+  );
+}
+
+/** Reduz a foto para no máximo 1440px e JPEG 80% antes de enviar (bem mais rápido no 4G) */
+async function compress(uri: string): Promise<string> {
+  if (Platform.OS === "web") return uri;
+  try {
+    const { manipulateAsync, SaveFormat } = require("expo-image-manipulator") as typeof import("expo-image-manipulator");
+    const size = await imageSize(uri);
+    const actions: any[] = [];
+    if (size && Math.max(size.width, size.height) > MAX_SIDE) {
+      actions.push({ resize: size.width >= size.height ? { width: MAX_SIDE } : { height: MAX_SIDE } });
+    }
+    const out = await manipulateAsync(uri, actions, { compress: 0.8, format: SaveFormat.JPEG });
+    return out.uri;
+  } catch (e) {
+    return uri;
+  }
+}
+
 /** Envia uma foto local (câmera/galeria) para o Storage e devolve a URL pública. */
 export async function uploadImage(uri: string, folder: string): Promise<string> {
   if (!uri || isRemote(uri)) return uri;
   const uid = await me();
+  uri = await compress(uri);
   const ext = (uri.split("?")[0].split(".").pop() || "jpg").toLowerCase().slice(0, 5);
   const safeExt = ["jpg", "jpeg", "png", "webp", "heic", "gif"].includes(ext) ? ext : "jpg";
   const contentType = safeExt === "jpg" ? "image/jpeg" : `image/${safeExt}`;
@@ -171,6 +197,8 @@ function toPost(r: any, liked: Set<string>, saved: Set<string>): FeedPost {
     commentsCount: r.comments_count ?? 0,
     timeAgo: timeAgo(r.created_at),
     createdAt: r.created_at,
+    lat: r.lat ?? undefined,
+    lng: r.lng ?? undefined,
     isLiked: liked.has(r.id),
     isSaved: saved.has(r.id),
     clothingTags: Array.isArray(r.clothing_tags) ? r.clothing_tags : []
@@ -195,9 +223,69 @@ async function mapPosts(rows: any[]): Promise<FeedPost[]> {
   return rows.map(r => toPost(r, liked, saved));
 }
 
+/** ids de quem eu bloqueei e dos posts que denunciei (somem do meu feed) */
+async function hiddenSets(): Promise<{ users: Set<string>; posts: Set<string> }> {
+  const uid = await me();
+  const [b, r] = await Promise.all([
+    db().from("blocks").select("blocked_id").eq("blocker_id", uid),
+    db().from("reports").select("post_id").eq("reporter_id", uid)
+  ]);
+  return {
+    users: new Set<string>((b.data || []).map((x: any) => x.blocked_id)),
+    posts: new Set<string>((r.data || []).map((x: any) => x.post_id))
+  };
+}
+
+function visible(rows: any[], hidden: { users: Set<string>; posts: Set<string> }) {
+  return rows.filter(r => !hidden.users.has(r.user_id) && !hidden.posts.has(r.id));
+}
+
 export async function fetchFeed(limit = 60): Promise<FeedPost[]> {
-  const rows = check(await db().from("feed_posts").select("*").order("created_at", { ascending: false }).limit(limit));
-  return mapPosts(rows || []);
+  const [res, hidden] = await Promise.all([
+    db().from("feed_posts").select("*").order("created_at", { ascending: false }).limit(limit),
+    hiddenSets()
+  ]);
+  return mapPosts(visible(check(res) || [], hidden));
+}
+
+/** Explorar: looks de outras pessoas, mais curtidos primeiro */
+export async function fetchExplore(limit = 60): Promise<FeedPost[]> {
+  const uid = await me();
+  const [res, hidden] = await Promise.all([
+    db().from("feed_posts").select("*").neq("user_id", uid).order("created_at", { ascending: false }).limit(150),
+    hiddenSets()
+  ]);
+  const rows = visible(check(res) || [], hidden)
+    .sort((a: any, b: any) => b.likes_count + b.comments_count * 2 - (a.likes_count + a.comments_count * 2))
+    .slice(0, limit);
+  return mapPosts(rows);
+}
+
+/** Busca looks por cidade, país, estilo ou legenda */
+export async function searchPosts(query: string): Promise<FeedPost[]> {
+  const q = query.trim().replace(/[%,()]/g, " ");
+  if (!q) return [];
+  const like = `%${q}%`;
+  const [res, hidden] = await Promise.all([
+    db()
+      .from("feed_posts")
+      .select("*")
+      .or(`city.ilike.${like},country.ilike.${like},style_tag.ilike.${like},caption.ilike.${like}`)
+      .order("created_at", { ascending: false })
+      .limit(60),
+    hiddenSets()
+  ]);
+  return mapPosts(visible(check(res) || [], hidden));
+}
+
+export async function updateCaption(postId: string, caption: string) {
+  check(await db().from("posts").update({ caption }).eq("id", postId));
+}
+
+export async function reportPost(postId: string, reason: string) {
+  const uid = await me();
+  const r = await db().from("reports").insert({ reporter_id: uid, post_id: postId, reason });
+  if (r.error && r.error.code !== "23505") throw new Error(r.error.message);
 }
 
 export async function fetchPost(id: string): Promise<FeedPost | null> {
@@ -228,13 +316,24 @@ export async function createPost(input: {
   city: string;
   country: string;
   styleTag: string;
+  lat?: number;
+  lng?: number;
 }): Promise<FeedPost> {
   const uid = await me();
   const image_url = await uploadImage(input.image, "posts");
   const row = check(
     await db()
       .from("posts")
-      .insert({ user_id: uid, image_url, caption: input.caption, city: input.city, country: input.country, style_tag: input.styleTag })
+      .insert({
+        user_id: uid,
+        image_url,
+        caption: input.caption,
+        city: input.city,
+        country: input.country,
+        style_tag: input.styleTag,
+        lat: input.lat ?? null,
+        lng: input.lng ?? null
+      })
       .select("id")
       .single()
   ) as any;
@@ -271,22 +370,31 @@ export async function setSave(postId: string, on: boolean) {
 // Comentários
 // ---------------------------------------------------------------------
 export async function fetchComments(postId: string): Promise<CommentItem[]> {
-  const rows = check(
-    await db()
+  const uid = await me();
+  const [rows, post] = await Promise.all([
+    db()
       .from("comments")
-      .select("id, post_id, text, created_at, profiles(username, avatar_url)")
+      .select("id, post_id, user_id, text, created_at, profiles(username, avatar_url)")
       .eq("post_id", postId)
-      .order("created_at", { ascending: true })
-  );
-  return (rows || []).map((r: any) => ({
+      .order("created_at", { ascending: true }),
+    db().from("posts").select("user_id").eq("id", postId).maybeSingle()
+  ]);
+  const postOwner = (post.data as any)?.user_id;
+  return (check(rows) || []).map((r: any) => ({
     id: r.id,
     postId: r.post_id,
+    userId: r.user_id,
+    canDelete: r.user_id === uid || postOwner === uid,
     username: r.profiles?.username || "membro",
     avatar: r.profiles?.avatar_url || DEFAULT_AVATAR,
     text: r.text,
     createdAt: timeAgo(r.created_at),
     likes: 0
   }));
+}
+
+export async function deleteComment(commentId: string) {
+  check(await db().from("comments").delete().eq("id", commentId));
 }
 
 export async function addComment(postId: string, text: string) {
@@ -314,6 +422,16 @@ export async function setFollow(targetId: string, on: boolean) {
   }
 }
 
+export async function fetchFollowList(userId: string, kind: "followers" | "following"): Promise<UserProfile[]> {
+  const col = kind === "followers" ? "follower_id" : "following_id";
+  const where = kind === "followers" ? "following_id" : "follower_id";
+  const rows = check(await db().from("follows").select(col).eq(where, userId).limit(500)) as any[];
+  const ids = (rows || []).map(r => r[col]);
+  if (ids.length === 0) return [];
+  const profs = check(await db().from("profile_stats").select("*").in("id", ids)) as any[];
+  return (profs || []).map(r => toProfile(r));
+}
+
 // ---------------------------------------------------------------------
 // Stories (últimas 24h)
 // ---------------------------------------------------------------------
@@ -328,6 +446,11 @@ export async function fetchStories(): Promise<UserStoryGroup[]> {
       .order("created_at", { ascending: true }),
     getMyProfile()
   ]);
+  const storyIds = ((check(rows) as any[]) || []).map(r => r.id);
+  const seenRes = storyIds.length
+    ? await db().from("story_views").select("story_id").eq("viewer_id", uid).in("story_id", storyIds)
+    : { data: [] as any[] };
+  const seen = new Set<string>((seenRes.data || []).map((x: any) => x.story_id));
   const groups = new Map<string, UserStoryGroup>();
   groups.set(uid, {
     id: uid,
@@ -345,13 +468,18 @@ export async function fetchStories(): Promise<UserStoryGroup[]> {
         username: r.profiles?.username || "membro",
         displayName: r.profiles?.display_name || r.profiles?.username || "",
         avatar: r.profiles?.avatar_url || DEFAULT_AVATAR,
-        hasUnseen: true,
+        hasUnseen: false,
         stories: []
       });
     }
-    groups.get(r.user_id)!.stories.push({ id: r.id, image: r.image_url, caption: r.caption || undefined, timestamp: timeAgo(r.created_at) });
+    const g = groups.get(r.user_id)!;
+    const wasSeen = r.user_id === uid || seen.has(r.id);
+    if (!wasSeen) g.hasUnseen = true;
+    g.stories.push({ id: r.id, image: r.image_url, caption: r.caption || undefined, timestamp: timeAgo(r.created_at), seen: wasSeen });
   }
-  return Array.from(groups.values());
+  // quem tem story não visto aparece primeiro (depois do meu)
+  const all = Array.from(groups.values());
+  return [all[0], ...all.slice(1).sort((a, b) => Number(!!b.hasUnseen) - Number(!!a.hasUnseen))];
 }
 
 export async function addStory(imageUri: string, caption?: string): Promise<{ id: string; image: string }> {
@@ -361,6 +489,31 @@ export async function addStory(imageUri: string, caption?: string): Promise<{ id
     await db().from("stories").insert({ user_id: uid, image_url, caption: caption || null }).select("id").single()
   ) as any;
   return { id: row.id, image: image_url };
+}
+
+export async function markStorySeen(storyId: string) {
+  const uid = await me();
+  const r = await db().from("story_views").insert({ story_id: storyId, viewer_id: uid });
+  if (r.error && r.error.code !== "23505" && r.error.code !== "23503") throw new Error(r.error.message);
+}
+
+export async function deleteStory(storyId: string) {
+  check(await db().from("stories").delete().eq("id", storyId));
+}
+
+export async function fetchStoryViewers(storyId: string): Promise<{ username: string; avatar: string; time: string }[]> {
+  const rows = check(
+    await db()
+      .from("story_views")
+      .select("created_at, profiles(username, avatar_url)")
+      .eq("story_id", storyId)
+      .order("created_at", { ascending: false })
+  ) as any[];
+  return (rows || []).map(r => ({
+    username: r.profiles?.username || "membro",
+    avatar: r.profiles?.avatar_url || DEFAULT_AVATAR,
+    time: timeAgo(r.created_at)
+  }));
 }
 
 // ---------------------------------------------------------------------
@@ -380,15 +533,17 @@ export async function fetchThreads(): Promise<DirectThread[]> {
   const rows = check(
     await db()
       .from("messages")
-      .select("id, sender_id, recipient_id, text, image_url, created_at")
+      .select("id, sender_id, recipient_id, text, image_url, created_at, read_at")
       .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
       .order("created_at", { ascending: false })
       .limit(500)
   ) as any[];
   const last = new Map<string, any>();
+  const unread = new Map<string, number>();
   for (const m of rows || []) {
     const other = m.sender_id === uid ? m.recipient_id : m.sender_id;
     if (!last.has(other)) last.set(other, m);
+    if (m.recipient_id === uid && !m.read_at) unread.set(other, (unread.get(other) || 0) + 1);
   }
   if (last.size === 0) return [];
   const profs = check(
@@ -402,7 +557,8 @@ export async function fetchThreads(): Promise<DirectThread[]> {
       username: p?.username || "membro",
       avatar: p?.avatar_url || DEFAULT_AVATAR,
       lastMessage: m.text || "📷 Foto",
-      time: timeAgo(m.created_at)
+      time: timeAgo(m.created_at),
+      unread: unread.get(other) || 0
     };
   });
 }
@@ -442,6 +598,20 @@ export async function sendMessage(otherId: string, msg: { text?: string; image?:
       .single()
   );
   return toMessage(row, uid);
+}
+
+export async function markThreadRead(otherId: string) {
+  await db().rpc("mark_thread_read", { other: otherId });
+}
+
+export async function unreadMessagesCount(): Promise<number> {
+  const uid = await me();
+  const { count } = await db()
+    .from("messages")
+    .select("id", { count: "exact", head: true })
+    .eq("recipient_id", uid)
+    .is("read_at", null);
+  return count || 0;
 }
 
 export async function setReaction(messageId: string, emoji: string | null) {
@@ -504,7 +674,7 @@ export async function fetchActivities(): Promise<ActivityItem[]> {
   const rows = check(
     await db()
       .from("notifications")
-      .select("id, type, text, created_at, actor_id, actor:profiles!notifications_actor_id_fkey(username, avatar_url), post:posts(image_url)")
+      .select("id, type, text, created_at, actor_id, post_id, actor:profiles!notifications_actor_id_fkey(username, avatar_url), post:posts(image_url)")
       .eq("user_id", uid)
       .order("created_at", { ascending: false })
       .limit(100)
@@ -523,6 +693,7 @@ export async function fetchActivities(): Promise<ActivityItem[]> {
         : "começou a seguir você.",
     timeAgo: timeAgo(r.created_at),
     postImage: r.post?.image_url || undefined,
+    postId: r.post_id || undefined,
     timeCategory: timeCategory(r.created_at)
   }));
 }

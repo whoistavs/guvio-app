@@ -13,10 +13,10 @@ import {
   TextInput,
   View
 } from "react-native";
-import { Send, X } from "lucide-react-native";
+import { Send, Trash2, X } from "lucide-react-native";
 import { CommentItem, FeedPost } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
-import { addComment, loadComments } from "../services/storage";
+import { addComment, deleteComment, loadComments } from "../services/storage";
 
 export function CommentsModal({
   post,
@@ -59,6 +59,26 @@ export function CommentsModal({
     }
   };
 
+  const remove = (c: CommentItem) => {
+    if (!post) return;
+    Alert.alert("Apagar comentário?", c.text, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Apagar",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            const list = await deleteComment(post.id, c.id);
+            setComments(list);
+            onCommented?.(post.id, list.length);
+          } catch (e: any) {
+            Alert.alert("Erro", e?.message || "Não foi possível apagar.");
+          }
+        }
+      }
+    ]);
+  };
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView style={s.back} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -79,7 +99,7 @@ export function CommentsModal({
               </Text>
             ) : (
               comments.map(c => (
-                <View key={c.id} style={s.comment}>
+                <Pressable key={c.id} style={s.comment} onLongPress={c.canDelete ? () => remove(c) : undefined}>
                   <Image source={{ uri: c.avatar }} style={s.avatar} />
                   <View style={{ flex: 1 }}>
                     <Text style={[s.user, { color: colors.text }]}>
@@ -87,7 +107,12 @@ export function CommentsModal({
                     </Text>
                     <Text style={[s.meta, { color: colors.muted }]}>{c.createdAt}</Text>
                   </View>
-                </View>
+                  {c.canDelete ? (
+                    <Pressable onPress={() => remove(c)} hitSlop={10}>
+                      <Trash2 size={15} color={colors.muted} />
+                    </Pressable>
+                  ) : null}
+                </Pressable>
               ))
             )}
           </ScrollView>

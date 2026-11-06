@@ -85,11 +85,15 @@ function Grid({
 export function PublicProfileView({
   profile,
   onBack,
-  onMessage
+  onMessage,
+  onOpenPost,
+  onOpenFollows
 }: {
   profile: UserProfile;
   onBack: () => void;
   onMessage: () => void;
+  onOpenPost?: (postId: string) => void;
+  onOpenFollows?: (kind: "followers" | "following") => void;
 }) {
   const { colors } = useAppTheme();
   const [followedIds, setFollowedIds] = useState<string[]>([]);
@@ -163,8 +167,18 @@ export function PublicProfileView({
           />
           <View style={s.stats}>
             <Stat v={posts.length.toString()} l="posts" colors={colors} />
-            <Stat v={followersCount.toLocaleString("pt-BR")} l="seguidores" colors={colors} />
-            <Stat v={(profile.following || 0).toString()} l="seguindo" colors={colors} />
+            <Stat
+              v={followersCount.toLocaleString("pt-BR")}
+              l="seguidores"
+              colors={colors}
+              onPress={onOpenFollows ? () => onOpenFollows("followers") : undefined}
+            />
+            <Stat
+              v={(profile.following || 0).toString()}
+              l="seguindo"
+              colors={colors}
+              onPress={onOpenFollows ? () => onOpenFollows("following") : undefined}
+            />
           </View>
         </View>
 
@@ -210,7 +224,7 @@ export function PublicProfileView({
         <View style={[s.tab, { borderTopColor: colors.border }]}>
           <Grid3X3 size={20} color={colors.icon} />
         </View>
-        <Grid posts={posts} colors={colors} onSelectPost={setSelectedPost} />
+        <Grid posts={posts} colors={colors} onSelectPost={p => (onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))} />
       </ScrollView>
 
       {/* Post Viewer Modal */}
@@ -268,16 +282,26 @@ export function PublicProfileView({
   );
 }
 
-function Stat({ v, l, colors }: { v: string; l: string; colors: any }) {
+function Stat({ v, l, colors, onPress }: { v: string; l: string; colors: any; onPress?: () => void }) {
   return (
-    <View style={{ alignItems: "center" }}>
+    <Pressable onPress={onPress} disabled={!onPress} hitSlop={6} style={{ alignItems: "center" }}>
       <Text style={{ color: colors.text, fontWeight: "900", fontSize: 15 }}>{v}</Text>
       <Text style={{ color: colors.muted, fontSize: 10 }}>{l}</Text>
-    </View>
+    </Pressable>
   );
 }
 
-export function MyProfileView({ onSettings, postsVersion = 0 }: { onSettings: () => void; postsVersion?: number }) {
+export function MyProfileView({
+  onSettings,
+  postsVersion = 0,
+  onOpenPost,
+  onOpenFollows
+}: {
+  onSettings: () => void;
+  postsVersion?: number;
+  onOpenPost?: (postId: string) => void;
+  onOpenFollows?: (p: UserProfile, kind: "followers" | "following") => void;
+}) {
   const { colors } = useAppTheme();
   const [profile, setProfileState] = useState<UserProfile>(INITIAL_USER_PROFILE);
   const [userPosts, setUserPosts] = useState<FeedPost[]>([]);
@@ -390,8 +414,18 @@ export function MyProfileView({ onSettings, postsVersion = 0 }: { onSettings: ()
           <FastImage source={profile.avatar} style={s.bigAvatar} contentFit="cover" transition={100} />
           <View style={s.stats}>
             <Stat v={userPosts.length.toString()} l="posts" colors={colors} />
-            <Stat v={profile.followers.toString()} l="seguidores" colors={colors} />
-            <Stat v={followingCount.toString()} l="seguindo" colors={colors} />
+            <Stat
+              v={profile.followers.toString()}
+              l="seguidores"
+              colors={colors}
+              onPress={onOpenFollows ? () => onOpenFollows(profile, "followers") : undefined}
+            />
+            <Stat
+              v={followingCount.toString()}
+              l="seguindo"
+              colors={colors}
+              onPress={onOpenFollows ? () => onOpenFollows(profile, "following") : undefined}
+            />
           </View>
         </View>
 
@@ -440,7 +474,7 @@ export function MyProfileView({ onSettings, postsVersion = 0 }: { onSettings: ()
           <Grid
             posts={userPosts}
             colors={colors}
-            onSelectPost={setSelectedPost}
+            onSelectPost={p => (onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))}
             emptyTitle="Nenhum look postado"
             emptySubtitle="Seus looks publicados no feed aparecerão aqui no estilo grade do Instagram."
           />
@@ -450,7 +484,7 @@ export function MyProfileView({ onSettings, postsVersion = 0 }: { onSettings: ()
           <Grid
             posts={savedPosts}
             colors={colors}
-            onSelectPost={setSelectedPost}
+            onSelectPost={p => (onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))}
             emptyTitle="Nenhum look salvo"
             emptySubtitle="Clique no ícone de salvar em qualquer look do feed para guardá-lo na sua coleção privada."
           />
@@ -460,7 +494,7 @@ export function MyProfileView({ onSettings, postsVersion = 0 }: { onSettings: ()
           <Grid
             posts={[]}
             colors={colors}
-            onSelectPost={setSelectedPost}
+            onSelectPost={p => (onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))}
             emptyTitle="Nenhuma marcação"
             emptySubtitle="Fotos e looks onde outros criadores marcarem seu perfil aparecerão aqui."
           />
@@ -696,7 +730,15 @@ export function SettingsView({
   );
 }
 
-export function SimpleSettingsPage({ kind, onBack }: { kind: string; onBack: () => void }) {
+export function SimpleSettingsPage({
+  kind,
+  onBack,
+  onOpenPost
+}: {
+  kind: string;
+  onBack: () => void;
+  onOpenPost?: (postId: string) => void;
+}) {
   const { colors } = useAppTheme();
   const [savedPosts, setSavedPosts] = useState<FeedPost[]>([]);
   const [blocked, setBlockedList] = useState<UserProfile[]>([]);
@@ -721,7 +763,7 @@ export function SimpleSettingsPage({ kind, onBack }: { kind: string; onBack: () 
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScreenHeader title={title} onBack={onBack} />
       {kind === "saved" ? (
-        <Grid posts={savedPosts} colors={colors} />
+        <Grid posts={savedPosts} colors={colors} onSelectPost={p => onOpenPost?.(p.id)} />
       ) : kind === "activity" ? (
         <View style={s.info}>
           <Clock3 size={38} color={colors.icon} />

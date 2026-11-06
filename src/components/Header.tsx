@@ -8,13 +8,15 @@ export function Header({
   weatherText,
   onOpenDirect,
   onOpenActivity,
-  hasUnreadActivity = true
+  hasUnreadActivity = true,
+  unreadMessages = 0
 }: {
   locationText?: string;
   weatherText?: string;
   onOpenDirect?: () => void;
   onOpenActivity?: () => void;
   hasUnreadActivity?: boolean;
+  unreadMessages?: number;
 }) {
   const { colors } = useAppTheme();
   return (
@@ -42,6 +44,11 @@ export function Header({
 
         <Pressable onPress={onOpenDirect} hitSlop={10} style={styles.iconBtn}>
           <Send size={21} color={colors.icon} style={{ transform: [{ rotate: "-22deg" }] }} />
+          {unreadMessages > 0 && (
+            <View style={styles.dmBadge}>
+              <Text style={styles.dmBadgeText}>{unreadMessages > 9 ? "9+" : unreadMessages}</Text>
+            </View>
+          )}
         </Pressable>
       </View>
     </View>
@@ -57,6 +64,19 @@ const styles = StyleSheet.create({
   loc: { flexDirection: "row", alignItems: "center", gap: 4 },
   lt: { fontSize: 11, fontWeight: "600" },
   iconBtn: { position: "relative", padding: 2 },
+  dmBadge: {
+    position: "absolute",
+    top: -6,
+    right: -9,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: "#FF3040",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  dmBadgeText: { color: "#FFF", fontSize: 10, fontWeight: "900" },
   activityBadgeDot: {
     position: "absolute",
     top: 0,
