@@ -162,7 +162,7 @@ export function PublicProfileView({
         />
         <View style={s.top}>
           <FastImage
-            source={profile.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200"}
+            source={profile.avatar}
             style={s.bigAvatar}
             contentFit="cover"
             transition={100}

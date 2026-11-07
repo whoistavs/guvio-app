@@ -213,7 +213,7 @@ export async function signUpEmail(
   }
 
   const userId = `user-${Date.now()}`;
-  const defaultAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200";
+  const defaultAvatar = "";
 
   // Gerar hash seguro da senha
   const passwordHash = await hashPassword(password);

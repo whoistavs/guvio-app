@@ -9,9 +9,9 @@ import { generateSmartOutfit, getWeatherRecommendationTip, AIOutfitRecommendatio
 import { loadSavedWardrobe, addWardrobeItem, removeWardrobeItem } from "../services/storage";
 import { WeatherData } from "../services/weather";
 import { getSavedAuthSession } from "../services/auth";
-import { FastImage, preloadImages } from "./FastImage";
+import { ImagePlaceholder, FastImage, preloadImages } from "./FastImage";
 
-const DEFAULT_CLOTH = "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=400&auto=format&fit=crop";
+const DEFAULT_CLOTH = ""; // sem foto escolhida ainda
 
 export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; currentWeather?: WeatherData | null }) {
   const { colors } = useAppTheme();
@@ -80,6 +80,10 @@ export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; cu
     if (savingItem) return;
     if (!newName.trim()) {
       Alert.alert("Nome da peça", "Por favor informe o nome da peça de roupa.");
+      return;
+    }
+    if (!newImageUri) {
+      Alert.alert("Foto da peça", "Tire uma foto ou escolha da galeria.");
       return;
     }
     const newItem: WardrobeItem = {
@@ -247,7 +251,11 @@ export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; cu
               </Pressable>
             </View>
 
-            <FastImage source={newImageUri} style={s.previewImg} contentFit="cover" transition={100} />
+            {newImageUri ? (
+              <FastImage source={newImageUri} style={s.previewImg} contentFit="cover" transition={100} />
+            ) : (
+              <ImagePlaceholder style={s.previewImg} kind="photo" />
+            )}
 
             <View style={s.pickers}>
               <Pressable onPress={() => pickImage(true)} style={[s.pickerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>

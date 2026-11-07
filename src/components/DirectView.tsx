@@ -4,6 +4,7 @@ import { Image as ImageIcon, MessageCircle, Search, Send, Heart, SquarePen, X } 
 import * as ImagePicker from "expo-image-picker";
 import { DirectThread, UserProfile } from "../data/mockData";
 import { ScreenHeader } from "./ScreenHeader";
+import { FastImage } from "./FastImage";
 import { useAppTheme } from "../context/AppTheme";
 import {
   ChatMessage,
@@ -128,7 +129,7 @@ export function DirectView({
           right={
             onOpenProfile ? (
               <Pressable onPress={() => onOpenProfile(open.username)} hitSlop={8}>
-                <Image source={{ uri: open.avatar }} style={s.headAvatar} />
+                <FastImage source={open.avatar} style={s.headAvatar} />
               </Pressable>
             ) : undefined
           }
@@ -248,7 +249,7 @@ export function DirectView({
                   setOpen(threads.find(t => t.profileId === p.id) || threadForProfile(p));
                 }}
               >
-                <Image source={{ uri: p.avatar }} style={s.avatar} />
+                <FastImage source={p.avatar} style={s.avatar} />
                 <View style={{ flex: 1 }}>
                   <Text style={[s.user, { color: colors.text }]}>@{p.username}</Text>
                   <Text style={{ color: colors.muted, fontSize: 12 }}>{p.displayName}</Text>
@@ -280,7 +281,7 @@ export function DirectView({
         ) : (
           filteredThreads.map(d => (
             <Pressable key={d.id} onPress={() => setOpen(d)} style={s.thread}>
-              <Image source={{ uri: d.avatar }} style={s.avatar} />
+              <FastImage source={d.avatar} style={s.avatar} />
               <View style={{ flex: 1 }}>
                 <Text style={[s.user, { color: colors.text }]}>@{d.username}</Text>
                 <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12 }}>

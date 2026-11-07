@@ -3,9 +3,10 @@ import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Tex
 import { Camera, ImagePlus, Share2, Shirt, Sparkles, Upload } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useAppTheme } from "../context/AppTheme";
+import { ImagePlaceholder } from "./FastImage";
 import { OutfitPromoExporter } from "./OutfitPromoExporter";
 
-const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?q=80&w=800&auto=format&fit=crop";
+const DEFAULT_IMAGE = ""; // sem foto escolhida ainda
 
 export function CreateHubView({
   onPublish,
@@ -108,7 +109,16 @@ export function CreateHubView({
       </Pressable>
       <Text style={[s.h, { color: colors.text }]}>Nova publicação</Text>
       
-      <Image source={{ uri: imageUri }} style={s.preview} />
+      {imageUri ? (
+        <Image source={{ uri: imageUri }} style={s.preview} />
+      ) : (
+        <Pressable onPress={() => pickImage(false)}>
+          <ImagePlaceholder style={s.preview} kind="photo" />
+          <Text style={{ color: colors.muted, textAlign: "center", marginTop: -40, marginBottom: 24, fontSize: 12 }}>
+            Toque para escolher a foto do look
+          </Text>
+        </Pressable>
+      )}
       
       <View style={s.pickers}>
         <Pressable onPress={() => pickImage(true)} style={[s.pickerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -133,6 +143,10 @@ export function CreateHubView({
       <Pressable
         disabled={publishing}
         onPress={async () => {
+          if (!imageUri) {
+            Alert.alert("Escolha uma foto", "Tire uma foto ou abra a galeria para publicar seu look.");
+            return;
+          }
           const ok = await onPublish({ image: imageUri, caption: caption || "Novo look no Guvio." });
           if (ok === false) return;
           setCaption("");

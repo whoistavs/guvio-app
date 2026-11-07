@@ -16,6 +16,7 @@ import {
 import { Send, Trash2, X } from "lucide-react-native";
 import { CommentItem, FeedPost } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
+import { FastImage } from "./FastImage";
 import { addComment, deleteComment, loadComments } from "../services/storage";
 
 export function CommentsModal({
@@ -100,7 +101,7 @@ export function CommentsModal({
             ) : (
               comments.map(c => (
                 <Pressable key={c.id} style={s.comment} onLongPress={c.canDelete ? () => remove(c) : undefined}>
-                  <Image source={{ uri: c.avatar }} style={s.avatar} />
+                  <FastImage source={c.avatar} style={s.avatar} />
                   <View style={{ flex: 1 }}>
                     <Text style={[s.user, { color: colors.text }]}>
                       @{c.username} <Text style={[s.body, { color: colors.text }]}>{c.text}</Text>

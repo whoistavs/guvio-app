@@ -9,7 +9,7 @@ import { HomeFeed } from "./src/components/HomeFeed";
 import { WardrobeView } from "./src/components/WardrobeView";
 import { SearchProfilesView } from "./src/components/SearchProfilesView";
 import { BottomNavLiquid } from "./src/components/BottomNavLiquid";
-import { MOCK_FEED_POSTS, FeedPost, UserProfile, DirectThread } from "./src/data/mockData";
+import { FeedPost, UserProfile, DirectThread } from "./src/data/mockData";
 import { MyProfileView, PublicProfileView, SettingsView, SimpleSettingsPage } from "./src/components/ProfileViews";
 import { DirectView } from "./src/components/DirectView";
 import { ActivityView } from "./src/components/ActivityView";
@@ -58,7 +58,7 @@ function Guvio() {
   const top = stack[stack.length - 1];
   const [place, setPlace] = useState<CurrentPlace | null>(null);
   const [unreadDm, setUnreadDm] = useState(0);
-  const [posts, setPosts] = useState<FeedPost[]>(MOCK_FEED_POSTS);
+  const [posts, setPosts] = useState<FeedPost[]>([]);
   const [location, setLocation] = useState("Sua cidade");
   const [filterCity, setFilterCity] = useState<string | null>(null);
   const [filterCountry, setFilterCountry] = useState<string | null>(null);
@@ -220,7 +220,7 @@ function Guvio() {
         id: `p-${cleanName}`,
         username: cleanName,
         displayName: name,
-        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=300",
+        avatar: "",
         location: location || "Brasil",
         followers: 0,
         following: 0,

@@ -14,7 +14,7 @@ import type {
   WardrobeItem
 } from "../data/mockData";
 
-export const DEFAULT_AVATAR = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200";
+export const DEFAULT_AVATAR = ""; // sem foto: o app mostra o ícone de perfil
 
 function db() {
   if (!supabase) throw new Error("Supabase não configurado");
@@ -151,7 +151,9 @@ export async function listProfiles(): Promise<UserProfile[]> {
 
 export async function updateMyProfile(p: UserProfile): Promise<UserProfile> {
   const uid = await me();
-  const avatar = p.avatar ? await uploadImage(p.avatar, "avatar") : null;
+  // foto de exemplo antiga não é salva: fica o ícone de perfil
+  const stock = !p.avatar || p.avatar.includes("photo-1534528741775-53994a69daeb");
+  const avatar = stock ? null : await uploadImage(p.avatar, "avatar");
   const username = p.username.trim().toLowerCase().replace(/^@/, "");
   const res = await db()
     .from("profiles")
