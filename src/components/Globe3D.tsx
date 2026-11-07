@@ -30,7 +30,9 @@ const DIAG = {
   buffer: "",
   glError: 0,
   lastError: "",
-  version: ""
+  version: "",
+  sceneObjs: 0,
+  camera: ""
 };
 
 // Proteção contra o app fechar ao desenhar o globo: se fechar com o globo aberto,
@@ -654,6 +656,12 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
           try {
             render(scene, camera);
             DIAG.frames += 1;
+            if (DIAG.frames % 60 === 1) {
+              let n = 0;
+              scene?.traverse?.(() => n++);
+              DIAG.sceneObjs = n;
+              DIAG.camera = `${camera?.type || "?"}${camera?.isCamera ? "" : "!"} z${Number(camera?.position?.z).toFixed(1)}`;
+            }
             DIAG.calls = gl.info?.render?.calls ?? 0;
             DIAG.points = gl.info?.render?.points ?? 0;
             DIAG.triangles = gl.info?.render?.triangles ?? 0;
@@ -680,7 +688,7 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
       const id = setInterval(() => {
         setDiagText(
           `nível ${level} · gl ${DIAG.created ? "ok" : "não criado"} · ${DIAG.buffer} · quadros ${DIAG.frames} · ` +
-            `draws ${DIAG.calls} · pts ${DIAG.points} · tri ${DIAG.triangles}` +
+            `draws ${DIAG.calls} · pts ${DIAG.points} · tri ${DIAG.triangles} · obj ${DIAG.sceneObjs} · cam ${DIAG.camera}` +
             (DIAG.glError ? ` · glErr ${DIAG.glError}` : "") +
             (DIAG.lastError ? ` · erro: ${DIAG.lastError}` : "") +
             (DIAG.version ? ` · ${DIAG.version}` : "")
