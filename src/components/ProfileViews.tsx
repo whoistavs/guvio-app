@@ -948,7 +948,7 @@ export function SettingsView({
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: 60 }}>
       <ScreenHeader title="Configurações" onBack={onBack} />
       {rows.map(r => {
         const I = r.i;
@@ -990,7 +990,7 @@ export function SettingsView({
           </Text>
         </Pressable>
       ) : null}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -1263,7 +1263,7 @@ const s = StyleSheet.create({
   tileWrap: { width: "33.333%", aspectRatio: 1, borderWidth: 0.5, borderColor: "rgba(255,255,255,.2)" },
   tile: { width: "100%", height: "100%", backgroundColor: "#222" },
   emptyGrid: { alignItems: "center", justifyContent: "center", padding: 40, width: "100%" },
-  setting: { minHeight: 58, flexDirection: "row", alignItems: "center", paddingHorizontal: 20, gap: 14, borderBottomWidth: 1 },
+  setting: { minHeight: 58, flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 10, gap: 14, borderBottomWidth: 1, flexShrink: 0 },
   settingText: { fontSize: 14, fontWeight: "700", flex: 1 },
   info: { alignItems: "center", padding: 40, gap: 12 },
   infoBig: { fontSize: 22, fontWeight: "900" },

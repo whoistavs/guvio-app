@@ -502,7 +502,9 @@ export function HomeFeed({
                       <MessageCircle size={24} color={colors.icon} />
                     </Pressable>
                     <Pressable onPress={() => setSharePost(p)} hitSlop={8}>
-                      <Send size={23} color={colors.icon} style={{ transform: [{ rotate: "-22deg" }] }} />
+                      <View style={{ transform: [{ rotate: "-22deg" }] }}>
+            <Send size={23} color={colors.icon} />
+          </View>
                     </Pressable>
                   </View>
                   <Pressable

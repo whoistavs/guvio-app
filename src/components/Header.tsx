@@ -43,7 +43,9 @@ export function Header({
         </Pressable>
 
         <Pressable onPress={onOpenDirect} hitSlop={10} style={styles.iconBtn}>
-          <Send size={21} color={colors.icon} style={{ transform: [{ rotate: "-22deg" }] }} />
+          <View style={{ transform: [{ rotate: "-22deg" }] }}>
+            <Send size={21} color={colors.icon} />
+          </View>
           {unreadMessages > 0 && (
             <View style={styles.dmBadge}>
               <Text style={styles.dmBadgeText}>{unreadMessages > 9 ? "9+" : unreadMessages}</Text>

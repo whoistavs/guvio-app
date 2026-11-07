@@ -163,7 +163,9 @@ export function PostDetailView({
             <MessageCircle size={25} color={colors.icon} />
           </Pressable>
           <Pressable onPress={() => setSharing(true)} hitSlop={8}>
-            <Send size={23} color={colors.icon} style={{ transform: [{ rotate: "-22deg" }] }} />
+            <View style={{ transform: [{ rotate: "-22deg" }] }}>
+            <Send size={23} color={colors.icon} />
+          </View>
           </Pressable>
           <View style={{ flex: 1 }} />
           <Pressable onPress={toggleSave} onLongPress={() => setPicking(true)} delayLongPress={350} hitSlop={8}>
