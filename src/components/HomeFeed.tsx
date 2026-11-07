@@ -12,6 +12,7 @@ import {
   Tag,
   Trash2,
   MoreHorizontal,
+  X,
   UserPlus
 } from "lucide-react-native";
 import { FeedPost, UserStoryGroup, MOCK_PROFILES, UserProfile, ClothingTag } from "../data/mockData";
@@ -32,6 +33,7 @@ export function HomeFeed({
   onAssembleWithWardrobe,
   countryFilter,
   cityFilter,
+  onClearFilter,
   onOpenProfile
 }: {
   posts: FeedPost[];
@@ -39,6 +41,7 @@ export function HomeFeed({
   onAssembleWithWardrobe?: (p: FeedPost) => void;
   countryFilter?: string | null;
   cityFilter?: string | null;
+  onClearFilter?: () => void;
   onOpenProfile?: (name: string) => void;
 }) {
   const { colors } = useAppTheme();
@@ -303,13 +306,25 @@ export function HomeFeed({
 
       {/* Location Filter Header (when globe active) */}
       {(cityFilter || countryFilter) && (
-        <View style={s.heading}>
-          <Text style={[s.badge, { color: colors.muted }]}>
-            {cityFilter ? `EXPLORAR ${cityFilter.toUpperCase()}` : `EXPLORAR ${countryFilter!.toUpperCase()}`}
-          </Text>
-          <Text style={[s.h, { color: colors.text }]}>
-            {cityFilter ? `Looks de ${cityFilter}` : `Looks de ${countryFilter}`}
-          </Text>
+        <View style={[s.heading, { flexDirection: "row", alignItems: "center" }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.badge, { color: colors.muted }]}>
+              {cityFilter ? `EXPLORAR ${cityFilter.toUpperCase()}` : `EXPLORAR ${countryFilter!.toUpperCase()}`}
+            </Text>
+            <Text style={[s.h, { color: colors.text }]}>
+              {cityFilter ? `Looks de ${cityFilter}` : `Looks de ${countryFilter}`}
+            </Text>
+          </View>
+          {onClearFilter ? (
+            <Pressable
+              onPress={onClearFilter}
+              hitSlop={10}
+              style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: colors.surface, flexDirection: "row", alignItems: "center", gap: 4 }}
+            >
+              <X size={14} color={colors.text} />
+              <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>Limpar</Text>
+            </Pressable>
+          ) : null}
         </View>
       )}
 

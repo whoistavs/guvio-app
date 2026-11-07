@@ -25,10 +25,20 @@ type Mode = "looks" | "people";
 
 export function SearchProfilesView({
   onOpenProfile,
-  onOpenPost
+  onOpenPost,
+  globe,
+  cityFocus,
+  onClearCityFocus,
+  scrollEnabled = true
 }: {
   onOpenProfile: (p: UserProfile) => void;
   onOpenPost?: (postId: string) => void;
+  /** globo mostrado acima de "Em alta na comunidade" */
+  globe?: React.ReactNode;
+  /** cidade tocada no globo e os looks dela */
+  cityFocus?: { title: string; posts: FeedPost[] } | null;
+  onClearCityFocus?: () => void;
+  scrollEnabled?: boolean;
 }) {
   const { colors } = useAppTheme();
   const [q, setQ] = useState("");
@@ -139,7 +149,12 @@ export function SearchProfilesView({
   const hasQuery = q.trim().length > 0;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      contentContainerStyle={s.content}
+      keyboardShouldPersistTaps="handled"
+      scrollEnabled={scrollEnabled}
+    >
       <Text style={[s.h, { color: colors.text }]}>{hasQuery ? "Pesquisar" : "Explorar"}</Text>
       <View style={[s.search, { backgroundColor: colors.surface }]}>
         <Search size={18} color={colors.muted} />
@@ -193,6 +208,25 @@ export function SearchProfilesView({
         </>
       ) : (
         <>
+          {globe ? <View style={s.globe}>{globe}</View> : null}
+          {cityFocus ? (
+            <>
+              <View style={s.cityHead}>
+                <Text style={[s.label, { color: colors.muted, marginTop: 0, marginBottom: 0, flex: 1 }]} numberOfLines={1}>
+                  LOOKS DE {cityFocus.title.toUpperCase()}
+                </Text>
+                <Pressable onPress={onClearCityFocus} hitSlop={10} style={[s.clear, { backgroundColor: colors.surface }]}>
+                  <X size={13} color={colors.text} />
+                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 11 }}>Limpar</Text>
+                </Pressable>
+              </View>
+              {cityFocus.posts.length === 0 ? (
+                <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 6 }}>Nenhum look nessa cidade ainda.</Text>
+              ) : (
+                renderGrid(cityFocus.posts)
+              )}
+            </>
+          ) : null}
           <Text style={[s.label, { color: colors.muted }]}>EM ALTA NA COMUNIDADE</Text>
           {loadingExplore ? (
             <ActivityIndicator color={colors.muted} style={{ marginTop: 30 }} />
@@ -218,6 +252,9 @@ const s = StyleSheet.create({
   search: { height: 46, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, gap: 9 },
   input: { flex: 1, height: "100%", fontSize: 14 },
   label: { fontSize: 10, fontWeight: "800", letterSpacing: 1.3, marginTop: 24, marginBottom: 10 },
+  globe: { marginTop: 14, marginHorizontal: -20, alignItems: "center" },
+  cityHead: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 18, marginBottom: 10 },
+  clear: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14 },
   tabs: { flexDirection: "row", marginTop: 16, marginBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   tab: { flex: 1, alignItems: "center", paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: "transparent" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 2 },

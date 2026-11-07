@@ -3,9 +3,8 @@ import { Alert, Dimensions, Linking, SafeAreaView, ScrollView, StatusBar, StyleS
 import { AppThemeProvider, useAppTheme } from "./src/context/AppTheme";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import { Header } from "./src/components/Header";
-import { Globe3D, GlobeFocusTarget, GlobeMarker } from "./src/components/Globe3D";
+import { Globe3D, GlobeMarker } from "./src/components/Globe3D";
 import { GlobeLocationSearch, GlobeSearchSelection } from "./src/components/GlobeLocationSearch";
-import { ScrollIndicator } from "./src/components/ScrollIndicator";
 import { HomeFeed } from "./src/components/HomeFeed";
 import { WardrobeView } from "./src/components/WardrobeView";
 import { SearchProfilesView } from "./src/components/SearchProfilesView";
@@ -47,7 +46,6 @@ type Screen =
 function Guvio() {
   const { colors, dark } = useAppTheme();
   const scroll = useRef<ScrollView>(null);
-  const h = Dimensions.get("window").height;
 
   const [authenticated, setAuthenticated] = useState(false);
   const [booting, setBooting] = useState(true);
@@ -63,12 +61,11 @@ function Guvio() {
   const [location, setLocation] = useState("Sua cidade");
   const [filterCity, setFilterCity] = useState<string | null>(null);
   const [filterCountry, setFilterCountry] = useState<string | null>(null);
-  const [focus, setFocus] = useState<GlobeFocusTarget | null>(null);
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [unread, setUnread] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [globeTouching, setGlobeTouching] = useState(false);
-  const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+  const [searchMarkerId, setSearchMarkerId] = useState<string | null>(null);
 
   // pontos do globo: cidades onde há looks com localização
   const globeMarkers = useMemo<GlobeMarker[]>(() => {
@@ -95,16 +92,10 @@ function Guvio() {
     }));
   }, [posts]);
 
-  const selectGlobeMarker = (m: GlobeMarker) => {
-    setSelectedMarkerId(m.id);
-    setFilterCity(m.city);
-    setFilterCountry(m.country || null);
-    setLocation([m.city, m.country].filter(Boolean).join(", "));
-    fetchCityWeather(m.lat, m.lon).then(setWeather);
-  };
+  const searchMarker = globeMarkers.find(m => m.id === searchMarkerId) || null;
 
+  /** limpa o filtro de cidade/país do feed e volta para a sua localização */
   const clearGlobeSelection = () => {
-    setSelectedMarkerId(null);
     setFilterCity(null);
     setFilterCountry(null);
     if (place) {
@@ -240,9 +231,7 @@ function Guvio() {
   if (!authenticated) return <AuthScreen onAuthenticated={() => setAuthenticated(true)} />;
 
   const search = (x: GlobeSearchSelection) => {
-    setSelectedMarkerId(null);
     setLocation(`${x.label}${x.subtitle ? `, ${x.subtitle}` : ""}`);
-    setFocus({ id: `${x.label}-${Date.now()}`, lat: x.lat, lon: x.lon });
 
     if (x.type === "city") {
       setFilterCity(x.label);
@@ -363,9 +352,8 @@ function Guvio() {
           contentContainerStyle={{ flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          scrollEnabled={!globeTouching}
         >
-          <View style={[s.first, { minHeight: h - 40, backgroundColor: colors.bg }]}>
+          <View style={{ backgroundColor: colors.bg }}>
             <Header
               locationText={location}
               weatherText={weatherText}
@@ -378,24 +366,13 @@ function Guvio() {
               unreadMessages={unreadDm}
             />
             <GlobeLocationSearch onSelect={search} />
-            <View style={s.globeContainer}>
-              <Globe3D
-                markers={globeMarkers}
-                origin={place ? { lat: place.lat, lon: place.lng } : null}
-                selectedId={selectedMarkerId}
-                onSelectMarker={selectGlobeMarker}
-                onClearSelection={clearGlobeSelection}
-                focusTarget={focus}
-                onInteractionChange={setGlobeTouching}
-              />
-            </View>
-            <ScrollIndicator onPress={() => scroll.current?.scrollTo({ y: h - 60, animated: true })} />
           </View>
           <HomeFeed
             posts={posts}
             setPosts={handleUpdatePosts}
             countryFilter={filterCountry}
             cityFilter={filterCity}
+            onClearFilter={clearGlobeSelection}
             onAssembleWithWardrobe={() => setTab("wardrobe")}
             onOpenProfile={openName}
           />
@@ -403,7 +380,32 @@ function Guvio() {
       ) : tab === "wardrobe" ? (
         <WardrobeView onAdd={() => setTab("add")} currentWeather={weather} />
       ) : tab === "search" ? (
-        <SearchProfilesView onOpenProfile={openProfileObj} onOpenPost={openPost} />
+        <SearchProfilesView
+          onOpenProfile={openProfileObj}
+          onOpenPost={openPost}
+          scrollEnabled={!globeTouching}
+          globe={
+            <Globe3D
+              markers={globeMarkers}
+              origin={place ? { lat: place.lat, lon: place.lng } : null}
+              selectedId={searchMarkerId}
+              onSelectMarker={m => setSearchMarkerId(m.id)}
+              onClearSelection={() => setSearchMarkerId(null)}
+              onInteractionChange={setGlobeTouching}
+            />
+          }
+          cityFocus={
+            searchMarker
+              ? {
+                  title: [searchMarker.city, searchMarker.country].filter(Boolean).join(", "),
+                  posts: posts.filter(
+                    p => p.city === searchMarker.city && (p.country || "") === (searchMarker.country || "")
+                  )
+                }
+              : null
+          }
+          onClearCityFocus={() => setSearchMarkerId(null)}
+        />
       ) : tab === "profile" ? (
         <MyProfileView
           onSettings={() => push({ name: "settings" })}
@@ -456,6 +458,5 @@ export default function App() {
 
 const s = StyleSheet.create({
   safe: { flex: 1 },
-  first: { width: "100%", justifyContent: "space-between", alignItems: "center", paddingBottom: 16 },
-  globeContainer: { flex: 1, width: "100%", alignItems: "center", justifyContent: "center", marginVertical: 8 }
+  first: { width: "100%", justifyContent: "space-between", alignItems: "center", paddingBottom: 16 }
 });
