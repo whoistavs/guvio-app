@@ -18,9 +18,9 @@ import { CommentItem, FeedPost } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
 import { ListSkeleton } from "./SkeletonLoader";
 import { FastImage } from "./FastImage";
-import { addComment, deleteComment, loadComments, setCommentLike } from "../services/storage";
+import { addComment, deleteComment, loadComments, setCommentLike, setPinnedComment } from "../services/storage";
 import { RichCaption } from "./RichCaption";
-import { PopOnActive } from "./motion";
+import { PopOnActive, toast } from "./motion";
 import { likeFeedback, tapFeedback } from "../utils/haptics";
 
 export function CommentsModal({
@@ -29,8 +29,13 @@ export function CommentsModal({
   onClose,
   onCommented,
   onOpenProfile,
-  onOpenTag
+  onOpenTag,
+  isOwner,
+  onPostChange
 }: {
+  /** dono do post pode fixar um comentário no topo */
+  isOwner?: boolean;
+  onPostChange?: (p: FeedPost) => void;
   post: FeedPost | null;
   visible: boolean;
   onClose: () => void;
@@ -44,6 +49,21 @@ export function CommentsModal({
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [replyTo, setReplyTo] = useState<CommentItem | null>(null);
+  const [pinnedId, setPinnedId] = useState<string | null>(post?.pinnedCommentId || null);
+  useEffect(() => setPinnedId(post?.pinnedCommentId || null), [post?.id, post?.pinnedCommentId]);
+
+  const togglePin = async (c: CommentItem) => {
+    if (!post) return;
+    const next = pinnedId === c.id ? null : c.id;
+    setPinnedId(next);
+    try {
+      const updated = await setPinnedComment(post, next);
+      onPostChange?.(updated);
+      if (next) toast("Comentário fixado no topo", "📌");
+    } catch {
+      setPinnedId(pinnedId);
+    }
+  };
   const [openThreads, setOpenThreads] = useState<Set<string>>(new Set());
   const input = useRef<TextInput>(null);
 
@@ -65,8 +85,11 @@ export function CommentsModal({
         repliesOf.set(root, [...(repliesOf.get(root) || []), c]);
       }
     });
-    return { roots, repliesOf };
-  }, [comments]);
+    // comentário fixado vem primeiro
+    const pinned = pinnedId ? roots.find(c => c.id === pinnedId) : undefined;
+    const ordered = pinned ? [pinned, ...roots.filter(c => c !== pinned)] : roots;
+    return { roots: ordered, repliesOf };
+  }, [comments, pinnedId]);
 
   useEffect(() => {
     if (!visible || !post) return;
@@ -144,6 +167,9 @@ export function CommentsModal({
         <FastImage source={c.avatar} style={isReply ? s.avatarSmall : s.avatar} />
       </Pressable>
       <View style={{ flex: 1 }}>
+        {!isReply && pinnedId === c.id ? (
+          <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", marginBottom: 2 }}>📌 Fixado pelo autor</Text>
+        ) : null}
         <RichCaption
           text={c.text}
           style={[s.body, { color: colors.text }]}
@@ -165,6 +191,11 @@ export function CommentsModal({
           <Pressable onPress={() => startReply(c)} hitSlop={8}>
             <Text style={[s.meta, { color: colors.muted, fontWeight: "800" }]}>Responder</Text>
           </Pressable>
+          {isOwner && !isReply ? (
+            <Pressable onPress={() => togglePin(c)} hitSlop={8}>
+              <Text style={[s.meta, { color: colors.muted, fontWeight: "800" }]}>{pinnedId === c.id ? "Desafixar" : "Fixar"}</Text>
+            </Pressable>
+          ) : null}
           {c.canDelete ? (
             <Pressable onPress={() => remove(c)} hitSlop={8}>
               <Trash2 size={12} color={colors.muted} />

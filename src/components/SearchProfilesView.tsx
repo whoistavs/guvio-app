@@ -14,8 +14,12 @@ import {
   loadRecentSearches,
   addRecentSearch,
   removeRecentSearch,
-  loadTrendingTags
+  loadTrendingTags,
+  loadTopCreators,
+  searchByColor
 } from "../services/storage";
+import { weekStart } from "../data/challenges";
+import { COLOR_CHIPS } from "../utils/colorHarmony";
 import { STYLES } from "../data/mockData";
 import { RankingGrid } from "./RankingGrid";
 import { FastImage } from "./FastImage";
@@ -67,6 +71,25 @@ export function SearchProfilesView({
   const [recent, setRecent] = useState<string[]>(() => loadRecentSearches());
   const [trending, setTrending] = useState<{ tag: string; count: number }[]>([]);
   const [styleFilter, setStyleFilter] = useState<string | null>(null);
+  const [colorFilter, setColorFilter] = useState<string | null>(null);
+  const [colorLooks, setColorLooks] = useState<FeedPost[] | null>(null);
+  const [creators, setCreators] = useState<(UserProfile & { weekLikes: number; weekPosts: number })[]>([]);
+
+  useEffect(() => {
+    loadTopCreators(weekStart(new Date()).toISOString()).then(setCreators).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setColorLooks(null);
+    if (!colorFilter) return;
+    let alive = true;
+    searchByColor(colorFilter)
+      .then(list => alive && setColorLooks(list))
+      .catch(() => alive && setColorLooks([]));
+    return () => {
+      alive = false;
+    };
+  }, [colorFilter]);
 
   useEffect(() => {
     loadTrendingTags(12).then(setTrending).catch(() => {});
@@ -357,6 +380,56 @@ export function SearchProfilesView({
               </View>
             </>
           ) : null}
+          {creators.length > 0 ? (
+            <>
+              <Text style={[s.label, { color: colors.muted }]}>⭐ CRIADORES DA SEMANA</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 4 }}>
+                {creators.map((c, i) => (
+                  <Pressable key={c.id || c.username} onPress={() => onOpenProfile(c)} style={{ width: 76, alignItems: "center" }}>
+                    <View>
+                      <FastImage source={c.avatar} style={[s.creatorAv, { borderColor: i === 0 ? "#F2C230" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : colors.border }]} contentFit="cover" />
+                      <View style={[s.rank, { backgroundColor: colors.text }]}>
+                        <Text style={{ color: colors.bg, fontSize: 10, fontWeight: "900" }}>{i + 1}</Text>
+                      </View>
+                    </View>
+                    <Text style={{ color: colors.text, fontSize: 11, fontWeight: "800", marginTop: 6 }} numberOfLines={1}>
+                      @{c.username}
+                    </Text>
+                    <Text style={{ color: colors.muted, fontSize: 10 }}>❤️ {c.weekLikes}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </>
+          ) : null}
+          <Text style={[s.label, { color: colors.muted }]}>LOOKS POR COR</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+            {COLOR_CHIPS.map(c => {
+              const on = colorFilter === c.term;
+              return (
+                <Pressable
+                  key={c.label}
+                  onPress={() => setColorFilter(on ? null : c.term)}
+                  style={[s.colorChip, { borderColor: on ? colors.text : colors.border, backgroundColor: on ? colors.surface : "transparent" }]}
+                >
+                  <View style={[s.colorDot, { backgroundColor: c.hex, borderColor: colors.border }]} />
+                  <Text style={{ color: colors.text, fontSize: 12, fontWeight: on ? "900" : "700" }}>{c.label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          {colorFilter ? (
+            colorLooks === null ? (
+              <View style={{ marginTop: 10 }}>
+                <GridSkeleton count={6} />
+              </View>
+            ) : colorLooks.length === 0 ? (
+              <Text style={{ color: colors.muted, fontSize: 12, marginTop: 10 }}>
+                Nenhum look com peças nessa cor ainda. Marque as peças com a cor ao publicar.
+              </Text>
+            ) : (
+              <View style={{ marginTop: 10 }}>{renderGrid(colorLooks)}</View>
+            )
+          ) : null}
           <Text style={[s.label, { color: colors.muted }]}>EM ALTA NA COMUNIDADE</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 10 }}>
             {[null, ...STYLES.map(st => st.title)].map(t => {
@@ -405,6 +478,10 @@ const s = StyleSheet.create({
   recentRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 },
   tagWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   tagChip: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6 },
+  creatorAv: { width: 64, height: 64, borderRadius: 32, borderWidth: 3 },
+  rank: { position: "absolute", right: -2, bottom: -2, width: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  colorChip: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: 16, paddingHorizontal: 10, height: 32 },
+  colorDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1 },
   styleChip: { borderWidth: 1, borderRadius: 16, paddingHorizontal: 12, height: 32, alignItems: "center", justifyContent: "center" },
   globe: { marginTop: 14, marginHorizontal: -20, alignItems: "center" },
   cityHead: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 18, marginBottom: 10 },

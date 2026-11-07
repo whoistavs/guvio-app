@@ -15,7 +15,7 @@ import {
   X,
   UserPlus
 } from "lucide-react-native";
-import { FeedPost, UserStoryGroup, MOCK_PROFILES, UserProfile, ClothingTag, StoryOverlay } from "../data/mockData";
+import { FeedPost, UserStoryGroup, MOCK_PROFILES, UserProfile, ClothingTag, StoryOverlay, StorySticker } from "../data/mockData";
 import { loadAllRegisteredProfiles, loadSavedProfile } from "../services/storage";
 import { askReport, EditPostModal, openOwnPostMenu } from "./PostMenus";
 import { PostMedia } from "./PostMedia";
@@ -28,11 +28,27 @@ import { StoryViewerModal, CreateStoryModal } from "./StoryViewerModal";
 import { CollectionPickerModal } from "./CollectionPickerModal";
 import { SuggestionsRow } from "./SuggestionsRow";
 import { LikersModal } from "./LikersModal";
+import { PollBar, RatingBar, RepostLine } from "./PostExtras";
+import { RepostModal } from "./RepostModal";
+import { FastStorage } from "../services/FastStorage";
 import { FadeIn, PopOnActive, toast } from "./motion";
 import { SharePostModal } from "./SharePostModal";
 import { useAppTheme } from "../context/AppTheme";
 import { FastImage, preloadImages } from "./FastImage";
-import { loadStories, saveStories, loadFollowedUsers, saveFollowedUsers, getCachedStories, setMuted } from "../services/storage";
+import {
+  loadStories,
+  saveStories,
+  loadFollowedUsers,
+  saveFollowedUsers,
+  getCachedStories,
+  setMuted,
+  loadNotInterested,
+  markNotInterested,
+  applyNotInterested,
+  loadNearby
+} from "../services/storage";
+
+const SEEN_KEY = "guvio_feed_seen_until_v1";
 import { FeedPostSkeleton } from "./SkeletonLoader";
 
 /** desenha de novo só quando algum item de "deps" mudar */
@@ -53,7 +69,8 @@ export function HomeFeed({
   onOpenProfile,
   onOpenTag,
   refreshKey = 0,
-  belowStories
+  belowStories,
+  nearby
 }: {
   posts: FeedPost[];
   setPosts: React.Dispatch<React.SetStateAction<FeedPost[]>>;
@@ -67,16 +84,38 @@ export function HomeFeed({
   refreshKey?: number;
   /** algo entre os stories e o feed (ex.: desafio da semana) */
   belowStories?: React.ReactNode;
+  /** sua localização, para a aba "Perto" */
+  nearby?: { lat: number; lng: number } | null;
 }) {
   const { colors } = useAppTheme();
   const [isLoading, setIsLoading] = useState(true);
 
   // Social feed states
-  const [feedTab, setFeedTab] = useState<"forYou" | "following">("forYou");
+  const [feedTab, setFeedTab] = useState<"forYou" | "following" | "nearby">("forYou");
   const [commentPost, setCommentPost] = useState<FeedPost | null>(null);
   const [sharePost, setSharePost] = useState<FeedPost | null>(null);
   const [collectionPost, setCollectionPost] = useState<FeedPost | null>(null);
   const [likersPost, setLikersPost] = useState<string | null>(null);
+  const [repostPost, setRepostPost] = useState<FeedPost | null>(null);
+  const [ni, setNi] = useState<Awaited<ReturnType<typeof loadNotInterested>> | null>(null);
+  const [nearbyPosts, setNearbyPosts] = useState<FeedPost[] | null>(null);
+  // "você está em dia": o post mais novo que você já tinha visto na última vez
+  const [seenUntil] = useState<string | null>(() => FastStorage.getItemSync(SEEN_KEY, null));
+
+  useEffect(() => {
+    loadNotInterested().then(setNi).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const newest = posts.reduce<string | null>((m, p) => (p.createdAt && (!m || p.createdAt > m) ? p.createdAt : m), null);
+    if (newest) FastStorage.setItemSync(SEEN_KEY, newest);
+  }, [posts.length]);
+
+  useEffect(() => {
+    if (feedTab !== "nearby" || !nearby) return;
+    setNearbyPosts(null);
+    loadNearby(nearby.lat, nearby.lng, 60).then(setNearbyPosts);
+  }, [feedTab, nearby?.lat, nearby?.lng, refreshKey]);
   const [stories, setStories] = useState<UserStoryGroup[]>(() => getCachedStories());
 
   useEffect(() => {
@@ -173,13 +212,20 @@ export function HomeFeed({
     await saveFollowedUsers(updated);
   };
 
-  const handlePublishStory = async (imageUri: string, caption?: string, overlay?: StoryOverlay | null) => {
+  const handlePublishStory = async (
+    imageUri: string,
+    caption?: string,
+    overlay?: StoryOverlay | null,
+    extra?: { closeFriends?: boolean; sticker?: StorySticker | null }
+  ) => {
     const newStory = {
       id: `my-st-${Date.now()}`,
       image: imageUri,
       timestamp: "Agora",
       caption,
-      overlay: overlay || null
+      overlay: overlay || null,
+      closeFriends: !!extra?.closeFriends,
+      sticker: extra?.sticker || null
     };
 
     const updatedStories = stories.map(g => {
@@ -217,6 +263,16 @@ export function HomeFeed({
       });
     } else {
       Alert.alert(`@${p.creatorUsername || p.creatorName}`, undefined, [
+        { text: "Repostar no meu perfil", onPress: () => setRepostPost(p) },
+        {
+          text: "Não tenho interesse",
+          onPress: async () => {
+            try {
+              setNi(await markNotInterested(p));
+              toast("Ok! Vamos mostrar menos looks assim", "👋");
+            } catch {}
+          }
+        },
         {
           text: "Silenciar",
           onPress: async () => {
@@ -252,7 +308,16 @@ export function HomeFeed({
     visiblePosts = visiblePosts.filter(
       p => followedUserIds.includes(p.userId || "") || isMine(p)
     );
+  } else if (feedTab === "nearby") {
+    visiblePosts = (nearbyPosts || []).filter(p => !p.archived);
+  } else {
+    visiblePosts = applyNotInterested(visiblePosts, ni);
   }
+  // "Você está em dia": aparece antes do primeiro post que você já tinha visto
+  const caughtUpAt =
+    feedTab === "forYou" && seenUntil && visiblePosts[0]?.createdAt && visiblePosts[0].createdAt > seenUntil
+      ? visiblePosts.findIndex(p => !!p.createdAt && p.createdAt <= seenUntil)
+      : -1;
 
   return (
     <View style={[s.c, { backgroundColor: colors.bg }]}>
@@ -279,6 +344,8 @@ export function HomeFeed({
                   {
                     borderColor: st.isMe && !hasStories
                       ? colors.border
+                      : st.hasClose || (st.isMe && st.stories.some(x => x.closeFriends))
+                      ? "#22C55E"
                       : st.hasUnseen
                       ? "#FF2D55"
                       : colors.muted
@@ -341,6 +408,15 @@ export function HomeFeed({
               Seguindo
             </Text>
           </Pressable>
+
+          {nearby ? (
+            <Pressable
+              onPress={() => setFeedTab("nearby")}
+              style={[s.feedTabBtn, feedTab === "nearby" && [s.feedTabBtnActive, { borderBottomColor: colors.text }]]}
+            >
+              <Text style={[s.feedTabText, { color: feedTab === "nearby" ? colors.text : colors.muted }]}>Perto</Text>
+            </Pressable>
+          ) : null}
         </View>
       )}
 
@@ -377,10 +453,18 @@ export function HomeFeed({
       ) : visiblePosts.length === 0 ? (
         <View style={[s.empty, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>
-            {feedTab === "following" ? "Nenhum look de quem você segue" : "Novos looks chegando"}
+            {feedTab === "following"
+              ? "Nenhum look de quem você segue"
+              : feedTab === "nearby"
+              ? nearbyPosts === null
+                ? "Procurando looks perto de você..."
+                : "Nenhum look perto de você ainda"
+              : "Novos looks chegando"}
           </Text>
           <Text style={{ color: colors.muted, textAlign: "center", marginTop: 6, fontSize: 12, lineHeight: 18 }}>
-            {feedTab === "following"
+            {feedTab === "nearby"
+              ? "Mostramos looks publicados a até 60 km de você. Publique o primeiro da sua região!"
+              : feedTab === "following"
               ? "Siga criadores de moda no feed ou na busca para ver publicações deles aqui."
               : "Ainda não temos publicações desse destino no feed. Publique o primeiro look para inaugurar!"}
           </Text>
@@ -396,6 +480,18 @@ export function HomeFeed({
           // Só redesenha este post quando algo dele mudou (curtir um look não redesenha o feed inteiro).
           // Os handlers usados aqui leem o estado mais recente (setPosts(prev => ...)), então pular é seguro.
           return (
+            <React.Fragment key={p.id}>
+            {pIdx === caughtUpAt && pIdx > 0 ? (
+              <View style={s.caughtUp}>
+                <View style={[s.caughtLine, { backgroundColor: colors.border }]} />
+                <View style={s.caughtIcon}>
+                  <Text style={{ color: "#FFF", fontWeight: "900" }}>✓</Text>
+                </View>
+                <Text style={{ color: colors.text, fontWeight: "900", marginTop: 8 }}>Você está em dia</Text>
+                <Text style={{ color: colors.muted, fontSize: 12 }}>Você já viu os looks novos. Abaixo, os anteriores.</Text>
+                <View style={[s.caughtLine, { backgroundColor: colors.border, marginTop: 14 }]} />
+              </View>
+            ) : null}
             <MemoRow
               key={p.id}
               deps={[p, isTagsVisible, heartAnimPostId === p.id, colors, myId, pIdx === 1 ? refreshKey : 0, pIdx < 4]}
@@ -434,8 +530,11 @@ export function HomeFeed({
                 </View>
 
                 {/* Foto(s) do post: carrossel, dois toques para curtir, segurar para zoom */}
+                <RepostLine post={p} onOpenProfile={onOpenProfile} />
                 <PostMedia
                   images={p.images && p.images.length ? p.images : [p.image]}
+                  video={p.videoUrl}
+                  labels={p.kind === "poll" ? p.poll?.options : undefined}
                   onDoubleTap={() => triggerDoubleTap(p, true)}
                   onOpenZoom={i => setZoom({ images: p.images && p.images.length ? p.images : [p.image], index: i })}
                 >
@@ -527,8 +626,13 @@ export function HomeFeed({
                   </Pressable>
                 </View>
 
+                <PollBar post={p} isMine={isMine(p)} onChange={u => setPostsSilently(u)} />
+
                 {/* Post Body (Likes, Caption, Comments, Wardrobe CTA) */}
                 <View style={s.body}>
+                  <View style={{ marginBottom: 6 }}>
+                    <RatingBar post={p} onChange={u => setPostsSilently(u)} />
+                  </View>
                   {p.hideLikes && !isMine(p) ? (
                     <Text style={[s.likes, { color: colors.text }]}>
                       {p.isLiked ? "Você e outras pessoas curtiram" : "Curtido por outras pessoas"}
@@ -576,12 +680,14 @@ export function HomeFeed({
             </FadeIn>
               )}
             />
+            </React.Fragment>
           );
         })
       )}
 
       {/* Modals */}
       <ImageZoomModal images={zoom?.images || null} index={zoom?.index || 0} onClose={() => setZoom(null)} />
+      <RepostModal post={repostPost} onClose={() => setRepostPost(null)} onDone={np => setPosts(v => [np, ...v])} />
       <LikersModal
         postId={likersPost}
         onClose={() => setLikersPost(null)}
@@ -592,6 +698,8 @@ export function HomeFeed({
       />
       <EditPostModal post={editingPost} onClose={() => setEditingPost(null)} onSaved={u => setPostsSilently(u)} />
       <CommentsModal
+        isOwner={!!commentPost && isMine(commentPost)}
+        onPostChange={u => setPostsSilently(u)}
         post={commentPost}
         visible={!!commentPost}
         onClose={() => setCommentPost(null)}
@@ -670,6 +778,9 @@ const s = StyleSheet.create({
   storyName: { fontSize: 10, fontWeight: "600", marginTop: 5, textAlign: "center" },
 
   // Feed Tabs (Para Você / Seguindo)
+  caughtUp: { alignItems: "center", paddingVertical: 22, paddingHorizontal: 30 },
+  caughtLine: { height: StyleSheet.hairlineWidth, alignSelf: "stretch" },
+  caughtIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#22C55E", alignItems: "center", justifyContent: "center", marginTop: 14 },
   feedTabsContainer: {
     flexDirection: "row",
     justifyContent: "center",

@@ -13,7 +13,9 @@ import {
   TextInput,
   View
 } from "react-native";
-import { Check, Link2, Search, X } from "lucide-react-native";
+import { Check, Image as ImageIcon, Link2, Search, X } from "lucide-react-native";
+import { LookImageModal } from "./LookImageModal";
+import { postWebLink } from "../utils/profileLink";
 import { FeedPost, UserProfile } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
 import { toast } from "./motion";
@@ -46,6 +48,7 @@ export function SharePostModal({
   const [selected, setSelected] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [asImage, setAsImage] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -116,9 +119,19 @@ export function SharePostModal({
   const shareOutside = async () => {
     const who = post.creatorUsername || post.creatorName;
     try {
-      await Share.share({
-        message: `Olha esse look de @${who} no Guvio${post.city ? ` (${post.city})` : ""} 👗 guvio://u/${who}`
-      });
+      const link = postWebLink(post.id);
+      const message = `Olha esse look de @${who} no Guvio${post.city ? ` (${post.city})` : ""} 👗 ${link}`;
+      if (Platform.OS === "web") {
+        const nav: any = typeof navigator !== "undefined" ? navigator : null;
+        if (nav?.share) {
+          await nav.share({ text: message, url: link }).catch(() => {});
+        } else {
+          await nav?.clipboard?.writeText(link);
+          toast("Link copiado", "🔗");
+        }
+        return;
+      }
+      await Share.share({ message });
     } catch {}
   };
 
@@ -148,7 +161,11 @@ export function SharePostModal({
             </View>
             <Pressable onPress={shareOutside} hitSlop={8} style={[s.outBtn, { borderColor: colors.border }]}>
               <Link2 size={15} color={colors.icon} />
-              <Text style={{ color: colors.text, fontSize: 11, fontWeight: "800" }}>Fora do app</Text>
+              <Text style={{ color: colors.text, fontSize: 11, fontWeight: "800" }}>Link</Text>
+            </Pressable>
+            <Pressable onPress={() => setAsImage(true)} hitSlop={8} style={[s.outBtn, { borderColor: colors.border }]}>
+              <ImageIcon size={15} color={colors.icon} />
+              <Text style={{ color: colors.text, fontSize: 11, fontWeight: "800" }}>Imagem</Text>
             </Pressable>
           </View>
 
@@ -217,6 +234,7 @@ export function SharePostModal({
           ) : null}
         </View>
       </KeyboardAvoidingView>
+      {asImage ? <LookImageModal post={post} onClose={() => setAsImage(false)} /> : null}
     </Modal>
   );
 }
@@ -228,7 +246,7 @@ const s = StyleSheet.create({
   dragHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "rgba(150,150,150,0.4)", marginBottom: 12 },
   titleRow: { width: "100%", flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   title: { fontSize: 16, fontWeight: "900" },
-  postPreview: { flexDirection: "row", gap: 12, marginHorizontal: 20, marginBottom: 14, padding: 8, borderRadius: 14, borderWidth: 1, alignItems: "center" },
+  postPreview: { flexDirection: "row", gap: 8, marginHorizontal: 20, marginBottom: 14, padding: 8, borderRadius: 14, borderWidth: 1, alignItems: "center" },
   postThumb: { width: 44, height: 44, borderRadius: 8 },
   postAuthor: { fontSize: 13, fontWeight: "800" },
   outBtn: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderRadius: 14, paddingHorizontal: 9, paddingVertical: 6 },

@@ -150,7 +150,7 @@ export function EditPostModal({
     setTags(prev =>
       prev.some(t => t.id === id)
         ? prev.filter(t => t.id !== id)
-        : [...prev, { id, name: it.name, brand: it.category, image: it.image, x: prev.length % 2 ? 70 : 24, y: Math.min(85, 22 + Math.floor(prev.length / 2) * 18) }]
+        : [...prev, { id, name: it.name, brand: it.category, image: it.image, link: it.link, color: it.colorTag, x: prev.length % 2 ? 70 : 24, y: Math.min(85, 22 + Math.floor(prev.length / 2) * 18) }]
     );
   };
 

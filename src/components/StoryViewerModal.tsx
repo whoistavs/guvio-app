@@ -15,7 +15,8 @@ import {
 } from "react-native";
 import { Camera, ChevronLeft, Eye, Heart, ImagePlus, Plus, Send, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
-import { StoryOverlay } from "../data/mockData";
+import { StoryOverlay, StorySticker } from "../data/mockData";
+import { StoryStickerView } from "./StoryStickerView";
 import { OVERLAY_COLORS, StoryOverlayText } from "./StoryOverlayText";
 import { UserStoryGroup, StoryItem } from "../data/mockData";
 import { FastImage } from "./FastImage";
@@ -23,6 +24,7 @@ import {
   markStorySeen,
   deleteMyStory,
   loadStoryViewers,
+  loadStoryResponses,
   loadChat,
   sendChatMessage
 } from "../services/storage";
@@ -162,11 +164,18 @@ export function StoryViewerModal({
     }
   };
 
+  const [responses, setResponses] = useState<{ username: string; avatar: string; kind: string; value: string }[]>([]);
   const openViewers = async () => {
     if (!currentStory) return;
     setIsPaused(true);
     setViewers([]);
-    setViewers(await loadStoryViewers(currentStory.id));
+    setResponses([]);
+    const [v, r] = await Promise.all([
+      loadStoryViewers(currentStory.id),
+      currentStory.sticker ? loadStoryResponses(currentStory.id).catch(() => []) : Promise.resolve([])
+    ]);
+    setViewers(v);
+    setResponses(r as any);
   };
 
   const handleDeleteStory = () => {
@@ -200,6 +209,16 @@ export function StoryViewerModal({
         {/* Story Background Image */}
         <FastImage source={currentStory.image} style={s.storyImage} contentFit="cover" transition={150} />
         <StoryOverlayText overlay={currentStory.overlay} />
+        {currentStory.sticker ? (
+          <View style={s.stickerWrap} pointerEvents="box-none">
+            <StoryStickerView
+              sticker={currentStory.sticker}
+              story={currentStory}
+              isMe={!!currentGroup.isMe}
+              onPause={p => setIsPaused(p)}
+            />
+          </View>
+        ) : null}
 
         {/* reação: o emoji escolhido aparece grande */}
         {reactionHeart && (
@@ -244,6 +263,11 @@ export function StoryViewerModal({
                     {currentGroup.displayName} {currentGroup.flag || ""}
                   </Text>
                   <Text style={s.timeAgo}>· {currentStory.timestamp}</Text>
+                  {currentStory.closeFriends ? (
+                    <View style={s.cfBadge}>
+                      <Text style={{ color: "#FFF", fontSize: 10, fontWeight: "900" }}>★ Melhores amigos</Text>
+                    </View>
+                  ) : null}
                 </View>
                 <Text style={s.authorHandle}>@{currentGroup.username}</Text>
               </View>
@@ -335,6 +359,26 @@ export function StoryViewerModal({
                 </Pressable>
               </View>
               <ScrollView>
+                {responses.length > 0 && currentStory?.sticker ? (
+                  <View style={{ marginBottom: 14 }}>
+                    <Text style={s.respTitle}>
+                      {currentStory.sticker.type === "poll" ? "VOTOS" : "RESPOSTAS"} ({responses.length})
+                    </Text>
+                    {responses.map((r, i) => (
+                      <View key={i} style={s.viewerRow}>
+                        <FastImage source={r.avatar} style={s.viewerAvatar} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: "#FFF", fontWeight: "800" }}>@{r.username}</Text>
+                          <Text style={{ color: "rgba(255,255,255,.8)", fontSize: 13 }}>
+                            {r.kind === "vote" && currentStory.sticker?.type === "poll"
+                              ? `votou em "${currentStory.sticker.options[Number(r.value)] ?? r.value}"`
+                              : r.value}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
                 {viewers.length === 0 ? (
                   <Text style={{ color: "rgba(255,255,255,.7)", textAlign: "center", marginTop: 20 }}>
                     Ninguém viu ainda.
@@ -366,7 +410,12 @@ export function CreateStoryModal({
 }: {
   visible: boolean;
   onClose: () => void;
-  onPublish: (imageUri: string, caption?: string, overlay?: StoryOverlay | null) => void;
+  onPublish: (
+    imageUri: string,
+    caption?: string,
+    overlay?: StoryOverlay | null,
+    extra?: { closeFriends?: boolean; sticker?: StorySticker | null }
+  ) => void;
   /** já abre com esta imagem (ex.: colagem de um look do guarda-roupa) */
   initialImage?: string | null;
 }) {
@@ -377,6 +426,12 @@ export function CreateStoryModal({
   const [ovBoxed, setOvBoxed] = useState(false);
   const [ovY, setOvY] = useState(0.42);
   const [editingText, setEditingText] = useState(false);
+  const [sticker, setSticker] = useState<StorySticker | null>(null);
+  const [stickerForm, setStickerForm] = useState<"poll" | "question" | null>(null);
+  const [sq, setSq] = useState("");
+  const [so1, setSo1] = useState("Sim");
+  const [so2, setSo2] = useState("Não");
+  const [closeOnly, setCloseOnly] = useState(false);
 
   useEffect(() => {
     if (visible && initialImage) setImageUri(initialImage);
@@ -412,11 +467,16 @@ export function CreateStoryModal({
 
   const handlePublish = () => {
     if (!imageUri) return;
-    onPublish(imageUri, caption, ovText.trim() ? { text: ovText.trim(), color: ovColor, boxed: ovBoxed, y: ovY } : null);
+    onPublish(imageUri, caption, ovText.trim() ? { text: ovText.trim(), color: ovColor, boxed: ovBoxed, y: ovY } : null, {
+      closeFriends: closeOnly,
+      sticker
+    });
     setImageUri(null);
     setCaption("");
     setOvText("");
     setEditingText(false);
+    setSticker(null);
+    setCloseOnly(false);
     onClose();
   };
 
@@ -442,9 +502,68 @@ export function CreateStoryModal({
           <View style={s.previewContainer}>
             <FastImage source={imageUri} style={s.previewImage} contentFit="cover" />
             {!editingText ? <StoryOverlayText overlay={ovText ? { text: ovText, color: ovColor, boxed: ovBoxed, y: ovY } : null} /> : null}
+            {sticker && !stickerForm ? (
+              <Pressable style={s.stickerWrap} onLongPress={() => setSticker(null)}>
+                <StoryStickerView sticker={sticker} preview />
+                <Text style={{ color: "#FFF", fontSize: 10, textAlign: "center", marginTop: 4 }}>segure para remover</Text>
+              </Pressable>
+            ) : null}
+            {stickerForm ? (
+              <View style={s.textEditor}>
+                <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 18, textAlign: "center", marginBottom: 14 }}>
+                  {stickerForm === "poll" ? "Enquete" : "Caixinha de pergunta"}
+                </Text>
+                <TextInput
+                  value={sq}
+                  onChangeText={setSq}
+                  autoFocus
+                  maxLength={80}
+                  placeholder={stickerForm === "poll" ? "Pergunta (ex.: Uso esse look hoje?)" : "Ex.: Me pergunte sobre estilo"}
+                  placeholderTextColor="rgba(255,255,255,.6)"
+                  style={s.stickerInput}
+                />
+                {stickerForm === "poll" ? (
+                  <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+                    <TextInput value={so1} onChangeText={setSo1} maxLength={24} style={[s.stickerInput, { flex: 1 }]} placeholderTextColor="rgba(255,255,255,.6)" placeholder="Opção 1" />
+                    <TextInput value={so2} onChangeText={setSo2} maxLength={24} style={[s.stickerInput, { flex: 1 }]} placeholderTextColor="rgba(255,255,255,.6)" placeholder="Opção 2" />
+                  </View>
+                ) : null}
+                <Pressable
+                  onPress={() => {
+                    setSticker(
+                      stickerForm === "poll"
+                        ? { type: "poll", question: sq.trim() || "O que acham?", options: [so1.trim() || "Sim", so2.trim() || "Não"] }
+                        : { type: "question", prompt: sq.trim() || "Me pergunte algo" }
+                    );
+                    setStickerForm(null);
+                  }}
+                  style={s.doneText}
+                >
+                  <Text style={{ color: "#000", fontWeight: "900" }}>Adicionar</Text>
+                </Pressable>
+              </View>
+            ) : null}
             <View style={s.textTools}>
               <Pressable onPress={() => setEditingText(v => !v)} style={s.toolBtn}>
                 <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 18 }}>Aa</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setSq("");
+                  setStickerForm("poll");
+                }}
+                style={s.toolBtn}
+              >
+                <Text style={{ fontSize: 18 }}>🗳️</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setSq("");
+                  setStickerForm("question");
+                }}
+                style={s.toolBtn}
+              >
+                <Text style={{ fontSize: 18 }}>❓</Text>
               </Pressable>
               {ovText ? (
                 <>
@@ -465,7 +584,7 @@ export function CreateStoryModal({
                   autoFocus
                   multiline
                   maxLength={120}
-                  placeholder="Escreva algo..."
+                  placeholder="Escreva algo... use @ para marcar alguém"
                   placeholderTextColor="rgba(255,255,255,.6)"
                   style={[s.textEditorInput, { color: ovColor }]}
                 />
@@ -479,6 +598,9 @@ export function CreateStoryModal({
                 </Pressable>
               </View>
             ) : null}
+            <Pressable onPress={() => setCloseOnly(v => !v)} style={[s.cfToggle, closeOnly && { backgroundColor: "#22C55E", borderColor: "#22C55E" }]}>
+              <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 12 }}>★ {closeOnly ? "Só melhores amigos" : "Melhores amigos"}</Text>
+            </Pressable>
             <View style={s.captionInputBox}>
               <TextInput
                 value={caption}
@@ -510,6 +632,11 @@ export function CreateStoryModal({
 }
 
 const s = StyleSheet.create({
+  stickerWrap: { position: "absolute", left: 0, right: 0, top: "55%", zIndex: 6 },
+  stickerInput: { color: "#FFF", fontSize: 16, fontWeight: "700", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,.4)", paddingVertical: 8, textAlign: "center" },
+  cfBadge: { backgroundColor: "#22C55E", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1 },
+  cfToggle: { position: "absolute", left: 14, top: 14, zIndex: 6, borderWidth: 1.5, borderColor: "rgba(255,255,255,.7)", borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "rgba(0,0,0,.4)" },
+  respTitle: { color: "rgba(255,255,255,.6)", fontSize: 10, fontWeight: "800", letterSpacing: 1.2, marginBottom: 6 },
   textTools: { position: "absolute", top: 14, right: 14, gap: 10, zIndex: 6 },
   toolBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: "rgba(0,0,0,.5)", alignItems: "center", justifyContent: "center" },
   textEditor: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,.55)", justifyContent: "center", padding: 24, zIndex: 7 },

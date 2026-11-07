@@ -14,6 +14,7 @@ import type {
   Highlight,
   StoryItem,
   StoryOverlay,
+  StorySticker,
   WishlistItem,
   OutfitLogEntry,
   FeedPost,
@@ -122,6 +123,26 @@ export async function uploadImage(uri: string, folder: string): Promise<string> 
   return db().storage.from("media").getPublicUrl(path).data.publicUrl;
 }
 
+/** Envia um vídeo (até ~50 MB) para o Storage */
+export async function uploadVideo(uri: string): Promise<string> {
+  if (!uri || isRemote(uri)) return uri;
+  const uid = await me();
+  const ext = (uri.split("?")[0].split(".").pop() || "mp4").toLowerCase();
+  const safeExt = ["mp4", "mov", "m4v", "webm"].includes(ext) ? ext : "mp4";
+  const path = `${uid}/videos/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${safeExt}`;
+  let body: ArrayBuffer | Blob;
+  if (Platform.OS === "web") body = await (await fetch(uri)).blob();
+  else {
+    const { File } = require("expo-file-system") as typeof import("expo-file-system");
+    const bytes = await new File(uri).bytes();
+    body = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  }
+  // H.264 em .mov toca no navegador quando marcado como mp4
+  const contentType = safeExt === "webm" ? "video/webm" : "video/mp4";
+  check(await db().storage.from("media").upload(path, body, { contentType, upsert: false }));
+  return db().storage.from("media").getPublicUrl(path).data.publicUrl;
+}
+
 // ---------------------------------------------------------------------
 // Perfis
 // ---------------------------------------------------------------------
@@ -225,8 +246,46 @@ function toPost(r: any, liked: Set<string>, saved: Set<string>): FeedPost {
     clothingTags: Array.isArray(r.clothing_tags) ? r.clothing_tags : [],
     archived: !!r.archived,
     pinned: !!r.pinned_at,
-    hideLikes: !!r.hide_likes
+    hideLikes: !!r.hide_likes,
+    kind: r.kind || "photo",
+    videoUrl: r.video_url || undefined,
+    repostOf: r.repost_of || undefined,
+    originalUsername: r.original_username || undefined,
+    originalAvatar: r.original_avatar_url || undefined,
+    pinnedCommentId: r.pinned_comment_id || null
   };
+}
+
+/** votos das enquetes e avaliações 🔥/🧊 dos posts da lista (2 consultas para a lista toda) */
+async function attachExtras(rows: any[], posts: FeedPost[]): Promise<FeedPost[]> {
+  if (!posts.length) return posts;
+  const uid = await me();
+  const ids = posts.map(p => p.id);
+  const pollIds = rows.filter(r => r.kind === "poll").map(r => r.id);
+  const [ratings, votes] = await Promise.all([
+    db().from("post_ratings").select("post_id, user_id, value").in("post_id", ids),
+    pollIds.length ? db().from("poll_votes").select("post_id, user_id, option").in("post_id", pollIds) : Promise.resolve({ data: [] as any[] })
+  ]);
+  const rr = (ratings.data || []) as any[];
+  const vv = (votes.data || []) as any[];
+  return posts.map((p, i) => {
+    const mine = rr.find(x => x.post_id === p.id && x.user_id === uid);
+    const rating = {
+      fire: rr.filter(x => x.post_id === p.id && x.value === 1).length,
+      ice: rr.filter(x => x.post_id === p.id && x.value === -1).length,
+      mine: (mine ? mine.value : 0) as 1 | -1 | 0
+    };
+    const row = rows[i];
+    if (row?.kind !== "poll") return { ...p, rating };
+    const options: string[] = Array.isArray(row.poll?.options) ? row.poll.options : ["Look 1", "Look 2"];
+    const pv = vv.filter(x => x.post_id === p.id);
+    const myVote = pv.find(x => x.user_id === uid)?.option;
+    return {
+      ...p,
+      rating,
+      poll: { options, votes: options.map((_, k) => pv.filter(x => x.option === k).length), myVote: myVote ?? null }
+    };
+  });
 }
 
 async function myLikesAndSaves(postIds: string[]) {
@@ -244,7 +303,8 @@ async function myLikesAndSaves(postIds: string[]) {
 
 async function mapPosts(rows: any[]): Promise<FeedPost[]> {
   const { liked, saved } = await myLikesAndSaves(rows.map(r => r.id));
-  return rows.map(r => toPost(r, liked, saved));
+  const posts = rows.map(r => toPost(r, liked, saved));
+  return attachExtras(rows, posts).catch(() => posts);
 }
 
 /** ids de quem eu bloqueei/silenciei e dos posts que denunciei (somem do meu feed) */
@@ -445,8 +505,13 @@ export async function createPost(input: {
   lng?: number;
   images?: string[];
   clothingTags?: ClothingTag[];
+  /** vídeo local + capa (input.image é a capa) */
+  video?: string;
+  /** enquete: uma legenda por foto */
+  pollOptions?: string[];
 }): Promise<FeedPost> {
   const uid = await me();
+  const video_url = input.video ? await uploadVideo(input.video) : null;
   const all = (input.images && input.images.length ? input.images : [input.image]).slice(0, 10);
   // sobe as fotos em sequência (mais estável no 4G)
   const uploaded: string[] = [];
@@ -465,7 +530,10 @@ export async function createPost(input: {
         lat: input.lat ?? null,
         lng: input.lng ?? null,
         images: uploaded.slice(1),
-        clothing_tags: (input.clothingTags || []).map(t => ({ ...t, image: t.image && /^https?:/.test(t.image) ? t.image : undefined }))
+        clothing_tags: (input.clothingTags || []).map(t => ({ ...t, image: t.image && /^https?:/.test(t.image) ? t.image : undefined })),
+        kind: video_url ? "video" : input.pollOptions && uploaded.length >= 2 ? "poll" : "photo",
+        video_url,
+        poll: input.pollOptions && uploaded.length >= 2 ? { options: input.pollOptions.slice(0, uploaded.length).map((o, i) => o.trim() || `Look ${i + 1}`) } : null
       })
       .select("id")
       .single()
@@ -776,7 +844,7 @@ export async function fetchStories(): Promise<UserStoryGroup[]> {
   const [rows, mine] = await Promise.all([
     db()
       .from("stories")
-      .select("id, user_id, image_url, caption, overlay, created_at, profiles!stories_user_id_fkey(username, display_name, avatar_url)")
+      .select("id, user_id, image_url, caption, overlay, audience, sticker, created_at, profiles!stories_user_id_fkey(username, display_name, avatar_url)")
       .gte("created_at", since)
       .order("created_at", { ascending: true }),
     getMyProfile()
@@ -815,9 +883,12 @@ export async function fetchStories(): Promise<UserStoryGroup[]> {
       image: r.image_url,
       caption: r.caption || undefined,
       overlay: r.overlay || null,
+      sticker: r.sticker || null,
+      closeFriends: r.audience === "close",
       timestamp: timeAgo(r.created_at),
       seen: wasSeen
     });
+    if (r.audience === "close" && !wasSeen) g.hasClose = true;
   }
   // quem tem story não visto aparece primeiro (depois do meu)
   const all = Array.from(groups.values());
@@ -827,14 +898,22 @@ export async function fetchStories(): Promise<UserStoryGroup[]> {
 export async function addStory(
   imageUri: string,
   caption?: string,
-  overlay?: StoryOverlay | null
+  overlay?: StoryOverlay | null,
+  extra?: { closeFriends?: boolean; sticker?: StorySticker | null }
 ): Promise<{ id: string; image: string }> {
   const uid = await me();
   const image_url = await uploadImage(imageUri, "stories");
   const row = check(
     await db()
       .from("stories")
-      .insert({ user_id: uid, image_url, caption: caption || null, overlay: overlay?.text ? overlay : null })
+      .insert({
+        user_id: uid,
+        image_url,
+        caption: caption || null,
+        overlay: overlay?.text ? overlay : null,
+        audience: extra?.closeFriends ? "close" : "all",
+        sticker: extra?.sticker || null
+      })
       .select("id")
       .single()
   ) as any;
@@ -1113,7 +1192,7 @@ export async function fetchWardrobe(): Promise<WardrobeItem[]> {
   const rows = check(
     await db().from("wardrobe_items").select("*").eq("user_id", uid).order("created_at", { ascending: false })
   ) as any[];
-  return (rows || []).map(r => ({ id: r.id, name: r.name, category: r.category, colorTag: r.color_tag, image: r.image_url }));
+  return (rows || []).map(r => ({ id: r.id, name: r.name, category: r.category, colorTag: r.color_tag, image: r.image_url, link: r.link || undefined }));
 }
 
 export async function addWardrobeItem(item: WardrobeItem): Promise<WardrobeItem> {
@@ -1122,11 +1201,11 @@ export async function addWardrobeItem(item: WardrobeItem): Promise<WardrobeItem>
   const r = check(
     await db()
       .from("wardrobe_items")
-      .insert({ user_id: uid, name: item.name, category: item.category, color_tag: item.colorTag, image_url })
+      .insert({ user_id: uid, name: item.name, category: item.category, color_tag: item.colorTag, image_url, link: item.link || null })
       .select("*")
       .single()
   ) as any;
-  return { id: r.id, name: r.name, category: r.category, colorTag: r.color_tag, image: r.image_url };
+  return { id: r.id, name: r.name, category: r.category, colorTag: r.color_tag, image: r.image_url, link: r.link || undefined };
 }
 
 export async function updateWardrobeItem(item: WardrobeItem): Promise<WardrobeItem> {
@@ -1134,12 +1213,12 @@ export async function updateWardrobeItem(item: WardrobeItem): Promise<WardrobeIt
   const r = check(
     await db()
       .from("wardrobe_items")
-      .update({ name: item.name, category: item.category, color_tag: item.colorTag, image_url })
+      .update({ name: item.name, category: item.category, color_tag: item.colorTag, image_url, link: item.link || null })
       .eq("id", item.id)
       .select("*")
       .single()
   ) as any;
-  return { id: r.id, name: r.name, category: r.category, colorTag: r.color_tag, image: r.image_url };
+  return { id: r.id, name: r.name, category: r.category, colorTag: r.color_tag, image: r.image_url, link: r.link || undefined };
 }
 
 export async function deleteWardrobeItem(id: string) {
@@ -1178,6 +1257,10 @@ export async function fetchActivities(): Promise<ActivityItem[]> {
         ? "pediu para seguir você."
         : r.type === "follow_accept"
         ? "aceitou seu pedido para seguir."
+        : r.type === "story_mention"
+        ? `marcou você num story: ${r.text || ""}`
+        : r.type === "repost"
+        ? "repostou seu look."
         : "começou a seguir você.",
     timeAgo: timeAgo(r.created_at),
     postImage: r.post?.image_url || undefined,
@@ -1324,6 +1407,8 @@ export function subscribeMyAlerts(
           else if (n.type === "reply") emit("Nova resposta 💬", `@${who}: ${n.text || ""}`);
           else if (n.type === "comment_like") emit("Curtiram seu comentário ❤️", `@${who} curtiu: ${n.text || ""}`);
           else if (n.type === "follow_request") emit("Pedido para seguir 🔒", `@${who} quer seguir você.`);
+          else if (n.type === "story_mention") emit("Você foi marcado 📸", `@${who} marcou você num story.`);
+          else if (n.type === "repost") emit("Repost 🔁", `@${who} repostou seu look.`);
           else if (n.type === "follow_accept") emit("Pedido aceito ✅", `@${who} aceitou seu pedido.`);
         }
       )
@@ -1500,4 +1585,129 @@ export async function saveOutfitLog(entry: OutfitLogEntry) {
 export async function deleteOutfitLog(day: string) {
   const uid = await me();
   check(await db().from("outfit_log").delete().eq("user_id", uid).eq("day", day));
+}
+
+
+// =====================================================================
+// MUTIRÃO 5
+// =====================================================================
+export async function votePoll(postId: string, option: number) {
+  const uid = await me();
+  check(await db().from("poll_votes").upsert({ post_id: postId, user_id: uid, option }, { onConflict: "post_id,user_id" }));
+}
+
+export async function ratePost(postId: string, value: 1 | -1 | 0) {
+  const uid = await me();
+  if (value === 0) check(await db().from("post_ratings").delete().eq("post_id", postId).eq("user_id", uid));
+  else check(await db().from("post_ratings").upsert({ post_id: postId, user_id: uid, value }, { onConflict: "post_id,user_id" }));
+}
+
+/** repostar: novo post meu apontando para o original (mesmas fotos, minha legenda) */
+export async function repost(original: FeedPost, caption: string): Promise<FeedPost> {
+  const uid = await me();
+  const srcId = original.repostOf || original.id;
+  const row = check(
+    await db()
+      .from("posts")
+      .insert({
+        user_id: uid,
+        image_url: original.image,
+        images: (original.images || []).slice(1),
+        caption,
+        city: original.city,
+        country: original.country,
+        style_tag: original.styleTag,
+        clothing_tags: original.clothingTags || [],
+        kind: "repost",
+        repost_of: srcId,
+        video_url: original.videoUrl || null
+      })
+      .select("id")
+      .single()
+  ) as any;
+  const post = await fetchPost(row.id);
+  if (!post) throw new Error("Repost criado, mas não carregou.");
+  return post;
+}
+
+export async function setPinnedComment(postId: string, commentId: string | null) {
+  check(await db().from("posts").update({ pinned_comment_id: commentId }).eq("id", postId));
+}
+
+export async function fetchNearby(lat: number, lng: number, km = 60): Promise<FeedPost[]> {
+  const [res, hidden] = await Promise.all([db().rpc("nearby_posts", { p_lat: lat, p_lng: lng, km, lim: 60 }), hiddenSets()]);
+  return mapPosts(visible((check(res) as any[]) || [], hidden));
+}
+
+export async function markNotInterested(post: FeedPost) {
+  const uid = await me();
+  const r = await db().from("not_interested").insert({ user_id: uid, post_id: post.id, style_tag: post.styleTag, author_id: post.userId || null });
+  if (r.error && r.error.code !== "23505") throw new Error(r.error.message);
+}
+
+export async function fetchNotInterested(): Promise<{ postIds: string[]; styles: string[]; authors: string[] }> {
+  const uid = await me();
+  const rows = (check(await db().from("not_interested").select("post_id, style_tag, author_id").eq("user_id", uid).limit(500)) as any[]) || [];
+  return {
+    postIds: rows.map(r => r.post_id),
+    styles: rows.map(r => r.style_tag).filter(Boolean),
+    authors: rows.map(r => r.author_id).filter(Boolean)
+  };
+}
+
+export async function fetchTopCreators(sinceIso: string): Promise<(UserProfile & { weekLikes: number; weekPosts: number })[]> {
+  const rows = (check(await db().rpc("top_creators", { since: sinceIso, lim: 10 })) as any[]) || [];
+  return rows.map(r => ({ ...toProfile(r), weekLikes: r.likes, weekPosts: r.posts }));
+}
+
+/** looks com uma cor nas peças marcadas ou na legenda */
+export async function searchByColor(color: string): Promise<FeedPost[]> {
+  const c = color.trim().toLowerCase().replace(/[%,()]/g, "");
+  if (!c) return [];
+  const [res, hidden] = await Promise.all([
+    db()
+      .from("feed_posts")
+      .select("*")
+      .or(`tags_text.ilike.%${c}%,caption.ilike.%${c}%`)
+      .order("created_at", { ascending: false })
+      .limit(60),
+    hiddenSets()
+  ]);
+  return mapPosts(visible(check(res) || [], hidden));
+}
+
+// ---------- melhores amigos ----------
+export async function fetchCloseFriends(): Promise<string[]> {
+  const uid = await me();
+  const rows = (check(await db().from("close_friends").select("friend_id").eq("owner_id", uid)) as any[]) || [];
+  return rows.map(r => r.friend_id);
+}
+
+export async function setCloseFriend(friendId: string, on: boolean) {
+  const uid = await me();
+  if (on) {
+    const r = await db().from("close_friends").insert({ owner_id: uid, friend_id: friendId });
+    if (r.error && r.error.code !== "23505") throw new Error(r.error.message);
+  } else check(await db().from("close_friends").delete().eq("owner_id", uid).eq("friend_id", friendId));
+}
+
+// ---------- respostas aos stickers do story ----------
+export async function respondStory(storyId: string, kind: "vote" | "answer", value: string) {
+  const uid = await me();
+  check(
+    await db()
+      .from("story_responses")
+      .upsert({ story_id: storyId, user_id: uid, kind, value: value.slice(0, 300) }, { onConflict: "story_id,user_id,kind" })
+  );
+}
+
+export async function fetchStoryResponses(storyId: string): Promise<{ userId: string; username: string; avatar: string; kind: "vote" | "answer"; value: string }[]> {
+  const rows = (check(
+    await db()
+      .from("story_responses")
+      .select("user_id, kind, value, created_at, profiles!story_responses_user_id_fkey(username, avatar_url)")
+      .eq("story_id", storyId)
+      .order("created_at", { ascending: false })
+  ) as any[]) || [];
+  return rows.map(r => ({ userId: r.user_id, username: r.profiles?.username || "membro", avatar: r.profiles?.avatar_url || "", kind: r.kind, value: r.value }));
 }

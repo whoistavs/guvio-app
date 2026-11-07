@@ -23,7 +23,10 @@ import {
   MoreHorizontal,
   Moon,
   Pin,
+  Play,
+  Repeat2,
   Settings,
+  Star,
   Share2,
   Shield,
   Tag,
@@ -68,6 +71,7 @@ import { FastImage, preloadImages } from "./FastImage";
 import { ShareProfileModal } from "./ShareProfileModal";
 import { GridSkeleton, ProfileSkeleton } from "./SkeletonLoader";
 import { HighlightsRow } from "./HighlightsRow";
+import { CloseFriendsView } from "./CloseFriendsView";
 import { BioLink } from "./BioExtras";
 import { AchievementsRow } from "./AchievementsRow";
 import { LEGAL_TEXTS } from "../data/legal";
@@ -111,6 +115,18 @@ function Grid({
           {p.pinned ? (
             <View style={s.tileIcon}>
               <Pin size={13} color="#FFF" fill="#FFF" />
+            </View>
+          ) : p.videoUrl ? (
+            <View style={s.tileIcon}>
+              <Play size={13} color="#FFF" fill="#FFF" />
+            </View>
+          ) : p.kind === "poll" ? (
+            <View style={s.tileIcon}>
+              <Text style={{ fontSize: 11 }}>🗳️</Text>
+            </View>
+          ) : p.kind === "repost" ? (
+            <View style={s.tileIcon}>
+              <Repeat2 size={13} color="#FFF" />
             </View>
           ) : p.images && p.images.length > 1 ? (
             <View style={s.tileIcon}>
@@ -892,7 +908,7 @@ export function SettingsView({
   onSignOut?: () => void;
   onDeleteAccount?: () => Promise<void>;
 }) {
-  const { colors, dark, toggle } = useAppTheme();
+  const { colors, pref, setPref } = useAppTheme();
   const [saver, setSaver] = useState(() => getSettings().dataSaver);
   const toggleSaver = () => setSaver(updateSettings({ dataSaver: !saver }).dataSaver);
   const rows = [
@@ -900,6 +916,7 @@ export function SettingsView({
     { id: "archived", l: "Arquivados", i: Archive },
     { id: "activity", l: "Sua atividade", i: Clock3 },
     { id: "blocked", l: "Bloqueados", i: UserX },
+    { id: "closeFriends", l: "Melhores amigos", i: Star },
     { id: "notifications", l: "Notificações", i: Bell },
     { id: "feedback", l: "Enviar feedback / bug", i: MessageCircle },
     { id: "tutorial", l: "Ver tutorial de novo", i: HelpCircle },
@@ -961,11 +978,25 @@ export function SettingsView({
           </Pressable>
         );
       })}
-      <Pressable onPress={toggle} style={[s.setting, { borderBottomColor: colors.border }]}>
+      <View style={[s.setting, { borderBottomColor: colors.border }]}>
         <Moon size={21} color={colors.icon} />
-        <Text style={[s.settingText, { color: colors.text }]}>Modo noturno</Text>
-        <Toggle value={dark} onValueChange={toggle} />
-      </Pressable>
+        <Text style={[s.settingText, { color: colors.text }]}>Tema</Text>
+        <View style={{ flexDirection: "row", backgroundColor: colors.surface, borderRadius: 10, padding: 3 }}>
+          {([
+            ["system", "Auto"],
+            ["light", "Claro"],
+            ["dark", "Escuro"]
+          ] as const).map(([k, l]) => (
+            <Pressable
+              key={k}
+              onPress={() => setPref(k)}
+              style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: pref === k ? colors.text : "transparent" }}
+            >
+              <Text style={{ color: pref === k ? colors.bg : colors.text, fontSize: 12, fontWeight: "800" }}>{l}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
       <Pressable onPress={toggleSaver} style={[s.setting, { borderBottomColor: colors.border }]}>
         <Gauge size={21} color={colors.icon} />
         <View style={{ flex: 1 }}>
@@ -1068,6 +1099,7 @@ export function SimpleSettingsPage({
         : "Bloqueados";
 
   if (kind === "notifications") return <NotificationSettings onBack={onBack} />;
+  if (kind === "closeFriends") return <CloseFriendsView onBack={onBack} />;
 
   if (legal) {
     return (

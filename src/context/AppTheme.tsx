@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useColorScheme } from "react-native";
 
 type ThemeMode = "light" | "dark";
+/** o que a pessoa escolheu: seguir o celular ou fixar claro/escuro */
+export type ThemePref = "system" | ThemeMode;
 
 type Palette = {
   bg: string; surface: string; surface2: string; text: string; muted: string;
@@ -23,29 +26,32 @@ const palettes: Record<ThemeMode, Palette> = {
   },
 };
 
-type AppThemeValue = { mode: ThemeMode; dark: boolean; colors: Palette; toggle: () => void; setMode: (m: ThemeMode) => void };
+type AppThemeValue = {
+  mode: ThemeMode;
+  dark: boolean;
+  colors: Palette;
+  pref: ThemePref;
+  setPref: (p: ThemePref) => void;
+  toggle: () => void;
+  setMode: (m: ThemeMode) => void;
+};
 const Ctx = createContext<AppThemeValue | null>(null);
 
 export function AppThemeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setModeState] = useState<ThemeMode>("light");
+  const system = useColorScheme();
+  const [pref, setPrefState] = useState<ThemePref>("system");
 
   useEffect(() => {
-    // Carregar preferência salva de tema do AsyncStorage
     AsyncStorage.getItem(THEME_STORAGE_KEY).then(saved => {
-      if (saved === "light" || saved === "dark") {
-        setModeState(saved);
-      }
+      if (saved === "light" || saved === "dark" || saved === "system") setPrefState(saved);
     });
   }, []);
 
-  const changeMode = (newMode: ThemeMode) => {
-    setModeState(newMode);
-    AsyncStorage.setItem(THEME_STORAGE_KEY, newMode).catch(() => {});
-  };
+  const mode: ThemeMode = pref === "system" ? (system === "dark" ? "dark" : "light") : pref;
 
-  const toggle = () => {
-    const next = mode === "light" ? "dark" : "light";
-    changeMode(next);
+  const setPref = (p: ThemePref) => {
+    setPrefState(p);
+    AsyncStorage.setItem(THEME_STORAGE_KEY, p).catch(() => {});
   };
 
   const value = useMemo(
@@ -53,10 +59,12 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
       mode,
       dark: mode === "dark",
       colors: palettes[mode],
-      toggle,
-      setMode: changeMode
+      pref,
+      setPref,
+      toggle: () => setPref(mode === "light" ? "dark" : "light"),
+      setMode: (m: ThemeMode) => setPref(m)
     }),
-    [mode]
+    [mode, pref]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

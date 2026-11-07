@@ -4,6 +4,7 @@ import {
   Alert,
   Dimensions,
   Linking,
+  Platform,
   Pressable,
   RefreshControl,
   SafeAreaView,
@@ -15,6 +16,10 @@ import {
 } from "react-native";
 import { AppThemeProvider, useAppTheme } from "./src/context/AppTheme";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
+import { UpdateBanner } from "./src/components/UpdateBanner";
+import { WebAlertHost, installWebAlert } from "./src/components/WebAlertHost";
+
+installWebAlert();
 import { Header } from "./src/components/Header";
 import { Globe3D, GlobeMarker } from "./src/components/Globe3D";
 import { GlobeLocationSearch, GlobeSearchSelection } from "./src/components/GlobeLocationSearch";
@@ -53,7 +58,7 @@ import { FollowListView } from "./src/components/FollowListView";
 import { fetchCityWeather, WeatherData } from "./src/services/weather";
 import { requestNotificationPermissions, sendLocalNotification } from "./src/services/notifications";
 import { getSavedAuthSession, signOut, handleAuthRedirect, deleteAccount } from "./src/services/auth";
-import { parseProfileLink } from "./src/utils/profileLink";
+import { parsePostLink, parseProfileLink } from "./src/utils/profileLink";
 import { FastStorage } from "./src/services/FastStorage";
 import { supabase, isCloud } from "./src/services/supabase";
 import { subscribeFeed, fetchPostCounts, subscribeMyAlerts, startPresence } from "./src/services/cloud";
@@ -76,7 +81,9 @@ function Guvio() {
   const [booting, setBooting] = useState(true);
   // perfil aberto por link/QR (guvio://u/<username>), abre depois do login
   const [pendingProfile, setPendingProfile] = useState<string | null>(null);
+  const [pendingPost, setPendingPost] = useState<string | null>(null);
   const openNameRef = useRef<((name: string) => void) | null>(null);
+  const openPostRef = useRef<((id: string) => void) | null>(null);
   const [tab, setTab] = useState("home");
   // pilha de telas abertas por cima das abas (voltar = tirar a de cima)
   const [stack, setStack] = useState<Screen[]>([]);
@@ -161,6 +168,8 @@ function Guvio() {
       await handleAuthRedirect(initialUrl).catch(() => false);
       const linkedUser = parseProfileLink(initialUrl);
       if (linkedUser) setPendingProfile(linkedUser);
+      const linkedPost = parsePostLink(initialUrl);
+      if (linkedPost) setPendingPost(linkedPost);
       const session = await getSavedAuthSession();
       setAuthenticated(Boolean(session));
       setBooting(false);
@@ -173,6 +182,11 @@ function Guvio() {
       const linkedUser = parseProfileLink(url);
       if (linkedUser) {
         setPendingProfile(linkedUser);
+        return;
+      }
+      const linkedPost = parsePostLink(url);
+      if (linkedPost) {
+        setPendingPost(linkedPost);
         return;
       }
       handleAuthRedirect(url).then(ok => ok && setAuthenticated(true));
@@ -328,6 +342,8 @@ function Guvio() {
     images?: string[];
     clothingTags?: ClothingTag[];
     caption: string;
+    video?: string;
+    pollOptions?: string[];
   }): Promise<boolean> => {
     if (publishing) return false;
     setPublishing(true);
@@ -341,7 +357,9 @@ function Guvio() {
         country: place?.country || filterCountry || "",
         styleTag: "Novo look",
         lat: place?.lat,
-        lng: place?.lng
+        lng: place?.lng,
+        video: x.video,
+        pollOptions: x.pollOptions
       });
       setPosts(prev => {
         const updated = prev.some(v => v.id === p.id) ? prev : [p, ...prev];
@@ -371,6 +389,22 @@ function Guvio() {
     }, 300);
     return () => clearTimeout(t);
   }, [pendingProfile, booting, authenticated]);
+
+  // link de post (guvio://p/<id> ou site ?p=<id>): abre o post depois do login
+  useEffect(() => {
+    if (!pendingPost || booting || !authenticated) return;
+    const id = pendingPost;
+    const t = setTimeout(() => {
+      setPendingPost(null);
+      openPostRef.current?.(id);
+      if (Platform.OS === "web" && typeof window !== "undefined" && /[?&][pu]=/.test(window.location.search)) {
+        try {
+          window.history.replaceState(null, "", window.location.pathname);
+        } catch {}
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [pendingPost, booting, authenticated]);
 
   if (booting) return <View style={[s.safe, { backgroundColor: colors.bg }]} />;
 
@@ -421,6 +455,7 @@ function Guvio() {
 
   const openProfileObj = (p: UserProfile) => push({ name: "publicProfile", profile: p });
   const openPost = (postId: string) => push({ name: "post", postId });
+  openPostRef.current = openPost;
 
   /** abre "Nova publicação" já com a #hashtag do desafio na legenda */
   const joinChallenge = (tag: string) => {
@@ -522,6 +557,7 @@ function Guvio() {
           {screen}
         </SlideInScreen>
         <ToastHost bottom={40} />
+        <UpdateBanner />
       </SafeAreaView>
     );
   }
@@ -579,6 +615,7 @@ function Guvio() {
             onOpenProfile={openName}
             onOpenTag={openTag}
             refreshKey={refreshKey}
+            nearby={place ? { lat: place.lat, lng: place.lng } : null}
             belowStories={<ChallengeCard onJoin={joinChallenge} onOpenRanking={() => push({ name: "challenge" })} />}
           />
           {loadingMore ? <ActivityIndicator color={colors.muted} style={{ marginVertical: 24 }} /> : null}
@@ -669,6 +706,7 @@ function Guvio() {
         }}
       />
       <ToastHost />
+      <UpdateBanner />
     </SafeAreaView>
   );
 }
@@ -699,6 +737,7 @@ export default function App() {
     <AppThemeProvider>
       <ErrorBoundary>
         <Guvio />
+        <WebAlertHost />
       </ErrorBoundary>
     </AppThemeProvider>
   );

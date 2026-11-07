@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { Camera, Check, Crop, FileText, ImagePlus, RotateCw, Shirt, Sparkles, Trash2, Upload, X } from "lucide-react-native";
+import { Camera, Check, Crop, FileText, Film, ImagePlus, RotateCw, Shirt, Sparkles, Trash2, Upload, X } from "lucide-react-native";
+import { videoThumbnail } from "../utils/videoThumb";
+import { Toggle } from "./Toggle";
 import * as ImagePicker from "expo-image-picker";
 import { useAppTheme } from "../context/AppTheme";
 import { toast } from "./motion";
@@ -22,6 +24,8 @@ function tagFromItem(it: WardrobeItem, idx: number): ClothingTag {
     name: it.name,
     brand: it.category,
     image: it.image,
+    link: it.link,
+    color: it.colorTag,
     x: col === 0 ? 24 : 70,
     y: Math.min(85, 22 + row * 18)
   };
@@ -40,6 +44,8 @@ export function CreateHubView({
     images?: string[];
     clothingTags?: ClothingTag[];
     caption: string;
+    video?: string;
+    pollOptions?: string[];
   }) => void | boolean | Promise<void | boolean>;
   onWardrobe: () => void;
   publishing?: boolean;
@@ -57,6 +63,49 @@ export function CreateHubView({
   const [drafts, setDrafts] = useState<PostDraftData[]>(() => loadDrafts());
   const [draftId, setDraftId] = useState<string | null>(null);
   const [editingImg, setEditingImg] = useState(false);
+  const [video, setVideo] = useState<string | null>(null);
+  const [loadingVideo, setLoadingVideo] = useState(false);
+  const [pollOn, setPollOn] = useState(false);
+  const [pollLabels, setPollLabels] = useState<string[]>([]);
+
+  // vídeo de até 30s; a capa vira a "foto" do post
+  const pickVideo = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (perm.status !== "granted") {
+        Alert.alert("Permissão necessária", "Libere o acesso aos vídeos nos Ajustes.");
+        return;
+      }
+      const r = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["videos"],
+        videoMaxDuration: 30,
+        allowsEditing: true,
+        quality: 0.7,
+        videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720
+      });
+      if (r.canceled || !r.assets?.[0]) return;
+      const a = r.assets[0];
+      if (a.duration && a.duration > 31000) {
+        Alert.alert("Vídeo longo demais", "Escolha um vídeo de até 30 segundos (dá para cortar ao escolher).");
+        return;
+      }
+      if (a.fileSize && a.fileSize > 48 * 1024 * 1024) {
+        Alert.alert("Vídeo pesado demais", "O limite é de uns 45 MB. Tente um vídeo mais curto.");
+        return;
+      }
+      setLoadingVideo(true);
+      const cover = await videoThumbnail(a.uri).catch(() => "");
+      setVideo(a.uri);
+      setImages(cover ? [cover] : []);
+      setCurrent(0);
+      setPollOn(false);
+      if (!cover) Alert.alert("Escolha uma capa", "Não conseguimos gerar a capa. Escolha uma foto na galeria para ser a capa.");
+    } catch (e: any) {
+      Alert.alert("Não deu para usar o vídeo", e?.message || "Tente outro.");
+    } finally {
+      setLoadingVideo(false);
+    }
+  };
   const imageUri = images[current] || images[0] || DEFAULT_IMAGE;
 
   useEffect(() => {
@@ -126,6 +175,9 @@ export function CreateHubView({
 
   // ----- rascunhos -----
   const resetPost = () => {
+    setVideo(null);
+    setPollOn(false);
+    setPollLabels([]);
     setCaption("");
     setImages([]);
     setTags([]);
@@ -363,6 +415,22 @@ export function CreateHubView({
         </ScrollView>
       ) : null}
 
+      {video ? (
+        <View style={[s.videoInfo, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Film size={18} color={colors.icon} />
+          <Text style={{ color: colors.text, fontWeight: "800", flex: 1 }}>Vídeo pronto · a foto acima é a capa</Text>
+          <Pressable
+            onPress={() => {
+              setVideo(null);
+              setImages([]);
+            }}
+            hitSlop={8}
+          >
+            <X size={16} color={colors.muted} />
+          </Pressable>
+        </View>
+      ) : null}
+
       <View style={s.pickers}>
         <Pressable onPress={() => pickImage(true)} style={[s.pickerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Camera size={18} color={colors.icon} />
@@ -370,9 +438,43 @@ export function CreateHubView({
         </Pressable>
         <Pressable onPress={() => pickImage(false)} style={[s.pickerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <ImagePlus size={18} color={colors.icon} />
-          <Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Abrir Galeria</Text>
+          <Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Galeria</Text>
+        </Pressable>
+        <Pressable onPress={pickVideo} style={[s.pickerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {loadingVideo ? <ActivityIndicator color={colors.icon} /> : <Film size={18} color={colors.icon} />}
+          <Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Vídeo</Text>
         </Pressable>
       </View>
+
+      {!video && images.length >= 2 && images.length <= 4 ? (
+        <View style={[s.pollBox, { backgroundColor: colors.surface, borderColor: pollOn ? colors.text : colors.border }]}>
+          <Pressable onPress={() => setPollOn(v => !v)} style={s.pollHead}>
+            <Text style={{ fontSize: 18 }}>🗳️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.text, fontWeight: "900" }}>Enquete "Qual look?"</Text>
+              <Text style={{ color: colors.muted, fontSize: 11 }}>Cada foto vira uma opção para a comunidade votar</Text>
+            </View>
+            <Toggle value={pollOn} onValueChange={() => setPollOn(v => !v)} />
+          </Pressable>
+          {pollOn
+            ? images.map((_, i) => (
+                <TextInput
+                  key={i}
+                  value={pollLabels[i] || ""}
+                  onChangeText={v => setPollLabels(prev => {
+                    const n = [...prev];
+                    n[i] = v;
+                    return n;
+                  })}
+                  maxLength={30}
+                  placeholder={`Opção ${i + 1} (ex.: ${i === 0 ? "Com blazer" : "Com jaqueta"})`}
+                  placeholderTextColor={colors.muted}
+                  style={[s.pollInput, { backgroundColor: colors.bg, color: colors.text }]}
+                />
+              ))
+            : null}
+        </View>
+      ) : null}
 
       <Text style={[s.label, { color: colors.muted }]}>MARCAR PEÇAS DO GUARDA-ROUPA</Text>
       {wardrobe.length === 0 ? (
@@ -424,9 +526,11 @@ export function CreateHubView({
           }
           const ok = await onPublish({
             image: images[0],
-            images,
+            images: video ? [images[0]] : images,
             clothingTags: tags,
-            caption: caption || "Novo look no Guvio."
+            caption: caption || "Novo look no Guvio.",
+            video: video || undefined,
+            pollOptions: !video && pollOn && images.length >= 2 && images.length <= 4 ? images.map((_, i) => pollLabels[i] || `Look ${i + 1}`) : undefined
           });
           if (ok === false) return;
           if (draftId) {
@@ -458,6 +562,10 @@ const s = StyleSheet.create({
   pickers: { flexDirection: "row", gap: 10, marginVertical: 14 },
   pickerBtn: { flex: 1, height: 44, borderWidth: 1, borderRadius: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   text: { minHeight: 110, borderRadius: 18, padding: 14, textAlignVertical: "top" },
+  videoInfo: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 14, padding: 12, marginTop: 12 },
+  pollBox: { borderWidth: 1.5, borderRadius: 16, padding: 12, gap: 8, marginBottom: 14 },
+  pollHead: { flexDirection: "row", alignItems: "center", gap: 10 },
+  pollInput: { height: 42, borderRadius: 10, paddingHorizontal: 12 },
   editBar: { position: "absolute", left: 12, top: 12, flexDirection: "row", gap: 8, alignItems: "center" },
   editBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "rgba(0,0,0,.6)", alignItems: "center", justifyContent: "center" },
   draft: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderRadius: 16, padding: 10, marginBottom: 8 },

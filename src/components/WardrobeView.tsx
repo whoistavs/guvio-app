@@ -24,6 +24,8 @@ import { successFeedback, tapFeedback } from "../utils/haptics";
 import { DailyLookCard } from "./DailyLookCard";
 import { WardrobeStatsModal } from "./WardrobeStatsModal";
 import { OutfitStoryModal } from "./OutfitStoryModal";
+import { MatchPiecesModal } from "./MatchPiecesModal";
+import { openBioLink } from "./BioExtras";
 import { PressableScale } from "./motion";
 import { WeatherData } from "../services/weather";
 import { getSavedAuthSession } from "../services/auth";
@@ -41,6 +43,8 @@ function outfitToPost(pieces: WardrobeItem[]): { images: string[]; tags: Clothin
     name: p.name,
     brand: p.category,
     image: p.image,
+    link: p.link,
+    color: p.colorTag,
     x: i % 2 === 0 ? 24 : 70,
     y: Math.min(85, 22 + Math.floor(i / 2) * 18)
   }));
@@ -80,6 +84,8 @@ export function WardrobeView({
   const [newName, setNewName] = useState("");
   const [newCategory, setNewCategory] = useState("Camisetas");
   const [newColorTag, setNewColorTag] = useState("Preto");
+  const [newLink, setNewLink] = useState("");
+  const [matchFor, setMatchFor] = useState<WardrobeItem | null>(null);
   const [newImageUri, setNewImageUri] = useState(DEFAULT_CLOTH);
 
   useEffect(() => {
@@ -232,7 +238,8 @@ export function WardrobeView({
       name: newName.trim(),
       category: newCategory,
       colorTag: newColorTag,
-      image: newImageUri
+      image: newImageUri,
+      link: newLink.trim() || undefined
     };
     setSavingItem(true);
     try {
@@ -250,12 +257,15 @@ export function WardrobeView({
 
     setNewName("");
     setNewImageUri(DEFAULT_CLOTH);
+    setNewLink("");
     setEditingItemId(null);
     setAddModalVisible(false);
   };
 
   const itemMenu = (it: WardrobeItem) =>
     Alert.alert(it.name, `${it.category} · ${it.colorTag}`, [
+      { text: "O que combina?", onPress: () => setMatchFor(it) },
+      ...(it.link ? [{ text: "Abrir link da loja", onPress: () => openBioLink(it.link!) }] : []),
       {
         text: "Editar",
         onPress: () => {
@@ -263,6 +273,7 @@ export function WardrobeView({
           setNewName(it.name);
           setNewCategory(it.category);
           setNewColorTag(it.colorTag);
+          setNewLink(it.link || "");
           setNewImageUri(it.image);
           setAddModalVisible(true);
         }
@@ -438,6 +449,7 @@ export function WardrobeView({
               onPress={() => {
                 setEditingItemId(null);
                 setNewName("");
+                setNewLink("");
                 setNewImageUri(DEFAULT_CLOTH);
                 setAddModalVisible(true);
               }}
@@ -549,6 +561,7 @@ export function WardrobeView({
           setTool(null);
           setEditingItemId(null);
           setNewName(w.name);
+          setNewLink(w.link || "");
           setNewImageUri(w.image || DEFAULT_CLOTH);
           setAddModalVisible(true);
         }}
@@ -574,6 +587,21 @@ export function WardrobeView({
         title={storyLook?.title || ""}
         onClose={() => setStoryLook(null)}
         onPublished={() => setStoryLook(null)}
+      />
+      <MatchPiecesModal
+        item={matchFor}
+        wardrobe={items}
+        onClose={() => setMatchFor(null)}
+        onSaveLook={async ids => {
+          try {
+            const o = await saveOutfit(`Combina com ${matchFor?.name || "peça"}`.slice(0, 40), ids);
+            setOutfits(prev => [o, ...prev]);
+            successFeedback();
+            toast("Look salvo em Meus looks", "✨");
+          } catch (e: any) {
+            Alert.alert("Erro", e?.message || "Tente novamente.");
+          }
+        }}
       />
       <WardrobeStatsModal visible={showStats} onClose={() => setShowStats(false)} items={items} outfits={outfits} />
 
@@ -689,6 +717,16 @@ export function WardrobeView({
               onChangeText={setNewColorTag}
               placeholder="Cor/Tom (ex: Preto Profundo, Branco Egípcio)"
               placeholderTextColor={colors.muted}
+              style={[s.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
+            />
+            <TextInput
+              value={newLink}
+              onChangeText={setNewLink}
+              placeholder="Link da loja (opcional) — vira “Comprar” no post"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
               style={[s.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
             />
 

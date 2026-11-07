@@ -21,6 +21,7 @@ jobs:
       EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://kammkctketpkkdnukfme.supabase.co' }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_0B7Co6SegZB_VxJ61uHQCA_UgOuNOO5' }}
       EXPO_BASE_URL: /guvio-app
+      EXPO_PUBLIC_BUILD_ID: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,6 +34,7 @@ jobs:
         run: |
           cp dist/index.html dist/404.html
           touch dist/.nojekyll
+          echo "{\"build\":\"${EXPO_PUBLIC_BUILD_ID}\"}" > dist/version.json
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

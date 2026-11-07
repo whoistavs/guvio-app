@@ -145,6 +145,8 @@ export async function publishPost(input: {
   lng?: number;
   images?: string[];
   clothingTags?: ClothingTag[];
+  video?: string;
+  pollOptions?: string[];
 }): Promise<FeedPost> {
   if (await isCloud()) {
     const post = await cloud.createPost(input);
@@ -165,6 +167,12 @@ export async function publishPost(input: {
     images: input.images && input.images.length ? input.images : [input.image],
     clothingTags: input.clothingTags || [],
     caption: input.caption,
+    kind: input.video ? "video" : input.pollOptions && (input.images || []).length >= 2 ? "poll" : "photo",
+    videoUrl: input.video,
+    poll:
+      input.pollOptions && (input.images || []).length >= 2
+        ? { options: input.pollOptions.map((o, i) => o.trim() || `Look ${i + 1}`), votes: input.pollOptions.map(() => 0), myVote: null }
+        : undefined,
     likes: 0,
     commentsCount: 0,
     timeAgo: "agora",
@@ -600,7 +608,7 @@ export async function saveStories(stories: UserStoryGroup[]): Promise<void> {
     const mine = stories.find(g => g.isMe);
     for (const st of mine?.stories || []) {
       if (!storySnapshot.has(st.id)) {
-        const created = await cloud.addStory(st.image, st.caption, st.overlay);
+        const created = await cloud.addStory(st.image, st.caption, st.overlay, { closeFriends: st.closeFriends, sticker: st.sticker });
         storySnapshot.add(st.id);
         storySnapshot.add(created.id);
       }
@@ -1185,16 +1193,206 @@ export async function deleteOutfitLog(day: string): Promise<void> {
 
 
 /** publica um story meu de qualquer tela (ex.: look do guarda-roupa) */
-export async function publishMyStory(imageUri: string, caption?: string, overlay?: StoryItem["overlay"]): Promise<void> {
+export async function publishMyStory(
+  imageUri: string,
+  caption?: string,
+  overlay?: StoryItem["overlay"],
+  extra?: { closeFriends?: boolean; sticker?: StoryItem["sticker"] }
+): Promise<void> {
   if (await isCloud()) {
-    const created = await cloud.addStory(imageUri, caption, overlay);
+    const created = await cloud.addStory(imageUri, caption, overlay, extra);
     storySnapshot.add(created.id);
     return;
   }
   const groups: UserStoryGroup[] = FastStorage.getItemSync(KEYS.STORIES, INITIAL_STORIES);
-  const story: StoryItem = { id: `my-st-${Date.now()}`, image: imageUri, timestamp: "Agora", caption, overlay: overlay || null };
+  const story: StoryItem = {
+    id: `my-st-${Date.now()}`,
+    image: imageUri,
+    timestamp: "Agora",
+    caption,
+    overlay: overlay || null,
+    closeFriends: !!extra?.closeFriends,
+    sticker: extra?.sticker || null
+  };
   FastStorage.setItemSync(
     KEYS.STORIES,
     groups.map(g => (g.isMe ? { ...g, hasUnseen: true, stories: [...g.stories, story] } : g))
   );
+}
+
+
+// =====================================================================
+// MUTIRÃO 5
+// =====================================================================
+function patchLocalPost(id: string, fn: (p: FeedPost) => FeedPost) {
+  FastStorage.setItemSync(KEYS.POSTS, localPosts().map(p => (p.id === id ? fn(p) : p)));
+}
+
+export async function votePoll(post: FeedPost, option: number): Promise<FeedPost> {
+  const poll = post.poll || { options: ["Look 1", "Look 2"], votes: [0, 0], myVote: null };
+  const votes = [...poll.votes];
+  if (poll.myVote !== null && poll.myVote !== undefined) votes[poll.myVote] = Math.max(0, votes[poll.myVote] - 1);
+  votes[option] = (votes[option] || 0) + 1;
+  const next = { ...post, poll: { ...poll, votes, myVote: option } };
+  if (await isCloud()) await cloud.votePoll(post.id, option);
+  else patchLocalPost(post.id, () => next);
+  return next;
+}
+
+export async function ratePost(post: FeedPost, value: 1 | -1): Promise<FeedPost> {
+  const r = post.rating || { fire: 0, ice: 0, mine: 0 as 0 };
+  const newMine: 1 | -1 | 0 = r.mine === value ? 0 : value;
+  const fire = r.fire - (r.mine === 1 ? 1 : 0) + (newMine === 1 ? 1 : 0);
+  const ice = r.ice - (r.mine === -1 ? 1 : 0) + (newMine === -1 ? 1 : 0);
+  const next = { ...post, rating: { fire, ice, mine: newMine } };
+  if (await isCloud()) await cloud.ratePost(post.id, newMine);
+  else patchLocalPost(post.id, () => next);
+  return next;
+}
+
+export async function repostLook(original: FeedPost, caption: string): Promise<FeedPost> {
+  if (await isCloud()) {
+    const p = await cloud.repost(original, caption);
+    postSnapshot.set(p.id, { isLiked: false, isSaved: false, userId: p.userId });
+    return p;
+  }
+  const p: FeedPost = {
+    ...original,
+    id: `rp-${Date.now()}`,
+    userId: "my-profile",
+    creatorName: "Você",
+    creatorUsername: "voce",
+    caption,
+    likes: 0,
+    commentsCount: 0,
+    timeAgo: "Agora",
+    isLiked: false,
+    isSaved: false,
+    kind: "repost",
+    repostOf: original.repostOf || original.id,
+    originalUsername: original.originalUsername || original.creatorUsername,
+    originalAvatar: original.originalAvatar || original.creatorAvatar,
+    pinned: false,
+    archived: false
+  };
+  FastStorage.setItemSync(KEYS.POSTS, [p, ...localPosts()]);
+  return p;
+}
+
+export async function setPinnedComment(post: FeedPost, commentId: string | null): Promise<FeedPost> {
+  if (await isCloud()) await cloud.setPinnedComment(post.id, commentId);
+  else patchLocalPost(post.id, p => ({ ...p, pinnedCommentId: commentId }));
+  return { ...post, pinnedCommentId: commentId };
+}
+
+export async function loadNearby(lat: number, lng: number, km = 60): Promise<FeedPost[]> {
+  if (await isCloud()) return cloud.fetchNearby(lat, lng, km).catch(() => []);
+  const R = 6371, rad = (x: number) => (x * Math.PI) / 180;
+  return publicLocalPosts().filter(p => {
+    if (p.lat == null || p.lng == null) return false;
+    const a = Math.sin(rad(p.lat - lat) / 2) ** 2 + Math.cos(rad(lat)) * Math.cos(rad(p.lat)) * Math.sin(rad(p.lng - lng) / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(Math.min(1, a))) <= km;
+  });
+}
+
+// ---------- não tenho interesse ----------
+const NI_KEY = "guvio_not_interested_v1";
+type NotInterested = { postIds: string[]; styles: string[]; authors: string[] };
+let niCache: NotInterested | null = null;
+
+export async function loadNotInterested(): Promise<NotInterested> {
+  if (niCache) return niCache;
+  niCache = (await isCloud())
+    ? await cloud.fetchNotInterested().catch(() => ({ postIds: [], styles: [], authors: [] }))
+    : FastStorage.getItemSync(NI_KEY, { postIds: [], styles: [], authors: [] });
+  return niCache!;
+}
+
+export async function markNotInterested(post: FeedPost): Promise<NotInterested> {
+  const cur = await loadNotInterested();
+  niCache = {
+    postIds: [...cur.postIds, post.id],
+    styles: post.styleTag ? [...cur.styles, post.styleTag] : cur.styles,
+    authors: post.userId ? [...cur.authors, post.userId] : cur.authors
+  };
+  if (await isCloud()) await cloud.markNotInterested(post);
+  else FastStorage.setItemSync(NI_KEY, niCache);
+  return niCache;
+}
+
+/**
+ * Ordena o "Para você" levando em conta o "não tenho interesse":
+ * some o post marcado; estilos e autores marcados vão para o fim (não somem).
+ */
+export function applyNotInterested(posts: FeedPost[], ni: NotInterested | null): FeedPost[] {
+  if (!ni || (!ni.postIds.length && !ni.styles.length)) return posts;
+  const hidden = new Set(ni.postIds);
+  const styleCount = new Map<string, number>();
+  ni.styles.forEach(s => styleCount.set(s.toLowerCase(), (styleCount.get(s.toLowerCase()) || 0) + 1));
+  const authorCount = new Map<string, number>();
+  ni.authors.forEach(a => authorCount.set(a, (authorCount.get(a) || 0) + 1));
+  const penalty = (p: FeedPost) => (styleCount.get((p.styleTag || "").toLowerCase()) || 0) + (authorCount.get(p.userId || "") || 0) * 2;
+  const visible = posts.filter(p => !hidden.has(p.id));
+  const keep = visible.filter(p => penalty(p) === 0);
+  const later = visible.filter(p => penalty(p) > 0).sort((a, b) => penalty(a) - penalty(b));
+  return [...keep, ...later];
+}
+
+// ---------- criadores da semana e busca por cor ----------
+export async function loadTopCreators(sinceIso: string): Promise<(UserProfile & { weekLikes: number; weekPosts: number })[]> {
+  if (await isCloud()) return cloud.fetchTopCreators(sinceIso).catch(() => []);
+  const by = new Map<string, { p: FeedPost; likes: number; posts: number }>();
+  publicLocalPosts().forEach(p => {
+    const k = p.creatorUsername || p.creatorName;
+    const cur = by.get(k) || { p, likes: 0, posts: 0 };
+    cur.likes += p.likes || 0;
+    cur.posts += 1;
+    by.set(k, cur);
+  });
+  return Array.from(by.values())
+    .sort((a, b) => b.likes - a.likes)
+    .slice(0, 10)
+    .map(x => ({
+      id: x.p.userId || x.p.creatorUsername || "",
+      username: x.p.creatorUsername || x.p.creatorName,
+      displayName: x.p.creatorName,
+      avatar: x.p.creatorAvatar,
+      location: x.p.city,
+      followers: 0,
+      following: 0,
+      weekLikes: x.likes,
+      weekPosts: x.posts
+    })) as any;
+}
+
+export async function searchByColor(color: string): Promise<FeedPost[]> {
+  if (await isCloud()) return cloud.searchByColor(color).catch(() => []);
+  const c = color.toLowerCase();
+  return publicLocalPosts().filter(
+    p => (p.caption || "").toLowerCase().includes(c) || JSON.stringify(p.clothingTags || []).toLowerCase().includes(c)
+  );
+}
+
+// ---------- melhores amigos ----------
+const CF_KEY = "guvio_close_friends_v1";
+export async function loadCloseFriends(): Promise<string[]> {
+  if (await isCloud()) return cloud.fetchCloseFriends().catch(() => []);
+  return FastStorage.getItemSync(CF_KEY, []);
+}
+export async function setCloseFriend(id: string, on: boolean): Promise<void> {
+  if (await isCloud()) return cloud.setCloseFriend(id, on);
+  const cur: string[] = FastStorage.getItemSync(CF_KEY, []);
+  FastStorage.setItemSync(CF_KEY, on ? Array.from(new Set([...cur, id])) : cur.filter(x => x !== id));
+}
+
+// ---------- respostas aos stickers ----------
+const SR_KEY = "guvio_story_responses_v1";
+export async function respondStory(storyId: string, kind: "vote" | "answer", value: string): Promise<void> {
+  if (await isCloud()) return cloud.respondStory(storyId, kind, value);
+  const all: any[] = FastStorage.getItemSync(SR_KEY, []);
+  FastStorage.setItemSync(SR_KEY, [{ storyId, kind, value, userId: "me", username: "você", avatar: "" }, ...all.filter(r => !(r.storyId === storyId && r.kind === kind && r.userId === "me"))]);
+}
+export async function loadStoryResponses(storyId: string) {
+  if (await isCloud()) return cloud.fetchStoryResponses(storyId).catch(() => []);
+  return (FastStorage.getItemSync(SR_KEY, []) as any[]).filter(r => r.storyId === storyId);
 }

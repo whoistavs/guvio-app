@@ -35,6 +35,9 @@ export interface ClothingTag {
   price?: string;
   x: number; // percentage 0-100
   y: number; // percentage 0-100
+  /** loja onde comprar */
+  link?: string;
+  color?: string;
 }
 
 export interface FeedPost {
@@ -65,6 +68,17 @@ export interface FeedPost {
   pinned?: boolean;
   /** número de curtidas escondido para os outros */
   hideLikes?: boolean;
+  kind?: "photo" | "video" | "poll" | "repost";
+  videoUrl?: string;
+  /** enquete "Qual look?": uma opção por foto */
+  poll?: { options: string[]; votes: number[]; myVote: number | null };
+  /** repost: id do post original e quem publicou */
+  repostOf?: string;
+  originalUsername?: string;
+  originalAvatar?: string;
+  pinnedCommentId?: string | null;
+  /** avaliação 🔥 / 🧊 */
+  rating?: { fire: number; ice: number; mine: 1 | -1 | 0 };
 }
 
 export interface WardrobeItem {
@@ -73,6 +87,8 @@ export interface WardrobeItem {
   category: string;
   colorTag: string;
   image: string;
+  /** loja onde comprar */
+  link?: string;
 }
 
 export interface StoryOverlay {
@@ -84,6 +100,10 @@ export interface StoryOverlay {
   y?: number;
 }
 
+export type StorySticker =
+  | { type: "poll"; question: string; options: string[] }
+  | { type: "question"; prompt: string };
+
 export interface StoryItem {
   id: string;
   image: string;
@@ -91,6 +111,9 @@ export interface StoryItem {
   caption?: string;
   seen?: boolean;
   overlay?: StoryOverlay | null;
+  /** só para melhores amigos */
+  closeFriends?: boolean;
+  sticker?: StorySticker | null;
 }
 
 export interface Highlight {
@@ -124,12 +147,14 @@ export interface UserStoryGroup {
   flag?: string;
   isMe?: boolean;
   hasUnseen?: boolean;
+  /** tem story novo só para melhores amigos (anel verde) */
+  hasClose?: boolean;
   stories: StoryItem[];
 }
 
 export interface ActivityItem {
   id: string;
-  type: "like" | "comment" | "follow" | "reply" | "comment_like" | "follow_request" | "follow_accept";
+  type: "like" | "comment" | "follow" | "reply" | "comment_like" | "follow_request" | "follow_accept" | "story_mention" | "repost";
   userId: string;
   username: string;
   userAvatar: string;

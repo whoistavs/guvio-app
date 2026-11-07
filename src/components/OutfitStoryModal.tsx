@@ -92,9 +92,9 @@ export function OutfitStoryModal({
           setShot(null);
           onClose();
         }}
-        onPublish={async (uri, caption, overlay) => {
+        onPublish={async (uri, caption, overlay, extra) => {
           try {
-            await publishMyStory(uri, caption, overlay);
+            await publishMyStory(uri, caption, overlay, extra);
             successFeedback();
             toast("Story publicado!", "✨");
             onPublished?.();

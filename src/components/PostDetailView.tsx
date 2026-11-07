@@ -10,6 +10,9 @@ import { CommentsModal } from "./CommentsModal";
 import { askReport, EditPostModal, openOwnPostMenu } from "./PostMenus";
 import { LikersModal } from "./LikersModal";
 import { PopOnActive } from "./motion";
+import { PollBar, RatingBar, RepostLine } from "./PostExtras";
+import { RepostModal } from "./RepostModal";
+import { openBioLink } from "./BioExtras";
 import { PostMedia } from "./PostMedia";
 import { SharePostModal } from "./SharePostModal";
 import { CollectionPickerModal } from "./CollectionPickerModal";
@@ -42,6 +45,7 @@ export function PostDetailView({
   const [zoom, setZoom] = useState<number | null>(null);
   const [sharing, setSharing] = useState(false);
   const [showLikers, setShowLikers] = useState(false);
+  const [reposting, setReposting] = useState(false);
   const [picking, setPicking] = useState(false);
 
   useEffect(() => {
@@ -109,6 +113,7 @@ export function PostDetailView({
       });
     } else {
       Alert.alert(`@${post.creatorUsername || post.creatorName}`, undefined, [
+        { text: "Repostar no meu perfil", onPress: () => setReposting(true) },
         {
           text: "Denunciar",
           style: "destructive",
@@ -151,11 +156,15 @@ export function PostDetailView({
           </View>
         </Pressable>
 
+        <RepostLine post={post} onOpenProfile={onOpenProfile} />
         <PostMedia
           images={post.images && post.images.length ? post.images : [post.image]}
+          video={post.videoUrl}
+          labels={post.kind === "poll" ? post.poll?.options : undefined}
           onDoubleTap={() => toggleLike(true)}
           onOpenZoom={i => setZoom(i)}
         />
+        <PollBar post={post} isMine={isMine} onChange={u => setPost(u)} />
 
         <View style={s.actions}>
           <Pressable onPress={() => toggleLike()} hitSlop={8}>
@@ -195,6 +204,7 @@ export function PostDetailView({
               </Text>
             </Pressable>
           )}
+          <RatingBar post={post} onChange={u => setPost(u)} />
           {post.caption ? (
             <RichCaption
               text={post.caption}
@@ -221,6 +231,11 @@ export function PostDetailView({
                     )}
                     <Text style={{ color: colors.text, fontSize: 11, fontWeight: "800" }} numberOfLines={1}>{t.name}</Text>
                     {t.brand ? <Text style={{ color: colors.muted, fontSize: 10 }} numberOfLines={1}>{t.brand}</Text> : null}
+                    {t.link ? (
+                      <Pressable onPress={() => openBioLink(t.link!)} style={[s.buy, { backgroundColor: colors.text }]} hitSlop={4}>
+                        <Text style={{ color: colors.bg, fontSize: 10, fontWeight: "900" }}>Comprar ↗</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                 ))}
               </ScrollView>
@@ -238,6 +253,8 @@ export function PostDetailView({
       </ScrollView>
 
       <CommentsModal
+        isOwner={isMine}
+        onPostChange={u => setPost(u)}
         post={showComments ? post : null}
         visible={showComments}
         onClose={() => setShowComments(false)}
@@ -251,6 +268,7 @@ export function PostDetailView({
         }}
         onCommented={(_, total) => setPost(p => (p ? { ...p, commentsCount: total } : p))}
       />
+      <RepostModal post={reposting ? post : null} onClose={() => setReposting(false)} />
       <SharePostModal post={post} visible={sharing} onClose={() => setSharing(false)} />
       <CollectionPickerModal
         post={picking ? post : null}
@@ -273,6 +291,7 @@ const s = StyleSheet.create({
   avatar: { width: 38, height: 38, borderRadius: 19 },
   name: { fontWeight: "800", fontSize: 14 },
   place: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
+  buy: { marginTop: 4, borderRadius: 8, paddingVertical: 4, alignItems: "center" },
   piece: { width: 96, borderWidth: 1, borderRadius: 14, padding: 6, gap: 2 },
   pieceImg: { width: "100%", height: 96, borderRadius: 10, marginBottom: 4 },
   actions: { flexDirection: "row", alignItems: "center", gap: 18, paddingHorizontal: 16, paddingVertical: 12 }

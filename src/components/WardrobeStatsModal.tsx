@@ -7,6 +7,7 @@ import { ListSkeleton } from "./SkeletonLoader";
 import { FastImage } from "./FastImage";
 import { loadMyPosts } from "../services/storage";
 import { computeWardrobeStats } from "../utils/wardrobeStats";
+import { wardrobePalette } from "../utils/colorHarmony";
 
 // cores aproximadas para as bolinhas da legenda de cores
 const SWATCH: Record<string, string> = {
@@ -40,6 +41,7 @@ export function WardrobeStatsModal({
   }, [visible]);
 
   const stats = useMemo(() => computeWardrobeStats(items, posts || [], outfits), [items, posts, outfits]);
+  const palette = useMemo(() => wardrobePalette(items), [items]);
   const maxCat = Math.max(1, ...stats.byCategory.map(c => c.count));
   const totalColors = Math.max(1, stats.byColor.reduce((a, c) => a + c.count, 0));
 
@@ -99,6 +101,48 @@ export function WardrobeStatsModal({
               ))}
             </View>
 
+            <Text style={[s.label, { color: colors.muted }]}>SUA PALETA</Text>
+            {palette.have.length === 0 ? (
+              <Text style={{ color: colors.muted, fontSize: 12 }}>Escreva a cor das peças para montar sua paleta.</Text>
+            ) : (
+              <View style={[s.paletteBox, { backgroundColor: colors.surface }]}>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                  {palette.have.slice(0, 8).map(c => (
+                    <View key={c.label} style={{ alignItems: "center", width: 54 }}>
+                      <View style={[s.chip, { backgroundColor: c.hex, borderColor: colors.border }]} />
+                      <Text style={{ color: colors.text, fontSize: 10, marginTop: 4 }} numberOfLines={1}>
+                        {c.label}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={{ color: colors.muted, fontSize: 12, marginTop: 10 }}>
+                  {palette.neutralShare >= 70
+                    ? `${palette.neutralShare}% neutras: base versátil. Uma peça colorida dá vida aos looks.`
+                    : palette.neutralShare <= 30
+                    ? `Só ${palette.neutralShare}% neutras: algumas peças básicas ajudam a combinar tudo.`
+                    : `${palette.neutralShare}% neutras: bom equilíbrio entre base e cor.`}
+                </Text>
+                {palette.missing.length ? (
+                  <>
+                    <Text style={{ color: colors.text, fontSize: 12, fontWeight: "800", marginTop: 12, marginBottom: 8 }}>
+                      Cores que combinariam e você ainda não tem
+                    </Text>
+                    <View style={{ flexDirection: "row", gap: 10 }}>
+                      {palette.missing.map(c => (
+                        <View key={c.label} style={{ alignItems: "center", width: 54 }}>
+                          <View style={[s.chip, { backgroundColor: c.hex, borderColor: colors.border, borderStyle: "dashed", borderWidth: 2 }]} />
+                          <Text style={{ color: colors.muted, fontSize: 10, marginTop: 4 }} numberOfLines={1}>
+                            {c.label}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                ) : null}
+              </View>
+            )}
+
             <Text style={[s.label, { color: colors.muted }]}>MAIS USADAS</Text>
             {stats.mostUsed.length === 0 ? (
               <Text style={{ color: colors.muted, fontSize: 12 }}>
@@ -148,6 +192,8 @@ export function WardrobeStatsModal({
 
 const s = StyleSheet.create({
   full: { flex: 1, paddingTop: 50 },
+  paletteBox: { borderRadius: 16, padding: 14 },
+  chip: { width: 40, height: 40, borderRadius: 20, borderWidth: 1 },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, marginBottom: 6 },
   h: { fontSize: 26, fontWeight: "900" },
   c: { padding: 20, paddingBottom: 60 },

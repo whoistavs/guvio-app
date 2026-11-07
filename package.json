@@ -42,6 +42,8 @@
     "expo-secure-store": "~15.0.8",
     "expo-splash-screen": "~31.0.13",
     "expo-updates": "~29.0.20",
+    "expo-video": "~3.0.16",
+    "expo-video-thumbnails": "~10.0.8",
     "expo-web-browser": "~15.0.11",
     "html2canvas": "^1.4.1",
     "lucide-react-native": "^1.27.0",

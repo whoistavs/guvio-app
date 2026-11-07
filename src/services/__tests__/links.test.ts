@@ -25,3 +25,20 @@ describe("parseCaption", () => {
     expect(parts.every(p => p.type === "text")).toBe(true);
   });
 });
+
+import { parsePostLink, postAppLink, postWebLink } from "../../utils/profileLink";
+describe("post links", () => {
+  it("round-trips ids from app and site links", () => {
+    const id = "3f2a9c1e-1111-2222-3333-444455556666";
+    expect(parsePostLink(postAppLink(id))).toBe(id);
+    expect(parsePostLink(postWebLink(id))).toBe(id);
+    expect(parsePostLink("https://whoistavs.github.io/guvio-app/?x=1&p=abcd1234#top")).toBe("abcd1234");
+  });
+  it("ignores other links", () => {
+    expect(parsePostLink("https://whoistavs.github.io/guvio-app/")).toBeNull();
+    expect(parsePostLink("guvio://u/ana")).toBeNull();
+    expect(parsePostLink("https://x.com/?p=<script>")).toBeNull();
+    expect(parseProfileLinkU("https://whoistavs.github.io/guvio-app/?u=ana")).toBe("ana");
+  });
+});
+import { parseProfileLink as parseProfileLinkU } from "../../utils/profileLink";

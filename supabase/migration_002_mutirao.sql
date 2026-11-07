@@ -52,6 +52,7 @@ alter table public.posts add column if not exists lat double precision;
 alter table public.posts add column if not exists lng double precision;
 
 -- feed_posts precisa ser recriada para incluir as colunas novas de posts
+drop function if exists public.nearby_posts(double precision, double precision, double precision, int);
 drop view if exists public.feed_posts;
 create view public.feed_posts with (security_invoker = true) as
 select

@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Expand } from "lucide-react-native";
 import { FastImage } from "./FastImage";
+import { VideoMedia } from "./VideoMedia";
 
 /**
  * Foto(s) do post: uma foto ou carrossel (arrastar para os lados), com bolinhas.
@@ -11,9 +12,15 @@ export function PostMedia({
   images,
   onDoubleTap,
   onOpenZoom,
-  children
+  children,
+  video,
+  labels
 }: {
   images: string[];
+  /** post de vídeo: a primeira imagem é a capa */
+  video?: string;
+  /** enquete: nome de cada opção, por cima de cada foto */
+  labels?: string[];
   onDoubleTap?: () => void;
   onOpenZoom?: (index: number) => void;
   /** coisas por cima da foto (coração animado, etiquetas das peças) */
@@ -33,6 +40,15 @@ export function PostMedia({
       lastTap.current = now;
     }
   };
+
+  if (video) {
+    return (
+      <View style={s.wrap}>
+        <VideoMedia uri={video} poster={list[0]} style={s.image} />
+        {children}
+      </View>
+    );
+  }
 
   return (
     <View style={s.wrap} onLayout={e => setWidth(e.nativeEvent.layout.width)}>
@@ -58,6 +74,14 @@ export function PostMedia({
               style={{ width: width || 1 }}
             >
               <FastImage source={uri} style={s.image} contentFit="cover" transition={120} />
+              {labels?.[i] ? (
+                <View style={s.label} pointerEvents="none">
+                  <Text style={s.labelNum}>{i + 1}</Text>
+                  <Text style={s.labelText} numberOfLines={1}>
+                    {labels[i]}
+                  </Text>
+                </View>
+              ) : null}
             </Pressable>
           ))}
         </ScrollView>
@@ -90,6 +114,9 @@ export function PostMedia({
 }
 
 const s = StyleSheet.create({
+  label: { position: "absolute", left: 12, bottom: 34, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(0,0,0,.65)", borderRadius: 18, paddingRight: 12, maxWidth: "80%" },
+  labelNum: { color: "#000", backgroundColor: "#FFF", fontWeight: "900", width: 28, height: 28, borderRadius: 14, textAlign: "center", lineHeight: 28, overflow: "hidden" },
+  labelText: { color: "#FFF", fontWeight: "800", fontSize: 13 },
   wrap: { position: "relative", width: "100%" },
   image: { width: "100%", aspectRatio: 1, backgroundColor: "#111" },
   counter: { position: "absolute", top: 12, right: 12, backgroundColor: "rgba(0,0,0,.6)", borderRadius: 12, paddingHorizontal: 9, paddingVertical: 3 },

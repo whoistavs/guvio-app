@@ -196,6 +196,7 @@ create policy "meu calendario" on public.outfit_log for all to authenticated
 -- ---------------------------------------------------------------------
 -- VIEWS (recriadas para trazer as colunas novas)
 -- ---------------------------------------------------------------------
+drop function if exists public.nearby_posts(double precision, double precision, double precision, int);
 drop view if exists public.feed_posts;
 create view public.feed_posts with (security_invoker = true) as
 select

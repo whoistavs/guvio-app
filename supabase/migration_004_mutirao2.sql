@@ -21,6 +21,7 @@ create policy "meus looks" on public.outfits for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- feed_posts precisa ser recriada para incluir a coluna nova
+drop function if exists public.nearby_posts(double precision, double precision, double precision, int);
 drop view if exists public.feed_posts;
 create view public.feed_posts with (security_invoker = true) as
 select
