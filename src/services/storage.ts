@@ -54,7 +54,7 @@ export const INITIAL_USER_PROFILE: UserProfile = {
   followers: 142,
   following: 89,
   postsCount: 0,
-  bio: "Amante da moda minimalista e composições contemporâneas ✨",
+  bio: "",
   website: "guvio.app/@usuario"
 };
 

@@ -224,7 +224,7 @@ function Guvio() {
         location: location || "Brasil",
         followers: 0,
         following: 0,
-        bio: `Criador(a) de estilo explorando tendências de moda no Guvio.`
+        bio: ""
       };
     push({ name: "publicProfile", profile: p });
   };

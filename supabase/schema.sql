@@ -44,9 +44,9 @@ begin
     coalesce(nullif(new.raw_user_meta_data->>'display_name', ''),
              nullif(new.raw_user_meta_data->>'full_name', ''),
              final_username),
-    coalesce(new.raw_user_meta_data->>'avatar_url', null),
+    null, -- sem foto do Google: a pessoa escolhe a sua no app
     '',
-    'Novo criador de estilo na comunidade Guvio ✨'
+    ''
   )
   on conflict (id) do nothing;
   return new;
@@ -340,7 +340,7 @@ select
                             '[^a-zA-Z0-9._]', '', 'g')), 20)
     || '_' || left(replace(u.id::text, '-', ''), 4),
   coalesce(nullif(u.raw_user_meta_data->>'display_name', ''), split_part(u.email, '@', 1), 'Membro Guvio'),
-  'Novo criador de estilo na comunidade Guvio ✨'
+  ''
 from auth.users u
 where not exists (select 1 from public.profiles p where p.id = u.id)
 on conflict do nothing;
@@ -430,3 +430,10 @@ begin
     alter publication supabase_realtime add table public.story_views;
   end if;
 end $$;
+
+-- ===== PERFIL LIMPO (migration_003) =====
+update public.profiles set bio = ''
+where bio in ('Novo criador de estilo na comunidade Guvio ✨',
+              'Amante da moda minimalista e composições contemporâneas ✨');
+update public.profiles set avatar_url = null
+where avatar_url like '%googleusercontent.com%';

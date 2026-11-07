@@ -242,7 +242,7 @@ export async function signUpEmail(
     followers: 0,
     following: 0,
     postsCount: 0,
-    bio: "Novo criador de estilo na comunidade Guvio ✨",
+    bio: "",
     website: `guvio.app/@${cleanUsername}`
   });
 
