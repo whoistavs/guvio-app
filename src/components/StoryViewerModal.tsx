@@ -264,6 +264,9 @@ export function StoryViewerModal({
             />
           </View>
 
+          {/* empurra legenda e barra de resposta para baixo; topo fica preso em cima */}
+          <View style={{ flex: 1 }} pointerEvents="none" />
+
           {/* Caption text */}
           {currentStory.caption ? (
             <View style={s.captionContainer}>
@@ -533,8 +536,8 @@ const s = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 140,
-    backgroundColor: "rgba(0,0,0,0.45)"
+    height: 130,
+    backgroundColor: "rgba(0,0,0,0.3)"
   },
   bottomOverlay: {
     position: "absolute",
@@ -544,7 +547,7 @@ const s = StyleSheet.create({
     height: 180,
     backgroundColor: "rgba(0,0,0,0.6)"
   },
-  safeArea: { flex: 1, justifyContent: "space-between" },
+  safeArea: { flex: 1, justifyContent: "flex-start" },
   progressContainer: {
     flexDirection: "row",
     gap: 4,
