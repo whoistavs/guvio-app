@@ -22,8 +22,8 @@ const useFrame = (cb: (state: any, delta: number) => void) =>
 
 // Proteção contra o app fechar ao desenhar o globo: se fechar com o globo aberto,
 // na próxima vez usamos um modo mais simples (0 = completo, 1 = simples, 2 = desligado)
-const GUARD_KEY = "guvio_globe_guard_v1";
-const LEVEL_KEY = "guvio_globe_level_v1";
+const GUARD_KEY = "guvio_globe_guard_v2";
+const LEVEL_KEY = "guvio_globe_level_v2";
 
 // ---------------------------------------------------------------------
 // Tipos públicos
@@ -257,6 +257,14 @@ function Atmosphere({ color }: { color: string }) {
 }
 
 /** Pontos onde há looks: um disco que pulsa + halo; o selecionado fica maior */
+const MAX_MARKERS = 512;
+
+/**
+ * Pontos onde há looks: um disco que pulsa + halo; o selecionado fica maior.
+ * As malhas são criadas UMA vez com capacidade fixa (só muda o "count"):
+ * recriar objetos 3D quando a quantidade muda quebrava o app no iPhone
+ * ("Cannot delete property '__r3f' of undefined").
+ */
 function Markers({
   markers,
   selectedId,
@@ -266,14 +274,27 @@ function Markers({
   selectedId?: string | null;
   color: string;
 }) {
-  const coreRef = useRef<THREE.InstancedMesh>(null!);
-  const haloRef = useRef<THREE.InstancedMesh>(null!);
   const tmp = useMemo(() => new THREE.Object3D(), []);
-  const max = Math.max(1, markers.length);
+  const { core, halo } = useMemo(() => {
+    const haloMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide });
+    const coreMat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const h = new THREE.InstancedMesh(new THREE.CircleGeometry(0.045, 24), haloMat, MAX_MARKERS);
+    const c = new THREE.InstancedMesh(new THREE.CircleGeometry(0.04, 24), coreMat, MAX_MARKERS);
+    h.count = 0;
+    c.count = 0;
+    h.frustumCulled = false;
+    c.frustumCulled = false;
+    return { core: c, halo: h };
+  }, []);
+
+  useEffect(() => {
+    (core.material as THREE.MeshBasicMaterial).color.set(color);
+    (halo.material as THREE.MeshBasicMaterial).color.set(color);
+  }, [color]);
 
   const placements = useMemo(
     () =>
-      markers.map(m => {
+      markers.slice(0, MAX_MARKERS).map(m => {
         const p = new THREE.Vector3(...latLonToVector3(m.lat, m.lon, R * 1.012));
         const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), p.clone().normalize());
         const weight = Math.min(1.6, 0.85 + Math.log10(1 + m.count) * 0.6);
@@ -290,42 +311,38 @@ function Markers({
       tmp.quaternion.copy(pl.q);
       tmp.scale.setScalar(pl.weight * (selected ? 1.5 : 1));
       tmp.updateMatrix();
-      coreRef.current?.setMatrixAt(i, tmp.matrix);
+      core.setMatrixAt(i, tmp.matrix);
 
       const phase = (t * 0.9 + i * 0.37) % 1;
       tmp.scale.setScalar(pl.weight * (selected ? 1.6 : 1) * (1 + phase * 1.8));
       tmp.updateMatrix();
-      haloRef.current?.setMatrixAt(i, tmp.matrix);
+      halo.setMatrixAt(i, tmp.matrix);
     });
-    if (coreRef.current) coreRef.current.instanceMatrix.needsUpdate = true;
-    if (haloRef.current) {
-      haloRef.current.instanceMatrix.needsUpdate = true;
-      (haloRef.current.material as THREE.MeshBasicMaterial).opacity = 0.35 * (1 - ((t * 0.9) % 1));
-    }
+    core.count = placements.length;
+    halo.count = placements.length;
+    core.instanceMatrix.needsUpdate = true;
+    halo.instanceMatrix.needsUpdate = true;
+    (halo.material as THREE.MeshBasicMaterial).opacity = 0.35 * (1 - ((t * 0.9) % 1));
   });
 
-  if (markers.length === 0) return null;
   return (
     <>
-      <instancedMesh ref={haloRef} args={[undefined, undefined, max]} frustumCulled={false}>
-        <circleGeometry args={[0.045, 24]} />
-        <meshBasicMaterial color={color} transparent opacity={0.3} depthWrite={false} side={THREE.DoubleSide} />
-      </instancedMesh>
-      <instancedMesh ref={coreRef} args={[undefined, undefined, max]} frustumCulled={false}>
-        <circleGeometry args={[0.04, 24]} />
-        <meshBasicMaterial color={color} side={THREE.DoubleSide} />
-      </instancedMesh>
+      <primitive object={halo} />
+      <primitive object={core} />
     </>
   );
 }
 
-function MyLocation({ origin, color }: { origin: { lat: number; lon: number }; color: string }) {
+/** Ponto verde da sua localização. Sempre montado (só fica invisível sem localização). */
+function MyLocation({ origin, color }: { origin?: { lat: number; lon: number } | null; color: string }) {
   const ringRef = useRef<THREE.Mesh>(null!);
+  const lat = origin?.lat ?? 0;
+  const lon = origin?.lon ?? 0;
   const { p, q } = useMemo(() => {
-    const p = new THREE.Vector3(...latLonToVector3(origin.lat, origin.lon, R * 1.013));
+    const p = new THREE.Vector3(...latLonToVector3(lat, lon, R * 1.013));
     const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), p.clone().normalize());
     return { p, q };
-  }, [origin.lat, origin.lon]);
+  }, [lat, lon]);
 
   useFrame(({ clock }) => {
     if (!ringRef.current) return;
@@ -335,7 +352,7 @@ function MyLocation({ origin, color }: { origin: { lat: number; lon: number }; c
   });
 
   return (
-    <group position={p} quaternion={q}>
+    <group position={p} quaternion={q} visible={!!origin}>
       <mesh>
         <circleGeometry args={[0.042, 24]} />
         <meshBasicMaterial color="#FFFFFF" side={THREE.DoubleSide} />
@@ -352,27 +369,58 @@ function MyLocation({ origin, color }: { origin: { lat: number; lon: number }; c
   );
 }
 
-function Arc({ from, to, color }: { from: { lat: number; lon: number }; to: { lat: number; lon: number }; color: string }) {
-  const { line, length } = useMemo(() => {
+/**
+ * Linha animada da sua cidade até a cidade escolhida.
+ * O objeto da linha é sempre o mesmo (só a geometria muda), pelo mesmo motivo dos marcadores.
+ */
+function Arc({
+  from,
+  to,
+  color
+}: {
+  from?: { lat: number; lon: number } | null;
+  to?: { lat: number; lon: number } | null;
+  color: string;
+}) {
+  const line = useMemo(() => {
+    const material = new THREE.LineDashedMaterial({ dashSize: 0.1, gapSize: 0.06, transparent: true, opacity: 0.95 });
+    const l = new THREE.Line(new THREE.BufferGeometry(), material);
+    l.visible = false;
+    l.frustumCulled = false;
+    return l;
+  }, []);
+
+  useEffect(() => {
+    (line.material as THREE.LineDashedMaterial).color.set(color);
+  }, [color]);
+
+  useEffect(() => {
+    if (!from || !to) {
+      line.visible = false;
+      return;
+    }
     const start = new THREE.Vector3(...latLonToVector3(from.lat, from.lon, R * 1.01));
     const end = new THREE.Vector3(...latLonToVector3(to.lat, to.lon, R * 1.01));
     const dist = start.distanceTo(end);
+    if (dist < 0.02) {
+      line.visible = false;
+      return;
+    }
     const mid = start.clone().add(end).multiplyScalar(0.5);
     if (mid.length() < 0.01) mid.set(0, R, 0); // pontos opostos
     mid.normalize().multiplyScalar(R * 1.01 + Math.min(1.1, dist * 0.42));
     const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
-    const geometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(80));
-    const material = new THREE.LineDashedMaterial({ color, dashSize: 0.1, gapSize: 0.06, transparent: true, opacity: 0.95 });
-    const l = new THREE.Line(geometry, material);
-    l.computeLineDistances();
-    return { line: l, length: curve.getLength() };
-  }, [from.lat, from.lon, to.lat, to.lon, color]);
+    const old = line.geometry;
+    line.geometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(80));
+    old.dispose();
+    line.computeLineDistances();
+    line.visible = true;
+  }, [from?.lat, from?.lon, to?.lat, to?.lon]);
 
   useFrame(({ clock }) => {
     (line.material as any).dashOffset = -clock.elapsedTime * 0.9;
   });
 
-  if (length < 0.02) return null;
   return <primitive object={line} />;
 }
 
@@ -452,8 +500,8 @@ function Scene({
         </mesh>
         {lite ? <LandDotsLite color={colors.dots} /> : <LandDots color={colors.dots} pixelRatio={pixelRatio} />}
         <Markers markers={markers} selectedId={selected?.id} color={colors.marker} />
-        {origin ? <MyLocation origin={origin} color={colors.me} /> : null}
-        {origin && selected ? <Arc from={origin} to={selected} color={colors.arc} /> : null}
+        <MyLocation origin={origin} color={colors.me} />
+        <Arc from={origin} to={selected} color={colors.arc} />
       </group>
     </>
   );
