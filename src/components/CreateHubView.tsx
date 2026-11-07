@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { Camera, Check, ImagePlus, Shirt, Sparkles, Upload, X } from "lucide-react-native";
+import { Camera, Check, Crop, FileText, ImagePlus, RotateCw, Shirt, Sparkles, Trash2, Upload, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useAppTheme } from "../context/AppTheme";
 import { ImagePlaceholder } from "./FastImage";
 import { OutfitPromoExporter } from "./OutfitPromoExporter";
 import { ClothingTag, WardrobeItem } from "../data/mockData";
-import { loadSavedWardrobe } from "../services/storage";
+import { deleteDraft, loadDrafts, loadSavedWardrobe, PostDraftData, saveDraft } from "../services/storage";
 import { getSavedAuthSession } from "../services/auth";
 
 const MAX_PHOTOS = 10;
@@ -53,6 +53,9 @@ export function CreateHubView({
   const [wardrobe, setWardrobe] = useState<WardrobeItem[]>([]);
   const [current, setCurrent] = useState(0);
   const [showPromoExporter, setShowPromoExporter] = useState(false);
+  const [drafts, setDrafts] = useState<PostDraftData[]>(() => loadDrafts());
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [editingImg, setEditingImg] = useState(false);
   const imageUri = images[current] || images[0] || DEFAULT_IMAGE;
 
   useEffect(() => {
@@ -61,6 +64,7 @@ export function CreateHubView({
     setTags(draft.tags);
     setCaption(draft.caption);
     setCurrent(0);
+    setDraftId(null);
     setMode("post");
   }, [draft?.id]);
 
@@ -79,6 +83,92 @@ export function CreateHubView({
       return next;
     });
   };
+
+  // ----- girar e recortar a foto atual -----
+  const manipulate = async (actions: any[]) => {
+    const uri = images[current];
+    if (!uri) return;
+    setEditingImg(true);
+    try {
+      const { manipulateAsync, SaveFormat } = require("expo-image-manipulator") as typeof import("expo-image-manipulator");
+      const out = await manipulateAsync(uri, actions, { compress: 0.92, format: SaveFormat.JPEG });
+      setImages(prev => prev.map((x, i) => (i === current ? out.uri : x)));
+    } catch (e: any) {
+      Alert.alert("Não deu para editar a foto", e?.message || "Tente outra imagem.");
+    } finally {
+      setEditingImg(false);
+    }
+  };
+
+  const sizeOf = (uri: string) =>
+    new Promise<{ width: number; height: number } | null>(res => Image.getSize(uri, (width, height) => res({ width, height }), () => res(null)));
+
+  const cropTo = async (ratio: number) => {
+    const size = await sizeOf(images[current]);
+    if (!size) return;
+    let w = size.width,
+      h = Math.round(size.width / ratio);
+    if (h > size.height) {
+      h = size.height;
+      w = Math.round(size.height * ratio);
+    }
+    await manipulate([{ crop: { originX: Math.round((size.width - w) / 2), originY: Math.round((size.height - h) / 2), width: w, height: h } }]);
+  };
+
+  const askCrop = () =>
+    Alert.alert("Recortar foto", "Corta pelo centro da imagem.", [
+      { text: "Quadrado 1:1", onPress: () => cropTo(1) },
+      { text: "Retrato 4:5", onPress: () => cropTo(4 / 5) },
+      { text: "Story 9:16", onPress: () => cropTo(9 / 16) },
+      { text: "Cancelar", style: "cancel" }
+    ]);
+
+  // ----- rascunhos -----
+  const resetPost = () => {
+    setCaption("");
+    setImages([]);
+    setTags([]);
+    setCurrent(0);
+    setDraftId(null);
+  };
+
+  const handleSaveDraft = async () => {
+    if (!images.length && !caption.trim()) {
+      Alert.alert("Nada para salvar", "Escolha uma foto ou escreva a legenda primeiro.");
+      return;
+    }
+    try {
+      await saveDraft({ id: draftId || undefined, images, caption, tags });
+      setDrafts(loadDrafts());
+      resetPost();
+      setMode("hub");
+      Alert.alert("Rascunho salvo", "Ele fica em Criar › Rascunhos.");
+    } catch (e: any) {
+      Alert.alert("Erro", e?.message || "Não foi possível salvar o rascunho.");
+    }
+  };
+
+  const openDraft = (d: PostDraftData) => {
+    setImages(d.images);
+    setCaption(d.caption);
+    setTags(d.tags);
+    setCurrent(0);
+    setDraftId(d.id);
+    setMode("post");
+  };
+
+  const removeDraft = (d: PostDraftData) =>
+    Alert.alert("Apagar rascunho?", undefined, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Apagar",
+        style: "destructive",
+        onPress: () => {
+          deleteDraft(d.id);
+          setDrafts(loadDrafts());
+        }
+      }
+    ]);
 
   const removeImage = (i: number) => {
     setImages(prev => prev.filter((_, k) => k !== i));
@@ -160,6 +250,34 @@ export function CreateHubView({
             </View>
           </Pressable>
 
+          {drafts.length > 0 ? (
+            <View style={{ marginBottom: 12 }}>
+              <Text style={[s.label, { color: colors.muted, marginTop: 8 }]}>RASCUNHOS ({drafts.length})</Text>
+              {drafts.map(d => (
+                <Pressable key={d.id} onPress={() => openDraft(d)} style={[s.draft, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  {d.images[0] ? (
+                    <Image source={{ uri: d.images[0] }} style={s.draftImg} />
+                  ) : (
+                    <View style={[s.draftImg, { alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }]}>
+                      <FileText size={18} color={colors.muted} />
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontWeight: "800" }} numberOfLines={1}>
+                      {d.caption.trim() || "Sem legenda"}
+                    </Text>
+                    <Text style={{ color: colors.muted, fontSize: 11 }}>
+                      {d.images.length} {d.images.length === 1 ? "foto" : "fotos"} · {new Date(d.savedAt).toLocaleDateString("pt-BR")}
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => removeDraft(d)} hitSlop={10}>
+                    <Trash2 size={16} color={colors.muted} />
+                  </Pressable>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
           <Pressable onPress={() => setShowPromoExporter(true)} style={[s.card, s.viralCard, { backgroundColor: colors.text }]}>
             <Sparkles size={28} color={colors.bg} />
             <View style={{ flex: 1 }}>
@@ -193,6 +311,15 @@ export function CreateHubView({
               <Text style={s.pinText} numberOfLines={1}>{t.name}</Text>
             </View>
           ))}
+          <View style={s.editBar}>
+            <Pressable onPress={() => manipulate([{ rotate: 90 }])} disabled={editingImg} style={s.editBtn} hitSlop={6}>
+              <RotateCw size={16} color="#FFF" />
+            </Pressable>
+            <Pressable onPress={askCrop} disabled={editingImg} style={s.editBtn} hitSlop={6}>
+              <Crop size={16} color="#FFF" />
+            </Pressable>
+            {editingImg ? <ActivityIndicator color="#FFF" /> : null}
+          </View>
           {images.length > 1 ? (
             <View style={s.counter}>
               <Text style={s.counterText}>{current + 1}/{images.length}</Text>
@@ -283,6 +410,10 @@ export function CreateHubView({
         style={[s.text, { backgroundColor: colors.surface, color: colors.text }]}
       />
       
+      <Pressable onPress={handleSaveDraft} disabled={publishing} style={[s.draftBtn, { borderColor: colors.border }]}>
+        <Text style={{ color: colors.text, fontWeight: "800" }}>{draftId ? "Atualizar rascunho" : "Salvar rascunho"}</Text>
+      </Pressable>
+
       <Pressable
         disabled={publishing}
         onPress={async () => {
@@ -297,10 +428,11 @@ export function CreateHubView({
             caption: caption || "Novo look no Guvio."
           });
           if (ok === false) return;
-          setCaption("");
-          setImages([]);
-          setTags([]);
-          setCurrent(0);
+          if (draftId) {
+            deleteDraft(draftId);
+            setDrafts(loadDrafts());
+          }
+          resetPost();
           setMode("hub");
         }}
         style={[s.publish, { backgroundColor: colors.text, opacity: publishing ? 0.6 : 1 }]}
@@ -325,6 +457,11 @@ const s = StyleSheet.create({
   pickers: { flexDirection: "row", gap: 10, marginVertical: 14 },
   pickerBtn: { flex: 1, height: 44, borderWidth: 1, borderRadius: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   text: { minHeight: 110, borderRadius: 18, padding: 14, textAlignVertical: "top" },
+  editBar: { position: "absolute", left: 12, top: 12, flexDirection: "row", gap: 8, alignItems: "center" },
+  editBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "rgba(0,0,0,.6)", alignItems: "center", justifyContent: "center" },
+  draft: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderRadius: 16, padding: 10, marginBottom: 8 },
+  draftImg: { width: 46, height: 46, borderRadius: 10 },
+  draftBtn: { height: 46, borderRadius: 23, borderWidth: 1, alignItems: "center", justifyContent: "center", marginTop: 14 },
   label: { fontSize: 10, fontWeight: "800", letterSpacing: 1.3, marginTop: 4, marginBottom: 8 },
   pin: { position: "absolute", maxWidth: 130, backgroundColor: "rgba(0,0,0,.7)", borderRadius: 8, paddingHorizontal: 7, paddingVertical: 4 },
   pinText: { color: "#FFF", fontSize: 10, fontWeight: "800" },

@@ -5,7 +5,8 @@ import { ActivityItem, MOCK_ACTIVITIES } from "../data/mockData";
 import { ScreenHeader } from "./ScreenHeader";
 import { useAppTheme } from "../context/AppTheme";
 import { FastImage } from "./FastImage";
-import { loadActivities, saveActivities, loadFollowedUsers, saveFollowedUsers } from "../services/storage";
+import { loadActivities, saveActivities, loadFollowedUsers, saveFollowedUsers, answerFollowRequest } from "../services/storage";
+import { ActivityGroup, groupActivities, groupMessage } from "../utils/groupActivities";
 
 export function ActivityView({
   onBack,
@@ -33,10 +34,25 @@ export function ActivityView({
     await saveFollowedUsers(updated);
   };
 
-  const todayActivities = activities.filter(a => a.timeCategory === "today");
-  const weekActivities = activities.filter(a => a.timeCategory === "week" || a.timeCategory === "earlier");
+  const [answered, setAnswered] = useState<Record<string, "ok" | "no">>({});
+  const todayActivities = groupActivities(activities.filter(a => a.timeCategory === "today"));
+  const weekActivities = groupActivities(activities.filter(a => a.timeCategory === "week" || a.timeCategory === "earlier"));
 
-  const renderActivityRow = (item: ActivityItem) => {
+  const answer = async (item: ActivityItem, accept: boolean) => {
+    setAnswered(prev => ({ ...prev, [item.id]: accept ? "ok" : "no" }));
+    try {
+      await answerFollowRequest(item.userId, accept);
+    } catch {
+      setAnswered(prev => {
+        const n = { ...prev };
+        delete n[item.id];
+        return n;
+      });
+    }
+  };
+
+  const renderActivityRow = (g: ActivityGroup) => {
+    const item = g.lead;
     const isFollowing = followedIds.includes(item.userId);
 
     const openItem = () => {
@@ -45,10 +61,13 @@ export function ActivityView({
     };
 
     return (
-      <Pressable key={item.id} style={s.activityRow} onPress={openItem}>
+      <Pressable key={g.key} style={s.activityRow} onPress={openItem}>
         {/* User Avatar with Type Badge */}
         <Pressable onPress={() => onOpenProfile?.(item.username)} style={s.avatarContainer}>
           <FastImage source={item.userAvatar} style={s.avatar} contentFit="cover" />
+          {g.others[0] ? (
+            <FastImage source={g.others[0].userAvatar} style={[s.avatar2, { borderColor: colors.bg }]} contentFit="cover" />
+          ) : null}
           <View
             style={[
               s.typeBadge,
@@ -81,13 +100,28 @@ export function ActivityView({
             >
               @{item.username}{" "}
             </Text>
-            {item.message}
+            {groupMessage(g)}
           </Text>
           <Text style={[s.timeAgo, { color: colors.muted }]}>{item.timeAgo}</Text>
         </View>
 
         {/* Right side: Follow button OR Post thumbnail */}
-        {item.type === "follow" ? (
+        {item.type === "follow_request" ? (
+          answered[item.id] ? (
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+              {answered[item.id] === "ok" ? "Aceito ✓" : "Recusado"}
+            </Text>
+          ) : (
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              <Pressable onPress={() => answer(item, true)} style={[s.followButton, { backgroundColor: "#0095F6", minWidth: 0 }]}>
+                <Text style={[s.followButtonText, { color: "#FFF" }]}>Aceitar</Text>
+              </Pressable>
+              <Pressable onPress={() => answer(item, false)} style={[s.followButton, { backgroundColor: colors.surface, minWidth: 0 }]}>
+                <Text style={[s.followButtonText, { color: colors.text }]}>Recusar</Text>
+              </Pressable>
+            </View>
+          )
+        ) : item.type === "follow" && !g.others.length ? (
           <Pressable
             onPress={() => toggleFollow(item.userId)}
             style={[
@@ -151,6 +185,7 @@ const s = StyleSheet.create({
   activityRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 },
   avatarContainer: { position: "relative" },
   avatar: { width: 44, height: 44, borderRadius: 22 },
+  avatar2: { position: "absolute", left: 18, top: 16, width: 30, height: 30, borderRadius: 15, borderWidth: 2 },
   typeBadge: {
     position: "absolute",
     bottom: -2,

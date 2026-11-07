@@ -13,12 +13,15 @@ export function DailyLookCard({
   items,
   weather,
   onSave,
-  onPublish
+  onPublish,
+  onWore
 }: {
   items: WardrobeItem[];
   weather?: WeatherData | null;
   onSave?: (pieces: WardrobeItem[]) => void;
   onPublish?: (pieces: WardrobeItem[]) => void;
+  /** registra no calendário que usou este look hoje */
+  onWore?: (pieces: WardrobeItem[]) => void;
 }) {
   const { colors } = useAppTheme();
   const [variation, setVariation] = useState(0);
@@ -73,10 +76,15 @@ export function DailyLookCard({
         ))}
       </ScrollView>
       <View style={s.actions}>
+        {onWore ? (
+          <Pressable onPress={() => onWore(look.items)} style={[s.btn, { backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1 }]}>
+            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12 }}>✓ Usei hoje</Text>
+          </Pressable>
+        ) : null}
         {onSave ? (
           <Pressable onPress={() => onSave(look.items)} style={[s.btn, { backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1 }]}>
             <Bookmark size={14} color={colors.text} />
-            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12 }}>Salvar look</Text>
+            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12 }}>Salvar</Text>
           </Pressable>
         ) : null}
         {onPublish ? (

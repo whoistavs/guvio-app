@@ -12,7 +12,7 @@ import {
   TextInput,
   View
 } from "react-native";
-import { ArrowLeft, Camera, CornerUpLeft, Image as ImageIcon, Send, Trash2, X } from "lucide-react-native";
+import { ArrowLeft, Camera, CornerUpLeft, Image as ImageIcon, Search, Send, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { DirectThread, FeedPost } from "../data/mockData";
 import { FastImage } from "./FastImage";
@@ -99,6 +99,8 @@ export function ChatView({
   const [zoom, setZoom] = useState<string | null>(null);
   const [online, setOnline] = useState(false);
   const [typing, setTyping] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState("");
   const scrollRef = useRef<ScrollView>(null);
   const typingRef = useRef<ReturnType<typeof typingChannel> | null>(null);
   const lastTap = useRef<Record<string, number>>({});
@@ -138,6 +140,23 @@ export function ChatView({
   useEffect(() => {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
   }, [messages.length, typing]);
+
+  const q = query
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  // na busca, mostra só as mensagens com o texto procurado
+  const shown =
+    searching && q
+      ? messages.filter(m =>
+          (m.text || "")
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .includes(q)
+        )
+      : messages;
 
   const byId = useMemo(() => new Map(messages.map(m => [m.id, m])), [messages]);
   const lastMine = [...messages].reverse().find(m => m.sender === "me" && !m.deleted);
@@ -248,14 +267,41 @@ export function ChatView({
             ) : null}
           </View>
         </Pressable>
+        <Pressable
+          onPress={() => {
+            setSearching(v => !v);
+            setQuery("");
+          }}
+          hitSlop={10}
+        >
+          {searching ? <X size={22} color={colors.icon} /> : <Search size={21} color={colors.icon} />}
+        </Pressable>
       </View>
+      {searching ? (
+        <View style={[s.searchBar, { backgroundColor: colors.surface }]}>
+          <Search size={16} color={colors.muted} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            autoFocus
+            placeholder="Buscar nesta conversa..."
+            placeholderTextColor={colors.muted}
+            style={{ flex: 1, color: colors.text, fontSize: 14, height: "100%" }}
+          />
+          {query.trim() ? (
+            <Text style={{ color: colors.muted, fontSize: 12 }}>
+              {shown.length} {shown.length === 1 ? "resultado" : "resultados"}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
 
       <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={s.chat} keyboardShouldPersistTaps="handled">
         {loading ? <ActivityIndicator color={colors.muted} style={{ marginTop: 40 }} /> : null}
         {!loading && messages.length === 0 ? (
           <Text style={{ color: colors.muted, textAlign: "center", marginTop: 40 }}>Diga oi para @{thread.username} 👋</Text>
         ) : null}
-        {messages.map(m => {
+        {shown.map(m => {
           const isMe = m.sender === "me";
           const quoted = m.replyTo ? byId.get(m.replyTo) : undefined;
           const fg = isMe ? colors.bg : colors.text;
@@ -408,6 +454,7 @@ const s = StyleSheet.create({
   headerWho: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
   headAvatar: { width: 36, height: 36, borderRadius: 18 },
   onlineDot: { position: "absolute", right: -1, bottom: -1, width: 12, height: 12, borderRadius: 6, backgroundColor: "#22C55E", borderWidth: 2 },
+  searchBar: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 14, marginTop: 8, height: 40, borderRadius: 12, paddingHorizontal: 12 },
   chat: { padding: 14, gap: 8, paddingBottom: 18 },
   meWrap: { alignSelf: "flex-end", maxWidth: "80%", alignItems: "flex-end" },
   otherWrap: { alignSelf: "flex-start", maxWidth: "80%", alignItems: "flex-start" },

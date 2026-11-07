@@ -43,6 +43,7 @@
     "expo-splash-screen": "~31.0.13",
     "expo-updates": "~29.0.20",
     "expo-web-browser": "~15.0.11",
+    "html2canvas": "^1.4.1",
     "lucide-react-native": "^1.27.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -50,6 +51,7 @@
     "react-native-qrcode-svg": "^6.3.54",
     "react-native-svg": "15.12.1",
     "react-native-url-polyfill": "^4.0.0",
+    "react-native-view-shot": "4.0.3",
     "react-native-web": "^0.21.2",
     "three": "^0.174.0"
   },

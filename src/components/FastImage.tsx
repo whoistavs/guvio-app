@@ -73,6 +73,8 @@ export function FastImage({ source, style, contentFit = "cover", transition = 15
 
 // Precarregador síncrono nativo para fotos de guarda-roupa e feed
 export function preloadImages(urls: string[]) {
+  // economia de dados: não baixa fotos antes de aparecerem na tela
+  if (require("../services/settings").isDataSaver()) return;
   const validUrls = urls.filter(u => typeof u === "string" && u.startsWith("http"));
   if (validUrls.length > 0) {
     ExpoImage.prefetch(validUrls, "memory-disk").catch(() => {});

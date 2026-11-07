@@ -6,7 +6,8 @@ import { useAppTheme } from "../context/AppTheme";
 import { ScreenHeader } from "./ScreenHeader";
 import { FastImage } from "./FastImage";
 import { CommentsModal } from "./CommentsModal";
-import { askDelete, askReport, EditCaptionModal } from "./PostMenus";
+import { askReport, EditPostModal, openOwnPostMenu } from "./PostMenus";
+import { LikersModal } from "./LikersModal";
 import { PostMedia } from "./PostMedia";
 import { SharePostModal } from "./SharePostModal";
 import { CollectionPickerModal } from "./CollectionPickerModal";
@@ -38,6 +39,7 @@ export function PostDetailView({
   const [editing, setEditing] = useState<FeedPost | null>(null);
   const [zoom, setZoom] = useState<number | null>(null);
   const [sharing, setSharing] = useState(false);
+  const [showLikers, setShowLikers] = useState(false);
   const [picking, setPicking] = useState(false);
 
   useEffect(() => {
@@ -98,17 +100,11 @@ export function PostDetailView({
 
   const openMenu = () => {
     if (isMine) {
-      Alert.alert("Seu look", undefined, [
-        { text: "Editar legenda", onPress: () => setEditing(post) },
-        {
-          text: "Apagar",
-          style: "destructive",
-          onPress: async () => {
-            if (await askDelete(post)) onDeleted?.(post.id);
-          }
-        },
-        { text: "Cancelar", style: "cancel" }
-      ]);
+      openOwnPostMenu(post, {
+        onEdit: () => setEditing(post),
+        onChanged: u => setPost(u),
+        onRemoved: id => onDeleted?.(id)
+      });
     } else {
       Alert.alert(`@${post.creatorUsername || post.creatorName}`, undefined, [
         {
@@ -176,9 +172,21 @@ export function PostDetailView({
         </View>
 
         <View style={{ paddingHorizontal: 16, gap: 6 }}>
-          <Text style={{ color: colors.text, fontWeight: "800" }}>
-            {post.likes} {post.likes === 1 ? "curtida" : "curtidas"}
-          </Text>
+          {post.archived ? (
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>📦 Arquivado: só você vê este look</Text>
+          ) : null}
+          {post.hideLikes && !isMine ? (
+            <Text style={{ color: colors.text, fontWeight: "800" }}>
+              {post.isLiked ? "Você e outras pessoas curtiram" : "Curtido por outras pessoas"}
+            </Text>
+          ) : (
+            <Pressable onPress={() => post.likes > 0 && setShowLikers(true)} hitSlop={6}>
+              <Text style={{ color: colors.text, fontWeight: "800" }}>
+                {post.likes} {post.likes === 1 ? "curtida" : "curtidas"}
+                {post.hideLikes ? <Text style={{ color: colors.muted, fontWeight: "600" }}> · só você vê</Text> : null}
+              </Text>
+            </Pressable>
+          )}
           {post.caption ? (
             <RichCaption
               text={post.caption}
@@ -246,11 +254,8 @@ export function PostDetailView({
         index={zoom ?? 0}
         onClose={() => setZoom(null)}
       />
-      <EditCaptionModal
-        post={editing}
-        onClose={() => setEditing(null)}
-        onSaved={(_, caption) => setPost(p => (p ? { ...p, caption } : p))}
-      />
+      <EditPostModal post={editing} onClose={() => setEditing(null)} onSaved={u => setPost(u)} />
+      <LikersModal postId={showLikers ? post.id : null} onClose={() => setShowLikers(false)} onOpenProfile={u => { setShowLikers(false); onOpenProfile?.(u); }} />
     </View>
   );
 }

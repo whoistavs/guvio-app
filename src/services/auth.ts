@@ -16,7 +16,9 @@ export const AUTH_REDIRECT = "guvio://auth/callback";
 /** no navegador (versão web) o login volta para o próprio site */
 function redirectUrl(): string {
   if (Platform.OS === "web" && typeof window !== "undefined" && window.location?.origin) {
-    return `${window.location.origin}/`;
+    // funciona tanto na raiz (Netlify) quanto em /guvio-app/ (GitHub Pages)
+    const path = window.location.pathname.replace(/[^/]*$/, "");
+    return `${window.location.origin}${path || "/"}`;
   }
   return AUTH_REDIRECT;
 }

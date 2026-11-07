@@ -15,9 +15,9 @@ import {
   X,
   UserPlus
 } from "lucide-react-native";
-import { FeedPost, UserStoryGroup, MOCK_PROFILES, UserProfile, ClothingTag } from "../data/mockData";
+import { FeedPost, UserStoryGroup, MOCK_PROFILES, UserProfile, ClothingTag, StoryOverlay } from "../data/mockData";
 import { loadAllRegisteredProfiles, loadSavedProfile } from "../services/storage";
-import { askReport, EditCaptionModal } from "./PostMenus";
+import { askReport, EditPostModal, openOwnPostMenu } from "./PostMenus";
 import { PostMedia } from "./PostMedia";
 import { ImageZoomModal } from "./ImageZoomModal";
 import { RichCaption } from "./RichCaption";
@@ -27,10 +27,11 @@ import { CommentsModal } from "./CommentsModal";
 import { StoryViewerModal, CreateStoryModal } from "./StoryViewerModal";
 import { CollectionPickerModal } from "./CollectionPickerModal";
 import { SuggestionsRow } from "./SuggestionsRow";
+import { LikersModal } from "./LikersModal";
 import { SharePostModal } from "./SharePostModal";
 import { useAppTheme } from "../context/AppTheme";
 import { FastImage, preloadImages } from "./FastImage";
-import { loadStories, saveStories, loadFollowedUsers, saveFollowedUsers, getCachedStories } from "../services/storage";
+import { loadStories, saveStories, loadFollowedUsers, saveFollowedUsers, getCachedStories, setMuted } from "../services/storage";
 import { FeedPostSkeleton } from "./SkeletonLoader";
 
 export function HomeFeed({
@@ -66,6 +67,7 @@ export function HomeFeed({
   const [commentPost, setCommentPost] = useState<FeedPost | null>(null);
   const [sharePost, setSharePost] = useState<FeedPost | null>(null);
   const [collectionPost, setCollectionPost] = useState<FeedPost | null>(null);
+  const [likersPost, setLikersPost] = useState<string | null>(null);
   const [stories, setStories] = useState<UserStoryGroup[]>(() => getCachedStories());
 
   useEffect(() => {
@@ -162,12 +164,13 @@ export function HomeFeed({
     await saveFollowedUsers(updated);
   };
 
-  const handlePublishStory = async (imageUri: string, caption?: string) => {
+  const handlePublishStory = async (imageUri: string, caption?: string, overlay?: StoryOverlay | null) => {
     const newStory = {
       id: `my-st-${Date.now()}`,
       image: imageUri,
       timestamp: "Agora",
-      caption
+      caption,
+      overlay: overlay || null
     };
 
     const updatedStories = stories.map(g => {
@@ -193,16 +196,31 @@ export function HomeFeed({
   };
 
   const [editingPost, setEditingPost] = useState<FeedPost | null>(null);
+  // atualiza um post na lista (já salvo no servidor)
+  const setPostsSilently = (u: FeedPost) => setPosts(v => v.map(x => (x.id === u.id ? { ...x, ...u } : x)));
 
   const openPostMenu = (p: FeedPost) => {
     if (isMine(p)) {
-      Alert.alert("Seu look", undefined, [
-        { text: "Editar legenda", onPress: () => setEditingPost(p) },
-        { text: "Apagar", style: "destructive", onPress: () => handleDeletePost(p.id) },
-        { text: "Cancelar", style: "cancel" }
-      ]);
+      openOwnPostMenu(p, {
+        onEdit: () => setEditingPost(p),
+        onChanged: u => setPostsSilently(u),
+        onRemoved: id => setPosts(v => v.filter(x => x.id !== id))
+      });
     } else {
       Alert.alert(`@${p.creatorUsername || p.creatorName}`, undefined, [
+        {
+          text: "Silenciar",
+          onPress: async () => {
+            if (!p.userId) return;
+            try {
+              await setMuted(p.userId, true);
+              setPosts(v => v.filter(x => x.userId !== p.userId));
+              Alert.alert("Silenciado", `Os looks de @${p.creatorUsername || p.creatorName} não aparecem mais no seu feed. Para desfazer, abra o perfil e toque em (…).`);
+            } catch (e: any) {
+              Alert.alert("Erro", e?.message || "Tente novamente.");
+            }
+          }
+        },
         {
           text: "Denunciar",
           style: "destructive",
@@ -229,7 +247,7 @@ export function HomeFeed({
   };
 
   // Filter posts according to Feed Tab, City, or Country
-  let visiblePosts = posts;
+  let visiblePosts = posts.filter(p => !p.archived);
   if (cityFilter) {
     visiblePosts = visiblePosts.filter(p => p.city === cityFilter);
   } else if (countryFilter) {
@@ -502,9 +520,18 @@ export function HomeFeed({
 
                 {/* Post Body (Likes, Caption, Comments, Wardrobe CTA) */}
                 <View style={s.body}>
-                  <Text style={[s.likes, { color: colors.text }]}>
-                    {p.likes.toLocaleString("pt-BR")} curtidas
-                  </Text>
+                  {p.hideLikes && !isMine(p) ? (
+                    <Text style={[s.likes, { color: colors.text }]}>
+                      {p.isLiked ? "Você e outras pessoas curtiram" : "Curtido por outras pessoas"}
+                    </Text>
+                  ) : (
+                    <Pressable onPress={() => p.likes > 0 && setLikersPost(p.id)} hitSlop={6}>
+                      <Text style={[s.likes, { color: colors.text }]}>
+                        {p.likes.toLocaleString("pt-BR")} {p.likes === 1 ? "curtida" : "curtidas"}
+                        {p.hideLikes ? <Text style={{ color: colors.muted, fontWeight: "600" }}> · só você vê</Text> : null}
+                      </Text>
+                    </Pressable>
+                  )}
                   <RichCaption
                     text={p.caption}
                     style={[s.caption, { color: colors.text }]}
@@ -543,11 +570,15 @@ export function HomeFeed({
 
       {/* Modals */}
       <ImageZoomModal images={zoom?.images || null} index={zoom?.index || 0} onClose={() => setZoom(null)} />
-      <EditCaptionModal
-        post={editingPost}
-        onClose={() => setEditingPost(null)}
-        onSaved={(id, caption) => setPosts(v => v.map(x => (x.id === id ? { ...x, caption } : x)))}
+      <LikersModal
+        postId={likersPost}
+        onClose={() => setLikersPost(null)}
+        onOpenProfile={u => {
+          setLikersPost(null);
+          onOpenProfile?.(u);
+        }}
       />
+      <EditPostModal post={editingPost} onClose={() => setEditingPost(null)} onSaved={u => setPostsSilently(u)} />
       <CommentsModal
         post={commentPost}
         visible={!!commentPost}

@@ -11,6 +11,11 @@ import type {
   CommentItem,
   DirectThread,
   SavedCollection,
+  Highlight,
+  StoryItem,
+  StoryOverlay,
+  WishlistItem,
+  OutfitLogEntry,
   FeedPost,
   UserProfile,
   UserStoryGroup,
@@ -77,10 +82,13 @@ async function compress(uri: string): Promise<string> {
     const { manipulateAsync, SaveFormat } = require("expo-image-manipulator") as typeof import("expo-image-manipulator");
     const size = await imageSize(uri);
     const actions: any[] = [];
-    if (size && Math.max(size.width, size.height) > MAX_SIDE) {
-      actions.push({ resize: size.width >= size.height ? { width: MAX_SIDE } : { height: MAX_SIDE } });
+    // economia de dados: fotos menores e mais comprimidas
+    const saver = require("./settings").isDataSaver() as boolean;
+    const side = saver ? 1080 : MAX_SIDE;
+    if (size && Math.max(size.width, size.height) > side) {
+      actions.push({ resize: size.width >= size.height ? { width: side } : { height: side } });
     }
-    const out = await manipulateAsync(uri, actions, { compress: 0.8, format: SaveFormat.JPEG });
+    const out = await manipulateAsync(uri, actions, { compress: saver ? 0.62 : 0.8, format: SaveFormat.JPEG });
     return out.uri;
   } catch (e) {
     return uri;
@@ -126,7 +134,9 @@ function toProfile(r: any, followingIds?: Set<string>): UserProfile {
     followers: r.followers_count ?? 0,
     following: r.following_count ?? 0,
     postsCount: r.posts_count ?? 0,
-    isFollowing: followingIds ? followingIds.has(r.id) : undefined
+    isFollowing: followingIds ? followingIds.has(r.id) : undefined,
+    isPrivate: !!r.is_private,
+    pronouns: r.pronouns || ""
   };
 }
 
@@ -166,7 +176,9 @@ export async function updateMyProfile(p: UserProfile): Promise<UserProfile> {
       avatar_url: avatar,
       bio: p.bio || "",
       website: p.website || "",
-      location: p.location || ""
+      location: p.location || "",
+      pronouns: (p.pronouns || "").slice(0, 30),
+      is_private: !!p.isPrivate
     })
     .eq("id", uid);
   if (res.error) {
@@ -207,7 +219,10 @@ function toPost(r: any, liked: Set<string>, saved: Set<string>): FeedPost {
     lng: r.lng ?? undefined,
     isLiked: liked.has(r.id),
     isSaved: saved.has(r.id),
-    clothingTags: Array.isArray(r.clothing_tags) ? r.clothing_tags : []
+    clothingTags: Array.isArray(r.clothing_tags) ? r.clothing_tags : [],
+    archived: !!r.archived,
+    pinned: !!r.pinned_at,
+    hideLikes: !!r.hide_likes
   };
 }
 
@@ -229,21 +244,25 @@ async function mapPosts(rows: any[]): Promise<FeedPost[]> {
   return rows.map(r => toPost(r, liked, saved));
 }
 
-/** ids de quem eu bloqueei e dos posts que denunciei (somem do meu feed) */
+/** ids de quem eu bloqueei/silenciei e dos posts que denunciei (somem do meu feed) */
 async function hiddenSets(): Promise<{ users: Set<string>; posts: Set<string> }> {
   const uid = await me();
-  const [b, r] = await Promise.all([
+  const [b, r, m] = await Promise.all([
     db().from("blocks").select("blocked_id").eq("blocker_id", uid),
-    db().from("reports").select("post_id").eq("reporter_id", uid)
+    db().from("reports").select("post_id").eq("reporter_id", uid),
+    db().from("mutes").select("muted_id").eq("muter_id", uid)
   ]);
   return {
-    users: new Set<string>((b.data || []).map((x: any) => x.blocked_id)),
+    users: new Set<string>([
+      ...(b.data || []).map((x: any) => x.blocked_id),
+      ...(m.data || []).map((x: any) => x.muted_id)
+    ]),
     posts: new Set<string>((r.data || []).map((x: any) => x.post_id))
   };
 }
 
 function visible(rows: any[], hidden: { users: Set<string>; posts: Set<string> }) {
-  return rows.filter(r => !hidden.users.has(r.user_id) && !hidden.posts.has(r.id));
+  return rows.filter(r => !r.archived && !hidden.users.has(r.user_id) && !hidden.posts.has(r.id));
 }
 
 export async function fetchFeed(limit = 30, before?: string): Promise<FeedPost[]> {
@@ -298,11 +317,95 @@ export async function fetchPost(id: string): Promise<FeedPost | null> {
   return row ? (await mapPosts([row]))[0] : null;
 }
 
+/** posts do perfil: fixados primeiro, sem os arquivados */
 export async function fetchUserPosts(userId: string): Promise<FeedPost[]> {
   const rows = check(
-    await db().from("feed_posts").select("*").eq("user_id", userId).order("created_at", { ascending: false })
+    await db()
+      .from("feed_posts")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("archived", false)
+      .order("pinned_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
   );
   return mapPosts(rows || []);
+}
+
+export async function fetchArchivedPosts(): Promise<FeedPost[]> {
+  const uid = await me();
+  const rows = check(
+    await db().from("feed_posts").select("*").eq("user_id", uid).eq("archived", true).order("created_at", { ascending: false })
+  );
+  return mapPosts(rows || []);
+}
+
+/** posts em que alguém marcou @username na legenda */
+export async function fetchTaggedPosts(username: string): Promise<FeedPost[]> {
+  const clean = username.replace(/^@/, "").replace(/[%,()]/g, "");
+  const [res, hidden] = await Promise.all([
+    db()
+      .from("feed_posts")
+      .select("*")
+      .ilike("caption", `%@${clean}%`)
+      .order("created_at", { ascending: false })
+      .limit(60),
+    hiddenSets()
+  ]);
+  const re = new RegExp(`@${clean.replace(/\./g, "\\.")}(?![A-Za-z0-9_.])`, "i");
+  return mapPosts(visible(check(res) || [], hidden).filter((r: any) => re.test(r.caption || "")));
+}
+
+export async function setPostFlags(postId: string, flags: { archived?: boolean; pinned?: boolean; hideLikes?: boolean }) {
+  const patch: any = {};
+  if (flags.archived !== undefined) {
+    patch.archived = flags.archived;
+    if (flags.archived) patch.pinned_at = null;
+  }
+  if (flags.pinned !== undefined) patch.pinned_at = flags.pinned ? new Date().toISOString() : null;
+  if (flags.hideLikes !== undefined) patch.hide_likes = flags.hideLikes;
+  check(await db().from("posts").update(patch).eq("id", postId));
+}
+
+export async function updatePost(
+  postId: string,
+  data: { caption: string; city: string; country: string; styleTag?: string; clothingTags: ClothingTag[] }
+) {
+  check(
+    await db()
+      .from("posts")
+      .update({
+        caption: data.caption,
+        city: data.city,
+        country: data.country,
+        style_tag: data.styleTag || "Novo look",
+        clothing_tags: data.clothingTags
+      })
+      .eq("id", postId)
+  );
+}
+
+export async function fetchLikers(postId: string): Promise<UserProfile[]> {
+  const rows = check(
+    await db().from("likes").select("user_id, created_at").eq("post_id", postId).order("created_at", { ascending: false }).limit(300)
+  ) as any[];
+  const ids = (rows || []).map(r => r.user_id);
+  if (!ids.length) return [];
+  const [profs, following] = await Promise.all([
+    db().from("profile_stats").select("*").in("id", ids),
+    fetchFollowingIds()
+  ]);
+  const set = new Set(following);
+  const list = ((check(profs) as any[]) || []).map(r => toProfile(r, set));
+  return ids.map(id => list.find(p => p.id === id)).filter(Boolean) as UserProfile[];
+}
+
+/** legendas recentes, para calcular as hashtags em alta */
+export async function fetchRecentCaptions(days = 7): Promise<{ caption: string; likes: number }[]> {
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const rows = check(
+    await db().from("feed_posts").select("caption, likes_count").gte("created_at", since).like("caption", "%#%").limit(500)
+  ) as any[];
+  return (rows || []).map(r => ({ caption: r.caption || "", likes: r.likes_count || 0 }));
 }
 
 export async function fetchSavedPosts(): Promise<FeedPost[]> {
@@ -570,15 +673,67 @@ export async function fetchFollowingIds(): Promise<string[]> {
   return (rows || []).map((r: any) => r.following_id);
 }
 
-export async function setFollow(targetId: string, on: boolean) {
+/** segue (perfil aberto) ou manda pedido (perfil privado). Retorna o que aconteceu. */
+export async function setFollow(targetId: string, on: boolean): Promise<"following" | "requested" | "none"> {
   const uid = await me();
-  if (targetId === uid) return;
+  if (targetId === uid) return "none";
   if (on) {
     const r = await db().from("follows").insert({ follower_id: uid, following_id: targetId });
-    if (r.error && r.error.code !== "23505") throw new Error(r.error.message);
-  } else {
-    check(await db().from("follows").delete().eq("follower_id", uid).eq("following_id", targetId));
+    if (!r.error || r.error.code === "23505") return "following";
+    // perfil privado: a regra do banco não deixa seguir direto, vira pedido
+    if (r.error.code === "42501" || /row-level security/i.test(r.error.message)) {
+      const q = await db().from("follow_requests").insert({ requester_id: uid, target_id: targetId });
+      if (q.error && q.error.code !== "23505") throw new Error(q.error.message);
+      return "requested";
+    }
+    throw new Error(r.error.message);
   }
+  check(await db().from("follows").delete().eq("follower_id", uid).eq("following_id", targetId));
+  await db().from("follow_requests").delete().eq("requester_id", uid).eq("target_id", targetId);
+  return "none";
+}
+
+export async function fetchMyRequestedIds(): Promise<string[]> {
+  const uid = await me();
+  const rows = check(await db().from("follow_requests").select("target_id").eq("requester_id", uid)) as any[];
+  return (rows || []).map(r => r.target_id);
+}
+
+export async function fetchFollowRequests(): Promise<UserProfile[]> {
+  const uid = await me();
+  const rows = check(
+    await db().from("follow_requests").select("requester_id, created_at").eq("target_id", uid).order("created_at", { ascending: false })
+  ) as any[];
+  const ids = (rows || []).map(r => r.requester_id);
+  if (!ids.length) return [];
+  const profs = check(await db().from("profile_stats").select("*").in("id", ids)) as any[];
+  return ids.map(id => (profs || []).find(p => p.id === id)).filter(Boolean).map(r => toProfile(r));
+}
+
+export async function answerFollowRequest(requesterId: string, accept: boolean) {
+  const uid = await me();
+  if (accept) check(await db().rpc("approve_follow_request", { requester: requesterId }));
+  else {
+    check(await db().from("follow_requests").delete().eq("requester_id", requesterId).eq("target_id", uid));
+    await db().from("notifications").delete().eq("user_id", uid).eq("actor_id", requesterId).eq("type", "follow_request");
+  }
+}
+
+// ---------------------------------------------------------------------
+// Silenciar
+// ---------------------------------------------------------------------
+export async function fetchMutedIds(): Promise<string[]> {
+  const uid = await me();
+  const rows = check(await db().from("mutes").select("muted_id").eq("muter_id", uid)) as any[];
+  return (rows || []).map(r => r.muted_id);
+}
+
+export async function setMuted(targetId: string, on: boolean) {
+  const uid = await me();
+  if (on) {
+    const r = await db().from("mutes").insert({ muter_id: uid, muted_id: targetId });
+    if (r.error && r.error.code !== "23505") throw new Error(r.error.message);
+  } else check(await db().from("mutes").delete().eq("muter_id", uid).eq("muted_id", targetId));
 }
 
 export async function fetchFollowList(userId: string, kind: "followers" | "following"): Promise<UserProfile[]> {
@@ -600,7 +755,7 @@ export async function fetchStories(): Promise<UserStoryGroup[]> {
   const [rows, mine] = await Promise.all([
     db()
       .from("stories")
-      .select("id, user_id, image_url, caption, created_at, profiles!stories_user_id_fkey(username, display_name, avatar_url)")
+      .select("id, user_id, image_url, caption, overlay, created_at, profiles!stories_user_id_fkey(username, display_name, avatar_url)")
       .gte("created_at", since)
       .order("created_at", { ascending: true }),
     getMyProfile()
@@ -634,18 +789,33 @@ export async function fetchStories(): Promise<UserStoryGroup[]> {
     const g = groups.get(r.user_id)!;
     const wasSeen = r.user_id === uid || seen.has(r.id);
     if (!wasSeen) g.hasUnseen = true;
-    g.stories.push({ id: r.id, image: r.image_url, caption: r.caption || undefined, timestamp: timeAgo(r.created_at), seen: wasSeen });
+    g.stories.push({
+      id: r.id,
+      image: r.image_url,
+      caption: r.caption || undefined,
+      overlay: r.overlay || null,
+      timestamp: timeAgo(r.created_at),
+      seen: wasSeen
+    });
   }
   // quem tem story não visto aparece primeiro (depois do meu)
   const all = Array.from(groups.values());
   return [all[0], ...all.slice(1).sort((a, b) => Number(!!b.hasUnseen) - Number(!!a.hasUnseen))];
 }
 
-export async function addStory(imageUri: string, caption?: string): Promise<{ id: string; image: string }> {
+export async function addStory(
+  imageUri: string,
+  caption?: string,
+  overlay?: StoryOverlay | null
+): Promise<{ id: string; image: string }> {
   const uid = await me();
   const image_url = await uploadImage(imageUri, "stories");
   const row = check(
-    await db().from("stories").insert({ user_id: uid, image_url, caption: caption || null }).select("id").single()
+    await db()
+      .from("stories")
+      .insert({ user_id: uid, image_url, caption: caption || null, overlay: overlay?.text ? overlay : null })
+      .select("id")
+      .single()
   ) as any;
   return { id: row.id, image: image_url };
 }
@@ -702,18 +872,22 @@ function previewOf(m: any): string {
 
 export async function fetchThreads(): Promise<DirectThread[]> {
   const uid = await me();
-  const rows = check(
-    await db()
+  const [res, prefs] = await Promise.all([
+    db()
       .from("messages")
       .select("id, sender_id, recipient_id, text, image_url, post_id, deleted_at, created_at, read_at")
       .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
       .order("created_at", { ascending: false })
-      .limit(500)
-  ) as any[];
+      .limit(500),
+    fetchDmPrefs().catch(() => ({} as Record<string, { pinned: boolean; clearedAt?: string }>))
+  ]);
+  const rows = check(res) as any[];
   const last = new Map<string, any>();
   const unread = new Map<string, number>();
   for (const m of rows || []) {
     const other = m.sender_id === uid ? m.recipient_id : m.sender_id;
+    const cleared = prefs[other]?.clearedAt;
+    if (cleared && m.created_at <= cleared) continue; // conversa apagada por mim
     if (!last.has(other)) last.set(other, m);
     if (m.recipient_id === uid && !m.read_at) unread.set(other, (unread.get(other) || 0) + 1);
   }
@@ -721,7 +895,7 @@ export async function fetchThreads(): Promise<DirectThread[]> {
   const profs = check(
     await db().from("profiles").select("id, username, avatar_url").in("id", Array.from(last.keys()))
   ) as any[];
-  return Array.from(last.entries()).map(([other, m]) => {
+  const list = Array.from(last.entries()).map(([other, m]) => {
     const p = (profs || []).find(x => x.id === other);
     return {
       id: other,
@@ -730,9 +904,12 @@ export async function fetchThreads(): Promise<DirectThread[]> {
       avatar: p?.avatar_url || DEFAULT_AVATAR,
       lastMessage: previewOf(m),
       time: timeAgo(m.created_at),
-      unread: unread.get(other) || 0
+      unread: unread.get(other) || 0,
+      pinned: !!prefs[other]?.pinned
     };
   });
+  // fixadas primeiro, mantendo a ordem da mais recente
+  return [...list.filter(t => t.pinned), ...list.filter(t => !t.pinned)];
 }
 
 function toMessage(m: any, uid: string): CloudMessage {
@@ -752,14 +929,16 @@ function toMessage(m: any, uid: string): CloudMessage {
 
 export async function fetchMessages(otherId: string): Promise<CloudMessage[]> {
   const uid = await me();
-  const rows = check(
-    await db()
-      .from("messages")
-      .select("*")
-      .or(`and(sender_id.eq.${uid},recipient_id.eq.${otherId}),and(sender_id.eq.${otherId},recipient_id.eq.${uid})`)
-      .order("created_at", { ascending: true })
-      .limit(500)
-  ) as any[];
+  const prefs = await fetchDmPrefs().catch(() => ({} as Record<string, { pinned: boolean; clearedAt?: string }>));
+  let q = db()
+    .from("messages")
+    .select("*")
+    .or(`and(sender_id.eq.${uid},recipient_id.eq.${otherId}),and(sender_id.eq.${otherId},recipient_id.eq.${uid})`)
+    .order("created_at", { ascending: true })
+    .limit(500);
+  const cleared = prefs[otherId]?.clearedAt;
+  if (cleared) q = q.gt("created_at", cleared);
+  const rows = check(await q) as any[];
   return (rows || []).map(m => toMessage(m, uid));
 }
 
@@ -929,6 +1108,19 @@ export async function addWardrobeItem(item: WardrobeItem): Promise<WardrobeItem>
   return { id: r.id, name: r.name, category: r.category, colorTag: r.color_tag, image: r.image_url };
 }
 
+export async function updateWardrobeItem(item: WardrobeItem): Promise<WardrobeItem> {
+  const image_url = await uploadImage(item.image, "wardrobe");
+  const r = check(
+    await db()
+      .from("wardrobe_items")
+      .update({ name: item.name, category: item.category, color_tag: item.colorTag, image_url })
+      .eq("id", item.id)
+      .select("*")
+      .single()
+  ) as any;
+  return { id: r.id, name: r.name, category: r.category, colorTag: r.color_tag, image: r.image_url };
+}
+
 export async function deleteWardrobeItem(id: string) {
   check(await db().from("wardrobe_items").delete().eq("id", id));
 }
@@ -961,6 +1153,10 @@ export async function fetchActivities(): Promise<ActivityItem[]> {
         ? `respondeu seu comentário: ${r.text || ""}`
         : r.type === "comment_like"
         ? `curtiu seu comentário: ${r.text || ""}`
+        : r.type === "follow_request"
+        ? "pediu para seguir você."
+        : r.type === "follow_accept"
+        ? "aceitou seu pedido para seguir."
         : "começou a seguir você.",
     timeAgo: timeAgo(r.created_at),
     postImage: r.post?.image_url || undefined,
@@ -1068,7 +1264,9 @@ async function usernameOf(id: string): Promise<string> {
   return (data as any)?.username || "alguém";
 }
 
-export function subscribeMyAlerts(onAlert: (title: string, body: string, kind: "activity" | "message") => void): () => void {
+export function subscribeMyAlerts(
+  onAlert: (title: string, body: string, kind: "activity" | "message", type?: string) => void
+): () => void {
   const client = db();
   let ch: ReturnType<typeof client.channel> | null = null;
   let stopped = false;
@@ -1083,11 +1281,14 @@ export function subscribeMyAlerts(onAlert: (title: string, body: string, kind: "
         async payload => {
           const n: any = payload.new;
           const who = await usernameOf(n.actor_id);
-          if (n.type === "like") onAlert("Nova curtida ❤️", `@${who} curtiu seu look.`, "activity");
-          else if (n.type === "comment") onAlert("Novo comentário 💬", `@${who}: ${n.text || ""}`, "activity");
-          else if (n.type === "follow") onAlert("Novo seguidor ✨", `@${who} começou a seguir você.`, "activity");
-          else if (n.type === "reply") onAlert("Nova resposta 💬", `@${who}: ${n.text || ""}`, "activity");
-          else if (n.type === "comment_like") onAlert("Curtiram seu comentário ❤️", `@${who} curtiu: ${n.text || ""}`, "activity");
+          const emit = (t: string, b: string) => onAlert(t, b, "activity", n.type);
+          if (n.type === "like") emit("Nova curtida ❤️", `@${who} curtiu seu look.`);
+          else if (n.type === "comment") emit("Novo comentário 💬", `@${who}: ${n.text || ""}`);
+          else if (n.type === "follow") emit("Novo seguidor ✨", `@${who} começou a seguir você.`);
+          else if (n.type === "reply") emit("Nova resposta 💬", `@${who}: ${n.text || ""}`);
+          else if (n.type === "comment_like") emit("Curtiram seu comentário ❤️", `@${who} curtiu: ${n.text || ""}`);
+          else if (n.type === "follow_request") emit("Pedido para seguir 🔒", `@${who} quer seguir você.`);
+          else if (n.type === "follow_accept") emit("Pedido aceito ✅", `@${who} aceitou seu pedido.`);
         }
       )
       .on(
@@ -1129,4 +1330,138 @@ export async function saveOutfit(name: string, itemIds: string[]): Promise<Outfi
 
 export async function deleteOutfit(id: string) {
   check(await db().from("outfits").delete().eq("id", id));
+}
+
+// ---------------------------------------------------------------------
+// Destaques de stories
+// ---------------------------------------------------------------------
+function toStory(r: any): StoryItem {
+  return { id: r.id, image: r.image_url, caption: r.caption || undefined, overlay: r.overlay || null, timestamp: timeAgo(r.created_at), seen: true };
+}
+
+export async function fetchHighlights(userId: string): Promise<Highlight[]> {
+  const rows = check(
+    await db()
+      .from("highlights")
+      .select("id, title, cover_url, created_at, highlight_items(created_at, stories(id, image_url, caption, overlay, created_at))")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true })
+  ) as any[];
+  return (rows || []).map(h => {
+    const stories = (h.highlight_items || [])
+      .filter((i: any) => i.stories)
+      .sort((a: any, b: any) => (a.stories.created_at < b.stories.created_at ? -1 : 1))
+      .map((i: any) => toStory(i.stories));
+    return { id: h.id, title: h.title, cover: h.cover_url || stories[0]?.image, stories };
+  });
+}
+
+/** todos os meus stories (inclusive os que já passaram de 24h), para montar destaques */
+export async function fetchMyStoryArchive(): Promise<StoryItem[]> {
+  const uid = await me();
+  const rows = check(
+    await db().from("stories").select("id, image_url, caption, overlay, created_at").eq("user_id", uid).order("created_at", { ascending: false }).limit(200)
+  ) as any[];
+  return (rows || []).map(toStory);
+}
+
+export async function saveHighlight(input: { id?: string; title: string; storyIds: string[]; cover?: string }): Promise<string> {
+  const uid = await me();
+  let id = input.id;
+  const cover_url = input.cover || null;
+  if (id) check(await db().from("highlights").update({ title: input.title, cover_url }).eq("id", id));
+  else {
+    const r = check(await db().from("highlights").insert({ user_id: uid, title: input.title, cover_url }).select("id").single()) as any;
+    id = r.id as string;
+  }
+  check(await db().from("highlight_items").delete().eq("highlight_id", id));
+  if (input.storyIds.length) {
+    check(await db().from("highlight_items").insert(input.storyIds.map(story_id => ({ highlight_id: id, story_id }))));
+  }
+  return id!;
+}
+
+export async function deleteHighlight(id: string) {
+  check(await db().from("highlights").delete().eq("id", id));
+}
+
+// ---------------------------------------------------------------------
+// Direct: fixar e apagar conversa (só para mim)
+// ---------------------------------------------------------------------
+export async function fetchDmPrefs(): Promise<Record<string, { pinned: boolean; clearedAt?: string }>> {
+  const uid = await me();
+  const rows = check(await db().from("dm_prefs").select("other_id, pinned, cleared_at").eq("user_id", uid)) as any[];
+  const out: Record<string, { pinned: boolean; clearedAt?: string }> = {};
+  (rows || []).forEach(r => (out[r.other_id] = { pinned: r.pinned, clearedAt: r.cleared_at || undefined }));
+  return out;
+}
+
+async function upsertDmPref(otherId: string, patch: { pinned?: boolean; cleared_at?: string }) {
+  const uid = await me();
+  const cur = await db().from("dm_prefs").select("pinned, cleared_at").eq("user_id", uid).eq("other_id", otherId).maybeSingle();
+  const row = { user_id: uid, other_id: otherId, pinned: (cur.data as any)?.pinned ?? false, cleared_at: (cur.data as any)?.cleared_at ?? null, ...patch };
+  check(await db().from("dm_prefs").upsert(row, { onConflict: "user_id,other_id" }));
+}
+
+export async function setDmPinned(otherId: string, pinned: boolean) {
+  await upsertDmPref(otherId, { pinned });
+}
+
+export async function clearConversation(otherId: string) {
+  await upsertDmPref(otherId, { cleared_at: new Date().toISOString(), pinned: false });
+}
+
+// ---------------------------------------------------------------------
+// Lista de desejos
+// ---------------------------------------------------------------------
+function toWish(r: any): WishlistItem {
+  return { id: r.id, name: r.name, link: r.link || undefined, price: r.price || undefined, image: r.image_url || undefined, bought: !!r.bought };
+}
+
+export async function fetchWishlist(): Promise<WishlistItem[]> {
+  const uid = await me();
+  const rows = check(await db().from("wishlist_items").select("*").eq("user_id", uid).order("created_at", { ascending: false })) as any[];
+  return (rows || []).map(toWish);
+}
+
+export async function saveWish(item: WishlistItem): Promise<WishlistItem> {
+  const uid = await me();
+  const image_url = item.image ? await uploadImage(item.image, "wishlist") : null;
+  const data = { name: item.name.trim().slice(0, 80), link: item.link || null, price: item.price || null, image_url, bought: !!item.bought };
+  const isNew = !item.id || item.id.startsWith("tmp-");
+  const r = check(
+    isNew
+      ? await db().from("wishlist_items").insert({ ...data, user_id: uid }).select("*").single()
+      : await db().from("wishlist_items").update(data).eq("id", item.id).select("*").single()
+  );
+  return toWish(r);
+}
+
+export async function deleteWish(id: string) {
+  check(await db().from("wishlist_items").delete().eq("id", id));
+}
+
+// ---------------------------------------------------------------------
+// Calendário de looks
+// ---------------------------------------------------------------------
+export async function fetchOutfitLog(fromDay: string, toDay: string): Promise<OutfitLogEntry[]> {
+  const uid = await me();
+  const rows = check(
+    await db().from("outfit_log").select("day, item_ids, note").eq("user_id", uid).gte("day", fromDay).lte("day", toDay)
+  ) as any[];
+  return (rows || []).map(r => ({ day: r.day, itemIds: Array.isArray(r.item_ids) ? r.item_ids : [], note: r.note || "" }));
+}
+
+export async function saveOutfitLog(entry: OutfitLogEntry) {
+  const uid = await me();
+  check(
+    await db()
+      .from("outfit_log")
+      .upsert({ user_id: uid, day: entry.day, item_ids: entry.itemIds, note: entry.note || "" }, { onConflict: "user_id,day" })
+  );
+}
+
+export async function deleteOutfitLog(day: string) {
+  const uid = await me();
+  check(await db().from("outfit_log").delete().eq("user_id", uid).eq("day", day));
 }

@@ -3,6 +3,11 @@ import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Swi
 import {
   Bookmark,
   Camera,
+  Archive,
+  AtSign,
+  Bell,
+  BellOff,
+  Gauge,
   Clock3,
   FileText,
   Globe,
@@ -10,12 +15,14 @@ import {
   Grid3X3,
   Heart,
   ImagePlus,
+  Layers,
   Lock,
   LogOut,
   MapPin,
   MessageCircle,
   MoreHorizontal,
   Moon,
+  Pin,
   Settings,
   Share2,
   Shield,
@@ -46,12 +53,24 @@ import {
   setBlocked,
   loadCollections,
   loadCollectionPosts,
-  deleteCollection
+  deleteCollection,
+  loadRequestedIds,
+  cancelFollowRequest,
+  loadMutedIds,
+  setMuted,
+  loadTaggedPosts,
+  loadFollowRequests,
+  answerFollowRequest,
+  loadArchivedPosts
 } from "../services/storage";
 import { getSavedAuthSession } from "../services/auth";
 import { FastImage, preloadImages } from "./FastImage";
 import { ShareProfileModal } from "./ShareProfileModal";
+import { HighlightsRow } from "./HighlightsRow";
+import { BioLink } from "./BioExtras";
+import { AchievementsRow } from "./AchievementsRow";
 import { LEGAL_TEXTS } from "../data/legal";
+import { getSettings, NotifKind, updateSettings } from "../services/settings";
 
 function Grid({
   posts,
@@ -88,6 +107,15 @@ function Grid({
       {posts.map(p => (
         <Pressable key={p.id} onPress={() => onSelectPost?.(p)} style={s.tileWrap}>
           <FastImage source={p.image} style={s.tile} contentFit="cover" transition={100} />
+          {p.pinned ? (
+            <View style={s.tileIcon}>
+              <Pin size={13} color="#FFF" fill="#FFF" />
+            </View>
+          ) : p.images && p.images.length > 1 ? (
+            <View style={s.tileIcon}>
+              <Layers size={13} color="#FFF" />
+            </View>
+          ) : null}
         </Pressable>
       ))}
     </View>
@@ -114,6 +142,11 @@ export function PublicProfileView({
 
   const [initiallyFollowed, setInitiallyFollowed] = useState(false);
   const isFollowed = followedIds.includes(profile.id || profile.username);
+  const [requested, setRequested] = useState(false);
+  const [muted, setMutedState] = useState(false);
+  const [tab, setTab] = useState<"posts" | "tagged">("posts");
+  const [tagged, setTagged] = useState<FeedPost[] | null>(null);
+  const locked = !!profile.isPrivate && !isFollowed;
 
   useEffect(() => {
     loadFollowedUsers().then(ids => {
@@ -121,7 +154,39 @@ export function PublicProfileView({
       setInitiallyFollowed(ids.includes(profile.id || profile.username));
     });
     loadUserPosts(profile).then(setPosts);
+    loadRequestedIds().then(ids => setRequested(ids.includes(profile.id)));
+    loadMutedIds().then(ids => setMutedState(ids.includes(profile.id)));
+    setTab("posts");
+    setTagged(null);
   }, [profile]);
+
+  useEffect(() => {
+    if (tab === "tagged" && tagged === null) loadTaggedPosts(profile.username).then(setTagged);
+  }, [tab]);
+
+  const openMenu = () =>
+    Alert.alert(`@${profile.username}`, undefined, [
+      {
+        text: muted ? "Reativar no feed" : "Silenciar",
+        onPress: async () => {
+          try {
+            await setMuted(profile.id, !muted);
+            setMutedState(!muted);
+            Alert.alert(
+              muted ? "Reativado" : "Silenciado",
+              muted
+                ? `Os looks de @${profile.username} voltam a aparecer no seu feed.`
+                : `Os looks de @${profile.username} não aparecem mais no seu feed. Você continua seguindo e ela não fica sabendo.`
+            );
+          } catch (e: any) {
+            Alert.alert("Erro", e?.message || "Tente novamente.");
+          }
+        }
+      },
+      { text: "Compartilhar perfil", onPress: () => setSharing(true) },
+      { text: "Bloquear", style: "destructive", onPress: handleBlock },
+      { text: "Cancelar", style: "cancel" }
+    ]);
 
   const handleBlock = () => {
     Alert.alert(
@@ -149,11 +214,28 @@ export function PublicProfileView({
 
   const toggleFollow = async () => {
     const targetId = profile.id || profile.username;
-    const updated = isFollowed
-      ? followedIds.filter(id => id !== targetId)
-      : [...followedIds, targetId];
-    setFollowedIds(updated);
-    await saveFollowedUsers(updated);
+    if (requested) {
+      await cancelFollowRequest(targetId).catch(() => {});
+      setRequested(false);
+      return;
+    }
+    const doIt = async () => {
+      const updated = isFollowed ? followedIds.filter(id => id !== targetId) : [...followedIds, targetId];
+      setFollowedIds(updated);
+      const asked = await saveFollowedUsers(updated);
+      if (asked.includes(targetId)) {
+        setFollowedIds(prev => prev.filter(id => id !== targetId));
+        setRequested(true);
+      }
+    };
+    if (isFollowed && profile.isPrivate) {
+      Alert.alert("Deixar de seguir?", "Esta conta é privada: para ver os looks de novo, você vai precisar pedir outra vez.", [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Deixar de seguir", style: "destructive", onPress: doIt }
+      ]);
+      return;
+    }
+    await doIt();
   };
 
   const [sharing, setSharing] = useState(false);
@@ -166,14 +248,9 @@ export function PublicProfileView({
           title={`@${profile.username}`}
           onBack={onBack}
           right={
-            <View style={{ flexDirection: "row", gap: 18, alignItems: "center" }}>
-              <Pressable onPress={() => setSharing(true)} hitSlop={10}>
-                <Share2 size={21} color={colors.icon} />
-              </Pressable>
-              <Pressable onPress={handleBlock} hitSlop={10}>
-                <UserX size={22} color={colors.icon} />
-              </Pressable>
-            </View>
+            <Pressable onPress={openMenu} hitSlop={10}>
+              <MoreHorizontal size={24} color={colors.icon} />
+            </Pressable>
           }
         />
         <View style={s.top}>
@@ -184,43 +261,47 @@ export function PublicProfileView({
             transition={100}
           />
           <View style={s.stats}>
-            <Stat v={posts.length.toString()} l="posts" colors={colors} />
+            <Stat v={(locked ? profile.postsCount || 0 : posts.length).toString()} l="posts" colors={colors} />
             <Stat
               v={followersCount.toLocaleString("pt-BR")}
               l="seguidores"
               colors={colors}
-              onPress={onOpenFollows ? () => onOpenFollows("followers") : undefined}
+              onPress={onOpenFollows && !locked ? () => onOpenFollows("followers") : undefined}
             />
             <Stat
               v={(profile.following || 0).toString()}
               l="seguindo"
               colors={colors}
-              onPress={onOpenFollows ? () => onOpenFollows("following") : undefined}
+              onPress={onOpenFollows && !locked ? () => onOpenFollows("following") : undefined}
             />
           </View>
         </View>
 
         <View style={s.bio}>
-          <Text style={[s.display, { color: colors.text }]}>{profile.displayName}</Text>
+          <Text style={[s.display, { color: colors.text }]}>
+            {profile.displayName}
+            {profile.pronouns ? <Text style={{ color: colors.muted, fontWeight: "500" }}>  {profile.pronouns}</Text> : null}
+            {profile.isPrivate ? "  🔒" : ""}
+          </Text>
           <Text style={{ color: colors.muted }}>{profile.location}</Text>
           {profile.bio ? <Text style={[s.bioText, { color: colors.text }]}>{profile.bio}</Text> : null}
-          {profile.website ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
-              <Globe size={12} color="#0095F6" />
-              <Text style={{ color: "#0095F6", fontSize: 12, fontWeight: "600" }}>{profile.website}</Text>
-            </View>
-          ) : null}
+          <BioLink url={profile.website} />
+          {muted ? <Text style={{ color: colors.muted, fontSize: 11, marginTop: 4 }}>🔕 Silenciado no seu feed</Text> : null}
         </View>
+
+        <AchievementsRow profile={profile} posts={posts} />
 
         <View style={s.actions}>
           <Pressable
             onPress={toggleFollow}
             style={[
               s.btn,
-              { backgroundColor: isFollowed ? colors.surface : "#0095F6" }
+              { backgroundColor: isFollowed || requested ? colors.surface : "#0095F6" }
             ]}
           >
-            {isFollowed ? (
+            {requested ? (
+              <Text style={{ color: colors.text, fontWeight: "800" }}>Solicitado</Text>
+            ) : isFollowed ? (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <UserCheck size={16} color={colors.text} />
                 <Text style={{ color: colors.text, fontWeight: "800" }}>Seguindo</Text>
@@ -228,7 +309,7 @@ export function PublicProfileView({
             ) : (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <UserPlus size={16} color="#FFF" />
-                <Text style={{ color: "#FFF", fontWeight: "800" }}>Seguir</Text>
+                <Text style={{ color: "#FFF", fontWeight: "800" }}>{profile.isPrivate ? "Pedir para seguir" : "Seguir"}</Text>
               </View>
             )}
           </Pressable>
@@ -239,10 +320,42 @@ export function PublicProfileView({
           </Pressable>
         </View>
 
-        <View style={[s.tab, { borderTopColor: colors.border }]}>
-          <Grid3X3 size={20} color={colors.icon} />
-        </View>
-        <Grid posts={posts} colors={colors} onSelectPost={p => (onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))} />
+        {locked ? (
+          <View style={[s.lockBox, { borderTopColor: colors.border }]}>
+            <View style={[s.lockIcon, { borderColor: colors.text }]}>
+              <Lock size={26} color={colors.text} />
+            </View>
+            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 15 }}>Esta conta é privada</Text>
+            <Text style={{ color: colors.muted, textAlign: "center", fontSize: 12 }}>
+              {requested ? "Pedido enviado. Quando aceitarem, os looks aparecem aqui." : "Peça para seguir e veja os looks de @" + profile.username + "."}
+            </Text>
+          </View>
+        ) : (
+          <>
+            <HighlightsRow userId={profile.id} username={profile.username} avatar={profile.avatar} />
+            <View style={[s.profileTabsBar, { borderTopColor: colors.border, borderBottomColor: colors.border, marginTop: 14 }]}>
+              <Pressable onPress={() => setTab("posts")} style={[s.tabItem, tab === "posts" && { borderBottomColor: colors.text, borderBottomWidth: 2 }]}>
+                <Grid3X3 size={20} color={tab === "posts" ? colors.text : colors.muted} />
+              </Pressable>
+              <Pressable onPress={() => setTab("tagged")} style={[s.tabItem, tab === "tagged" && { borderBottomColor: colors.text, borderBottomWidth: 2 }]}>
+                <AtSign size={20} color={tab === "tagged" ? colors.text : colors.muted} />
+              </Pressable>
+            </View>
+            {tab === "posts" ? (
+              <Grid posts={posts} colors={colors} onSelectPost={p => (onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))} />
+            ) : tagged === null ? (
+              <ActivityIndicator color={colors.muted} style={{ marginTop: 24 }} />
+            ) : (
+              <Grid
+                posts={tagged}
+                colors={colors}
+                onSelectPost={p => (onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))}
+                emptyTitle="Nenhuma marcação"
+                emptySubtitle={`Looks em que marcarem @${profile.username} aparecem aqui.`}
+              />
+            )}
+          </>
+        )}
       </ScrollView>
 
       {/* Post Viewer Modal */}
@@ -347,6 +460,10 @@ export function MyProfileView({
   const [editWebsite, setEditWebsite] = useState("");
   const [editLocation, setEditLocation] = useState("");
   const [editAvatar, setEditAvatar] = useState("");
+  const [editPronouns, setEditPronouns] = useState("");
+  const [editPrivate, setEditPrivate] = useState(false);
+  const [tagged, setTagged] = useState<FeedPost[] | null>(null);
+  const [requests, setRequests] = useState<UserProfile[]>([]);
 
   useEffect(() => {
     const p = getCachedMyProfile();
@@ -357,7 +474,13 @@ export function MyProfileView({
     setEditWebsite(p.website || "");
     setEditLocation(p.location);
     setEditAvatar(p.avatar);
+    setEditPronouns(p.pronouns || "");
+    setEditPrivate(!!p.isPrivate);
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "tagged" && profile && tagged === null) loadTaggedPosts(profile.username).then(setTagged);
+  }, [activeTab, profile?.username]);
 
   useEffect(() => {
     getSavedAuthSession().then(session => {
@@ -371,8 +494,11 @@ export function MyProfileView({
         setEditWebsite(p.website || "");
         setEditLocation(p.location);
         setEditAvatar(p.avatar);
+        setEditPronouns(p.pronouns || "");
+        setEditPrivate(!!p.isPrivate);
       });
     });
+    loadFollowRequests().then(setRequests);
 
     loadFollowedUsers().then(ids => {
       setFollowingCount(ids.length);
@@ -421,7 +547,9 @@ export function MyProfileView({
       bio: editBio.trim(),
       website: editWebsite.trim(),
       location: editLocation.trim() || profile.location,
-      avatar: editAvatar || profile.avatar
+      avatar: editAvatar || profile.avatar,
+      pronouns: editPronouns.trim(),
+      isPrivate: editPrivate
     };
     setSavingProfile(true);
     try {
@@ -476,16 +604,52 @@ export function MyProfileView({
         </View>
 
         <View style={s.bio}>
-          <Text style={[s.display, { color: colors.text }]}>{profile.displayName}</Text>
+          <Text style={[s.display, { color: colors.text }]}>
+            {profile.displayName}
+            {profile.pronouns ? <Text style={{ color: colors.muted, fontWeight: "500" }}>  {profile.pronouns}</Text> : null}
+            {profile.isPrivate ? "  🔒" : ""}
+          </Text>
           <Text style={{ color: colors.muted }}>{profile.location}</Text>
           {profile.bio ? <Text style={[s.bioText, { color: colors.text }]}>{profile.bio}</Text> : null}
-          {profile.website ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
-              <Globe size={12} color="#0095F6" />
-              <Text style={{ color: "#0095F6", fontSize: 12, fontWeight: "600" }}>{profile.website}</Text>
-            </View>
-          ) : null}
+          <BioLink url={profile.website} />
         </View>
+
+        <AchievementsRow profile={profile} posts={userPosts} />
+
+        {requests.length > 0 ? (
+          <View style={[s.requests, { backgroundColor: colors.surface }]}>
+            <Text style={{ color: colors.text, fontWeight: "900", marginBottom: 8 }}>
+              Pedidos para seguir ({requests.length})
+            </Text>
+            {requests.map(r => (
+              <View key={r.id} style={s.requestRow}>
+                <FastImage source={r.avatar} style={{ width: 36, height: 36, borderRadius: 18 }} />
+                <Text style={{ color: colors.text, fontWeight: "800", flex: 1 }} numberOfLines={1}>
+                  @{r.username}
+                </Text>
+                <Pressable
+                  onPress={async () => {
+                    await answerFollowRequest(r.id, true).catch(() => {});
+                    setRequests(prev => prev.filter(x => x.id !== r.id));
+                    setProfileState(p => (p ? { ...p, followers: p.followers + 1 } : p));
+                  }}
+                  style={[s.reqBtn, { backgroundColor: "#0095F6" }]}
+                >
+                  <Text style={{ color: "#FFF", fontWeight: "800", fontSize: 12 }}>Aceitar</Text>
+                </Pressable>
+                <Pressable
+                  onPress={async () => {
+                    await answerFollowRequest(r.id, false).catch(() => {});
+                    setRequests(prev => prev.filter(x => x.id !== r.id));
+                  }}
+                  style={[s.reqBtn, { backgroundColor: colors.bg }]}
+                >
+                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>Recusar</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         <View style={s.editRow}>
           <Pressable onPress={() => setEditModalVisible(true)} style={[s.edit, s.editHalf, { backgroundColor: colors.surface }]}>
@@ -495,6 +659,8 @@ export function MyProfileView({
             <Text style={{ color: colors.text, fontWeight: "800" }}>Compartilhar perfil</Text>
           </Pressable>
         </View>
+
+        <HighlightsRow userId={profile.id} username={profile.username} avatar={profile.avatar} isMe />
 
         {/* Instagram Profile Tabs: Posts | Saved | Tagged */}
         <View style={[s.profileTabsBar, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
@@ -542,13 +708,17 @@ export function MyProfileView({
         )}
 
         {activeTab === "tagged" && (
-          <Grid
-            posts={[]}
-            colors={colors}
-            onSelectPost={p => (onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))}
-            emptyTitle="Nenhuma marcação"
-            emptySubtitle="Fotos e looks onde outros criadores marcarem seu perfil aparecerão aqui."
-          />
+          tagged === null ? (
+            <ActivityIndicator color={colors.muted} style={{ marginTop: 24 }} />
+          ) : (
+            <Grid
+              posts={tagged}
+              colors={colors}
+              onSelectPost={p => (onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))}
+              emptyTitle="Nenhuma marcação"
+              emptySubtitle={`Looks em que alguém escrever @${profile.username} na legenda aparecem aqui.`}
+            />
+          )
         )}
       </ScrollView>
 
@@ -671,6 +841,26 @@ export function MyProfileView({
               placeholderTextColor={colors.muted}
               style={[s.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
             />
+            <TextInput
+              value={editPronouns}
+              onChangeText={setEditPronouns}
+              maxLength={30}
+              placeholder="Pronomes (ex: ele/dele, ela/dela)"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="none"
+              style={[s.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
+            />
+            <Pressable
+              onPress={() => setEditPrivate(v => !v)}
+              style={[s.privateRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Lock size={18} color={colors.icon} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.text, fontWeight: "800" }}>Conta privada</Text>
+                <Text style={{ color: colors.muted, fontSize: 11 }}>Só quem você aprovar vê seus looks e stories</Text>
+              </View>
+              <Toggle value={editPrivate} onValueChange={() => setEditPrivate(v => !v)} />
+            </Pressable>
 
             <Pressable onPress={handleSaveProfile} style={[s.saveBtn, { backgroundColor: colors.text }]}>
               <Text style={{ color: colors.bg, fontWeight: "900" }}>Salvar alterações</Text>
@@ -701,10 +891,14 @@ export function SettingsView({
   onDeleteAccount?: () => Promise<void>;
 }) {
   const { colors, dark, toggle } = useAppTheme();
+  const [saver, setSaver] = useState(() => getSettings().dataSaver);
+  const toggleSaver = () => setSaver(updateSettings({ dataSaver: !saver }).dataSaver);
   const rows = [
     { id: "saved", l: "Salvos", i: Bookmark },
+    { id: "archived", l: "Arquivados", i: Archive },
     { id: "activity", l: "Sua atividade", i: Clock3 },
     { id: "blocked", l: "Bloqueados", i: UserX },
+    { id: "notifications", l: "Notificações", i: Bell },
     { id: "feedback", l: "Enviar feedback / bug", i: MessageCircle },
     { id: "tutorial", l: "Ver tutorial de novo", i: HelpCircle },
     { id: "privacy", l: "Política de Privacidade", i: Shield },
@@ -770,6 +964,14 @@ export function SettingsView({
         <Text style={[s.settingText, { color: colors.text }]}>Modo noturno</Text>
         <Toggle value={dark} onValueChange={toggle} />
       </Pressable>
+      <Pressable onPress={toggleSaver} style={[s.setting, { borderBottomColor: colors.border }]}>
+        <Gauge size={21} color={colors.icon} />
+        <View style={{ flex: 1 }}>
+          <Text style={[s.settingText, { color: colors.text }]}>Economia de dados</Text>
+          <Text style={{ color: colors.muted, fontSize: 11 }}>Fotos mais leves ao publicar e sem pré-carregar imagens</Text>
+        </View>
+        <Toggle value={saver} onValueChange={toggleSaver} />
+      </Pressable>
       {onSignOut ? (
         <Pressable onPress={handleConfirmSignOut} style={[s.setting, { borderBottomColor: colors.border, marginTop: 12 }]}>
           <LogOut size={21} color="#FF3B30" />
@@ -805,10 +1007,12 @@ export function SimpleSettingsPage({
   const [savedPosts, setSavedPosts] = useState<FeedPost[]>([]);
   const [blocked, setBlockedList] = useState<UserProfile[]>([]);
   const [cols, setCols] = useState<SavedCollection[]>([]);
+  const [archived, setArchived] = useState<FeedPost[] | null>(null);
   const [activeCol, setActiveCol] = useState<string | null>(null);
   const [colPosts, setColPosts] = useState<FeedPost[]>([]);
 
   useEffect(() => {
+    if (kind === "archived") loadArchivedPosts().then(setArchived);
     if (kind === "saved") {
       loadSavedOnlyPosts().then(setSavedPosts);
       loadCollections().then(setCols);
@@ -853,11 +1057,15 @@ export function SimpleSettingsPage({
   const legal = LEGAL_TEXTS[kind];
   const title = legal
     ? legal.title
-    : kind === "saved"
+    : kind === "archived"
+      ? "Arquivados"
+      : kind === "saved"
       ? "Salvos"
       : kind === "activity"
         ? "Sua atividade"
         : "Bloqueados";
+
+  if (kind === "notifications") return <NotificationSettings onBack={onBack} />;
 
   if (legal) {
     return (
@@ -883,7 +1091,24 @@ export function SimpleSettingsPage({
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScreenHeader title={title} onBack={onBack} />
-      {kind === "saved" ? (
+      {kind === "archived" ? (
+        archived === null ? (
+          <ActivityIndicator color={colors.muted} style={{ marginTop: 30 }} />
+        ) : (
+          <>
+            <Text style={{ color: colors.muted, fontSize: 12, paddingHorizontal: 20, paddingVertical: 10 }}>
+              Só você vê estes looks. Abra um e use o menu (…) para mostrar no perfil de novo.
+            </Text>
+            <Grid
+              posts={archived}
+              colors={colors}
+              onSelectPost={p => onOpenPost?.(p.id)}
+              emptyTitle="Nada arquivado"
+              emptySubtitle="Use o menu (…) de um look seu e toque em Arquivar para tirá-lo do perfil sem apagar."
+            />
+          </>
+        )
+      ) : kind === "saved" ? (
         <>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.colRow}>
             {[{ id: "", name: "Todos", count: savedPosts.length, cover: savedPosts[0]?.image } as SavedCollection, ...cols].map(c => {
@@ -948,6 +1173,43 @@ export function SimpleSettingsPage({
   );
 }
 
+function NotificationSettings({ onBack }: { onBack: () => void }) {
+  const { colors } = useAppTheme();
+  const [st, setSt] = useState(() => getSettings());
+  const rows: { k: NotifKind; l: string; d: string }[] = [
+    { k: "like", l: "Curtidas", d: "Em looks e comentários seus" },
+    { k: "comment", l: "Comentários e respostas", d: "Quando comentam ou respondem você" },
+    { k: "follow", l: "Seguidores", d: "Novos seguidores e pedidos para seguir" },
+    { k: "message", l: "Mensagens do Direct", d: "Quando alguém te manda mensagem" }
+  ];
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }}>
+      <ScreenHeader title="Notificações" onBack={onBack} />
+      <Pressable onPress={() => setSt(updateSettings({ pauseAll: !st.pauseAll }))} style={[s.setting, { borderBottomColor: colors.border }]}>
+        <BellOff size={21} color={colors.icon} />
+        <View style={{ flex: 1 }}>
+          <Text style={[s.settingText, { color: colors.text }]}>Pausar todas</Text>
+          <Text style={{ color: colors.muted, fontSize: 11 }}>Os avisos continuam na tela de Notificações, só não aparecem no celular</Text>
+        </View>
+        <Toggle value={st.pauseAll} onValueChange={() => setSt(updateSettings({ pauseAll: !st.pauseAll }))} />
+      </Pressable>
+      {rows.map(r => {
+        const on = st.notify[r.k] !== false;
+        const flip = () => setSt(updateSettings({ notify: { ...st.notify, [r.k]: !on } }));
+        return (
+          <Pressable key={r.k} onPress={flip} disabled={st.pauseAll} style={[s.setting, { borderBottomColor: colors.border, opacity: st.pauseAll ? 0.45 : 1 }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.settingText, { color: colors.text }]}>{r.l}</Text>
+              <Text style={{ color: colors.muted, fontSize: 11 }}>{r.d}</Text>
+            </View>
+            <Toggle value={on} onValueChange={flip} />
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
 const s = StyleSheet.create({
   top: { flexDirection: "row", alignItems: "center", paddingHorizontal: 22, paddingTop: 12 },
   bigAvatar: { width: 88, height: 88, borderRadius: 44 },
@@ -965,6 +1227,13 @@ const s = StyleSheet.create({
     flexDirection: "row",
     gap: 6
   },
+  tileIcon: { position: "absolute", top: 6, right: 6, backgroundColor: "rgba(0,0,0,.35)", borderRadius: 8, padding: 3 },
+  requests: { marginHorizontal: 22, marginTop: 14, borderRadius: 16, padding: 12 },
+  requestRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 5 },
+  reqBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10 },
+  privateRow: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderRadius: 14, padding: 12, marginBottom: 8 },
+  lockBox: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 18, paddingVertical: 40, paddingHorizontal: 30, alignItems: "center", gap: 8 },
+  lockIcon: { width: 60, height: 60, borderRadius: 30, borderWidth: 2, alignItems: "center", justifyContent: "center", marginBottom: 6 },
   editRow: { flexDirection: "row", gap: 8, marginHorizontal: 22, marginTop: 14 },
   editHalf: { flex: 1, marginHorizontal: 0, marginTop: 0 },
   legal: { padding: 22, paddingBottom: 60 },

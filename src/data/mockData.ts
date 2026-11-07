@@ -59,6 +59,12 @@ export interface FeedPost {
   isLiked?: boolean;
   isSaved?: boolean;
   clothingTags?: ClothingTag[];
+  /** só o dono vê (sumiu do perfil) */
+  archived?: boolean;
+  /** fixado no topo do perfil */
+  pinned?: boolean;
+  /** número de curtidas escondido para os outros */
+  hideLikes?: boolean;
 }
 
 export interface WardrobeItem {
@@ -69,12 +75,45 @@ export interface WardrobeItem {
   image: string;
 }
 
+export interface StoryOverlay {
+  text: string;
+  color?: string;
+  /** fundo atrás do texto */
+  boxed?: boolean;
+  /** posição vertical, 0 a 1 */
+  y?: number;
+}
+
 export interface StoryItem {
   id: string;
   image: string;
   timestamp: string;
   caption?: string;
   seen?: boolean;
+  overlay?: StoryOverlay | null;
+}
+
+export interface Highlight {
+  id: string;
+  title: string;
+  cover?: string;
+  stories: StoryItem[];
+}
+
+export interface WishlistItem {
+  id: string;
+  name: string;
+  link?: string;
+  price?: string;
+  image?: string;
+  bought?: boolean;
+}
+
+export interface OutfitLogEntry {
+  /** AAAA-MM-DD */
+  day: string;
+  itemIds: string[];
+  note?: string;
 }
 
 export interface UserStoryGroup {
@@ -90,7 +129,7 @@ export interface UserStoryGroup {
 
 export interface ActivityItem {
   id: string;
-  type: "like" | "comment" | "follow" | "reply" | "comment_like";
+  type: "like" | "comment" | "follow" | "reply" | "comment_like" | "follow_request" | "follow_accept";
   userId: string;
   username: string;
   userAvatar: string;
@@ -263,6 +302,10 @@ export interface UserProfile {
   website?: string;
   verified?: boolean;
   isFollowing?: boolean;
+  isPrivate?: boolean;
+  pronouns?: string;
+  /** pedido para seguir enviado e ainda não aprovado */
+  requested?: boolean;
 }
 
 export const MOCK_PROFILES: UserProfile[] = [
@@ -476,7 +519,7 @@ export interface CommentItem {
 }
 
 export interface SavedCollection { id: string; name: string; cover?: string; count: number; }
-export interface DirectThread { id: string; profileId: string; username: string; avatar: string; lastMessage: string; time: string; unread?: number; }
+export interface DirectThread { id: string; profileId: string; username: string; avatar: string; lastMessage: string; time: string; unread?: number; pinned?: boolean; }
 
 export const MOCK_COMMENTS: CommentItem[] = [];
 

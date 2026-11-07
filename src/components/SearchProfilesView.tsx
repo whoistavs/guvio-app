@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Dimensions, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { BadgeCheck, Compass, Search, Users, X } from "lucide-react-native";
+import { BadgeCheck, Clock3, Compass, Hash, Search, TrendingUp, Users, X } from "lucide-react-native";
 import { FeedPost, UserProfile } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
 import {
@@ -9,8 +9,13 @@ import {
   loadFollowedUsers,
   saveFollowedUsers,
   searchLooks,
-  loadCityRanking
+  loadCityRanking,
+  loadRecentSearches,
+  addRecentSearch,
+  removeRecentSearch,
+  loadTrendingTags
 } from "../services/storage";
+import { STYLES } from "../data/mockData";
 import { RankingGrid } from "./RankingGrid";
 import { FastImage } from "./FastImage";
 import { SuggestionsRow } from "./SuggestionsRow";
@@ -57,6 +62,21 @@ export function SearchProfilesView({
   const [searching, setSearching] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [cityRank, setCityRank] = useState<FeedPost[] | null>(null);
+  const [focused, setFocused] = useState(false);
+  const [recent, setRecent] = useState<string[]>(() => loadRecentSearches());
+  const [trending, setTrending] = useState<{ tag: string; count: number }[]>([]);
+  const [styleFilter, setStyleFilter] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadTrendingTags(12).then(setTrending).catch(() => {});
+  }, []);
+
+  const remember = (term?: string) => {
+    const t = (term ?? q).trim();
+    if (t.length < 2) return;
+    addRecentSearch(t);
+    setRecent(loadRecentSearches());
+  };
 
   // ranking da cidade tocada no globo (busca no servidor os mais curtidos de lá)
   useEffect(() => {
@@ -118,7 +138,14 @@ export function SearchProfilesView({
   const renderGrid = (posts: FeedPost[]) => (
     <View style={s.grid}>
       {posts.map(p => (
-        <Pressable key={p.id} onPress={() => onOpenPost?.(p.id)} style={{ width: TILE, height: TILE * 1.25 }}>
+        <Pressable
+          key={p.id}
+          onPress={() => {
+            if (q.trim()) remember();
+            onOpenPost?.(p.id);
+          }}
+          style={{ width: TILE, height: TILE * 1.25 }}
+        >
           <FastImage source={p.image} style={{ width: "100%", height: "100%" }} contentFit="cover" />
           {p.city ? (
             <View style={s.tileTag}>
@@ -142,7 +169,14 @@ export function SearchProfilesView({
       list.map(p => {
         const isF = following.includes(p.id) || following.includes(p.username);
         return (
-          <Pressable key={p.id || p.username} onPress={() => onOpenProfile(p)} style={s.row}>
+          <Pressable
+            key={p.id || p.username}
+            onPress={() => {
+              if (q.trim()) remember(`@${p.username}`);
+              onOpenProfile(p);
+            }}
+            style={s.row}
+          >
             <FastImage source={p.avatar} style={s.avatar} contentFit="cover" />
             <View style={{ flex: 1 }}>
               <View style={s.name}>
@@ -173,6 +207,9 @@ export function SearchProfilesView({
     );
 
   const hasQuery = q.trim().length > 0;
+  const exploreShown = styleFilter
+    ? explore.filter(p => n(`${p.styleTag} ${p.caption}`).includes(n(styleFilter)))
+    : explore;
 
   return (
     <ScrollView
@@ -187,7 +224,11 @@ export function SearchProfilesView({
         <TextInput
           value={q}
           onChangeText={setQ}
-          placeholder="Cidade, estilo, @username..."
+          onFocus={() => setFocused(true)}
+          onBlur={() => setTimeout(() => setFocused(false), 150)}
+          onSubmitEditing={() => remember()}
+          returnKeyType="search"
+          placeholder="Cidade, estilo, #hashtag, @username..."
           placeholderTextColor={colors.muted}
           style={[s.input, { color: colors.text }]}
           autoCapitalize="none"
@@ -198,6 +239,38 @@ export function SearchProfilesView({
           </Pressable>
         ) : null}
       </View>
+
+      {focused && !hasQuery && recent.length > 0 ? (
+        <View style={{ marginTop: 14 }}>
+          <View style={s.recentHead}>
+            <Text style={[s.label, { color: colors.muted, marginTop: 0, marginBottom: 0 }]}>RECENTES</Text>
+            <Pressable
+              onPress={() => {
+                removeRecentSearch();
+                setRecent([]);
+              }}
+              hitSlop={10}
+            >
+              <Text style={{ color: "#0095F6", fontWeight: "800", fontSize: 12 }}>Limpar tudo</Text>
+            </Pressable>
+          </View>
+          {recent.map(r => (
+            <Pressable key={r} onPress={() => setQ(r)} style={s.recentRow}>
+              <Clock3 size={16} color={colors.muted} />
+              <Text style={{ color: colors.text, flex: 1 }}>{r}</Text>
+              <Pressable
+                onPress={() => {
+                  removeRecentSearch(r);
+                  setRecent(loadRecentSearches());
+                }}
+                hitSlop={10}
+              >
+                <X size={15} color={colors.muted} />
+              </Pressable>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
 
       {hasQuery ? (
         <>
@@ -259,16 +332,56 @@ export function SearchProfilesView({
               })()}
             </>
           ) : null}
+          {trending.length > 0 ? (
+            <>
+              <View style={[s.recentHead, { marginTop: 22 }]}>
+                <TrendingUp size={14} color={colors.muted} />
+                <Text style={[s.label, { color: colors.muted, marginTop: 0, marginBottom: 0, flex: 1 }]}>HASHTAGS EM ALTA</Text>
+              </View>
+              <View style={s.tagWrap}>
+                {trending.map((t, i) => (
+                  <Pressable
+                    key={t.tag}
+                    onPress={() => {
+                      setQ(`#${t.tag}`);
+                      remember(`#${t.tag}`);
+                    }}
+                    style={[s.tagChip, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  >
+                    <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "800" }}>{i + 1}</Text>
+                    <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>#{t.tag}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 10 }}>{t.count}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          ) : null}
           <Text style={[s.label, { color: colors.muted }]}>EM ALTA NA COMUNIDADE</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 10 }}>
+            {[null, ...STYLES.map(st => st.title)].map(t => {
+              const on = styleFilter === t;
+              return (
+                <Pressable
+                  key={t || "all"}
+                  onPress={() => setStyleFilter(t)}
+                  style={[s.styleChip, { backgroundColor: on ? colors.text : colors.surface, borderColor: colors.border }]}
+                >
+                  <Text style={{ color: on ? colors.bg : colors.text, fontWeight: "800", fontSize: 12 }}>{t || "Todos"}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
           {loadingExplore ? (
             <ActivityIndicator color={colors.muted} style={{ marginTop: 30 }} />
-          ) : explore.length === 0 ? (
+          ) : exploreShown.length === 0 ? (
             <View style={s.empty}>
               <Compass size={38} color={colors.muted} />
-              <Text style={{ color: colors.text, fontWeight: "800", marginTop: 8 }}>Ainda não há looks para explorar</Text>
+              <Text style={{ color: colors.text, fontWeight: "800", marginTop: 8 }}>
+                {styleFilter ? `Nenhum look ${styleFilter} por enquanto` : "Ainda não há looks para explorar"}
+              </Text>
             </View>
           ) : (
-            renderGrid(explore)
+            renderGrid(exploreShown)
           )}
           <View style={{ marginHorizontal: -20, marginTop: 10 }}>
             <SuggestionsRow onOpenProfile={onOpenProfile} title="Quem seguir" />
@@ -287,6 +400,11 @@ const s = StyleSheet.create({
   search: { height: 46, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, gap: 9 },
   input: { flex: 1, height: "100%", fontSize: 14 },
   label: { fontSize: 10, fontWeight: "800", letterSpacing: 1.3, marginTop: 24, marginBottom: 10 },
+  recentHead: { flexDirection: "row", alignItems: "center", gap: 6, justifyContent: "space-between", marginBottom: 8 },
+  recentRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 },
+  tagWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  tagChip: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6 },
+  styleChip: { borderWidth: 1, borderRadius: 16, paddingHorizontal: 12, height: 32, alignItems: "center", justifyContent: "center" },
   globe: { marginTop: 14, marginHorizontal: -20, alignItems: "center" },
   cityHead: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 18, marginBottom: 10 },
   clear: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14 },

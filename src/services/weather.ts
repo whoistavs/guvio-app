@@ -62,3 +62,66 @@ export async function fetchCityWeather(lat: number, lon: number): Promise<Weathe
     };
   }
 }
+
+// ---------------------------------------------------------------------
+// Mala de viagem: busca a cidade e a previsão dos próximos dias
+// ---------------------------------------------------------------------
+export interface Place {
+  name: string;
+  country: string;
+  lat: number;
+  lon: number;
+}
+
+export interface DayForecast {
+  date: string; // AAAA-MM-DD
+  min: number;
+  max: number;
+  rainChance: number;
+  condition: string;
+  weather: WeatherData;
+}
+
+/** procura cidades pelo nome (Open-Meteo, grátis e sem chave) */
+export async function searchPlaces(name: string): Promise<Place[]> {
+  const q = name.trim();
+  if (q.length < 2) return [];
+  const res = await fetch(
+    `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=pt&format=json`
+  );
+  if (!res.ok) throw new Error("Não foi possível buscar a cidade.");
+  const data = await res.json();
+  return (data.results || []).map((r: any) => ({
+    name: r.name,
+    country: r.country || "",
+    lat: r.latitude,
+    lon: r.longitude
+  }));
+}
+
+/** previsão diária (até 16 dias à frente) */
+export async function fetchForecast(lat: number, lon: number, startOffset: number, days: number): Promise<DayForecast[]> {
+  const total = Math.min(16, startOffset + days);
+  const res = await fetch(
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=${total}&timezone=auto`
+  );
+  if (!res.ok) throw new Error("Não foi possível buscar a previsão.");
+  const d = (await res.json()).daily || {};
+  const out: DayForecast[] = [];
+  for (let i = startOffset; i < (d.time || []).length && out.length < days; i++) {
+    const max = Math.round(d.temperature_2m_max[i]);
+    const min = Math.round(d.temperature_2m_min[i]);
+    const rain = d.precipitation_probability_max?.[i] ?? 0;
+    const cond = WEATHER_CODES[d.weathercode[i]] || "Tempo Limpo";
+    const avg = Math.round((max + min) / 2);
+    out.push({
+      date: d.time[i],
+      min,
+      max,
+      rainChance: rain,
+      condition: cond,
+      weather: { temperature: avg, condition: rain >= 60 && !/chuva|garoa|tempestade/i.test(cond) ? "Chuva provável" : cond, isCold: avg < 16, isWarm: max >= 26 }
+    });
+  }
+  return out;
+}

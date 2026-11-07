@@ -15,6 +15,8 @@ import {
 } from "react-native";
 import { Camera, ChevronLeft, Eye, Heart, ImagePlus, Plus, Send, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
+import { StoryOverlay } from "../data/mockData";
+import { OVERLAY_COLORS, StoryOverlayText } from "./StoryOverlayText";
 import { UserStoryGroup, StoryItem } from "../data/mockData";
 import { FastImage } from "./FastImage";
 import {
@@ -50,6 +52,7 @@ export function StoryViewerModal({
   const [isPaused, setIsPaused] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [reactionHeart, setReactionHeart] = useState(false);
+  const [reactionEmoji, setReactionEmoji] = useState("❤️");
 
   const progressAnim = useRef(new Animated.Value(0)).current;
   const [viewers, setViewers] = useState<{ username: string; avatar: string; time: string }[] | null>(null);
@@ -135,8 +138,9 @@ export function StoryViewerModal({
   };
 
   const handleSendReaction = (emoji: string) => {
+    setReactionEmoji(emoji);
     setReactionHeart(true);
-    setTimeout(() => setReactionHeart(false), 900);
+    setTimeout(() => setReactionHeart(false), 1100);
     sendToAuthor(`${emoji} Reagiu ao seu story`).catch(() => {});
   };
 
@@ -189,11 +193,13 @@ export function StoryViewerModal({
       <View style={s.container}>
         {/* Story Background Image */}
         <FastImage source={currentStory.image} style={s.storyImage} contentFit="cover" transition={150} />
+        <StoryOverlayText overlay={currentStory.overlay} />
 
-        {/* Floating Heart reaction animation */}
+        {/* reação: o emoji escolhido aparece grande */}
         {reactionHeart && (
           <View pointerEvents="none" style={s.reactionOverlay}>
-            <Heart size={80} color="#FF3040" fill="#FF3040" />
+            <Text style={{ fontSize: 96 }}>{reactionEmoji}</Text>
+            <Text style={{ color: "#FFF", fontWeight: "800", marginTop: 6 }}>Reação enviada</Text>
           </View>
         )}
 
@@ -296,7 +302,7 @@ export function StoryViewerModal({
               </View>
 
               <View style={s.reactionsRow}>
-                {["❤️", "🔥", "✨", "👏"].map(emoji => (
+                {["❤️", "🔥", "😍", "😂", "👏", "✨"].map(emoji => (
                   <Pressable key={emoji} onPress={() => handleSendReaction(emoji)} style={s.emojiBtn}>
                     <Text style={s.emojiText}>{emoji}</Text>
                   </Pressable>
@@ -346,14 +352,26 @@ export function StoryViewerModal({
 export function CreateStoryModal({
   visible,
   onClose,
-  onPublish
+  onPublish,
+  initialImage
 }: {
   visible: boolean;
   onClose: () => void;
-  onPublish: (imageUri: string, caption?: string) => void;
+  onPublish: (imageUri: string, caption?: string, overlay?: StoryOverlay | null) => void;
+  /** já abre com esta imagem (ex.: colagem de um look do guarda-roupa) */
+  initialImage?: string | null;
 }) {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [caption, setCaption] = useState("");
+  const [ovText, setOvText] = useState("");
+  const [ovColor, setOvColor] = useState(OVERLAY_COLORS[0]);
+  const [ovBoxed, setOvBoxed] = useState(false);
+  const [ovY, setOvY] = useState(0.42);
+  const [editingText, setEditingText] = useState(false);
+
+  useEffect(() => {
+    if (visible && initialImage) setImageUri(initialImage);
+  }, [visible, initialImage]);
 
   const pickImage = async () => {
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -385,9 +403,11 @@ export function CreateStoryModal({
 
   const handlePublish = () => {
     if (!imageUri) return;
-    onPublish(imageUri, caption);
+    onPublish(imageUri, caption, ovText.trim() ? { text: ovText.trim(), color: ovColor, boxed: ovBoxed, y: ovY } : null);
     setImageUri(null);
     setCaption("");
+    setOvText("");
+    setEditingText(false);
     onClose();
   };
 
@@ -412,6 +432,44 @@ export function CreateStoryModal({
         {imageUri ? (
           <View style={s.previewContainer}>
             <FastImage source={imageUri} style={s.previewImage} contentFit="cover" />
+            {!editingText ? <StoryOverlayText overlay={ovText ? { text: ovText, color: ovColor, boxed: ovBoxed, y: ovY } : null} /> : null}
+            <View style={s.textTools}>
+              <Pressable onPress={() => setEditingText(v => !v)} style={s.toolBtn}>
+                <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 18 }}>Aa</Text>
+              </Pressable>
+              {ovText ? (
+                <>
+                  <Pressable onPress={() => setOvBoxed(b => !b)} style={[s.toolBtn, ovBoxed && { backgroundColor: "rgba(255,255,255,.35)" }]}>
+                    <Text style={{ color: "#FFF", fontWeight: "900" }}>▣</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setOvY(y => (y <= 0.2 ? 0.42 : y <= 0.5 ? 0.7 : 0.15))} style={s.toolBtn}>
+                    <Text style={{ color: "#FFF", fontWeight: "900" }}>↕</Text>
+                  </Pressable>
+                </>
+              ) : null}
+            </View>
+            {editingText ? (
+              <View style={s.textEditor}>
+                <TextInput
+                  value={ovText}
+                  onChangeText={setOvText}
+                  autoFocus
+                  multiline
+                  maxLength={120}
+                  placeholder="Escreva algo..."
+                  placeholderTextColor="rgba(255,255,255,.6)"
+                  style={[s.textEditorInput, { color: ovColor }]}
+                />
+                <View style={s.colorRow}>
+                  {OVERLAY_COLORS.map(c => (
+                    <Pressable key={c} onPress={() => setOvColor(c)} style={[s.colorDot, { backgroundColor: c, borderWidth: ovColor === c ? 3 : 1.5 }]} />
+                  ))}
+                </View>
+                <Pressable onPress={() => setEditingText(false)} style={s.doneText}>
+                  <Text style={{ color: "#000", fontWeight: "900" }}>Pronto</Text>
+                </Pressable>
+              </View>
+            ) : null}
             <View style={s.captionInputBox}>
               <TextInput
                 value={caption}
@@ -443,6 +501,13 @@ export function CreateStoryModal({
 }
 
 const s = StyleSheet.create({
+  textTools: { position: "absolute", top: 14, right: 14, gap: 10, zIndex: 6 },
+  toolBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: "rgba(0,0,0,.5)", alignItems: "center", justifyContent: "center" },
+  textEditor: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,.55)", justifyContent: "center", padding: 24, zIndex: 7 },
+  textEditorInput: { fontSize: 28, fontWeight: "900", textAlign: "center", minHeight: 60 },
+  colorRow: { flexDirection: "row", justifyContent: "center", gap: 10, marginTop: 24 },
+  colorDot: { width: 30, height: 30, borderRadius: 15, borderColor: "#FFF" },
+  doneText: { alignSelf: "center", marginTop: 24, backgroundColor: "#FFF", paddingHorizontal: 22, paddingVertical: 10, borderRadius: 20 },
   ownerBar: { flexDirection: "row", justifyContent: "center", gap: 40, paddingBottom: 30, zIndex: 10 },
   ownerBtn: { alignItems: "center", gap: 4 },
   ownerText: { color: "#FFF", fontSize: 11, fontWeight: "800" },

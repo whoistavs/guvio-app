@@ -41,6 +41,7 @@ import {
   subscribeOffline
 } from "./src/services/storage";
 import { successFeedback } from "./src/utils/haptics";
+import { shouldNotify } from "./src/services/settings";
 import { getCurrentPlace, CurrentPlace } from "./src/services/location";
 import { PostDetailView } from "./src/components/PostDetailView";
 import { ChallengeCard } from "./src/components/ChallengeCard";
@@ -96,6 +97,8 @@ function Guvio() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [offline, setOffline] = useState(false);
+  const [newLooks, setNewLooks] = useState(0);
+  const scrollY = useRef(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   // pedido de busca vindo de uma #hashtag
@@ -206,14 +209,26 @@ function Guvio() {
           );
         });
       };
-      stopAlerts = subscribeMyAlerts((title, body, kind) => {
-        sendLocalNotification(title, body);
+      stopAlerts = subscribeMyAlerts((title, body, kind, type) => {
         if (kind === "activity") setUnread(true);
         else setUnreadDm(n => n + 1);
+        // respeita o que a pessoa escolheu receber em Configurações › Notificações
+        const pref =
+          kind === "message"
+            ? "message"
+            : type === "like" || type === "comment_like"
+            ? "like"
+            : type === "comment" || type === "reply"
+            ? "comment"
+            : "follow";
+        if (shouldNotify(pref)) sendLocalNotification(title, body);
       });
       stop = subscribeFeed({
-        onNewPost: newPost =>
-          setPosts(prev => (prev.some(p => p.id === newPost.id) ? prev : [newPost, ...prev])),
+        onNewPost: newPost => {
+          setPosts(prev => (prev.some(p => p.id === newPost.id) ? prev : [newPost, ...prev]));
+          // se você está lá embaixo no feed, mostra o aviso em vez de pular a tela
+          if (scrollY.current > 500) setNewLooks(n => n + 1);
+        },
         onDeletedPost: id => setPosts(prev => prev.filter(p => p.id !== id)),
         onLikesChanged: refreshCounts,
         onCommentsChanged: id => {
@@ -502,6 +517,8 @@ function Guvio() {
           scrollEventThrottle={200}
           onScroll={e => {
             const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+            scrollY.current = contentOffset.y;
+            if (contentOffset.y < 200 && newLooks) setNewLooks(0);
             if (layoutMeasurement.height + contentOffset.y > contentSize.height - 900) loadMore();
           }}
         >
@@ -539,7 +556,21 @@ function Guvio() {
           ) : null}
           <View style={{ height: 110 }} />
         </ScrollView>
-      ) : tab === "wardrobe" ? (
+      ) : null}
+      {tab === "home" && newLooks > 0 ? (
+        <Pressable
+          onPress={() => {
+            scroll.current?.scrollTo({ y: 0, animated: true });
+            setNewLooks(0);
+          }}
+          style={s.newPill}
+        >
+          <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 13 }}>
+            ↑ {newLooks === 1 ? "1 novo look" : `${newLooks} novos looks`}
+          </Text>
+        </Pressable>
+      ) : null}
+      {tab === "home" ? null : tab === "wardrobe" ? (
         <WardrobeView
           onAdd={() => setTab("add")}
           currentWeather={weather}
@@ -631,5 +662,20 @@ export default function App() {
 const s = StyleSheet.create({
   safe: { flex: 1 },
   offline: { paddingHorizontal: 16, paddingVertical: 8, alignItems: "center" },
+  newPill: {
+    position: "absolute",
+    top: 70,
+    alignSelf: "center",
+    backgroundColor: "#0095F6",
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+    zIndex: 50,
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 6
+  },
   first: { width: "100%", justifyContent: "space-between", alignItems: "center", paddingBottom: 16 }
 });

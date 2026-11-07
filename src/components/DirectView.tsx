@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { MessageCircle, Search, SquarePen, X } from "lucide-react-native";
 import { ChatView } from "./ChatView";
 import { DirectThread, UserProfile } from "../data/mockData";
 import { ScreenHeader } from "./ScreenHeader";
 import { FastImage } from "./FastImage";
 import { useAppTheme } from "../context/AppTheme";
-import { loadThreads, threadForProfile, loadAllRegisteredProfiles } from "../services/storage";
+import { loadThreads, threadForProfile, loadAllRegisteredProfiles, setThreadPinned, clearThread } from "../services/storage";
 import { isCloud } from "../services/supabase";
 import { subscribeOnline } from "../services/cloud";
 
@@ -45,6 +45,40 @@ export function DirectView({
     });
     return () => stop?.();
   }, []);
+
+  const reloadThreads = () => loadThreads().then(setThreads);
+
+  const threadMenu = (d: DirectThread) =>
+    Alert.alert(`@${d.username}`, undefined, [
+      {
+        text: d.pinned ? "Desafixar conversa" : "Fixar no topo",
+        onPress: async () => {
+          if (!d.pinned && threads.filter(t => t.pinned).length >= 3) {
+            Alert.alert("Limite de 3", "Você pode fixar até 3 conversas.");
+            return;
+          }
+          await setThreadPinned(d, !d.pinned).catch(() => {});
+          reloadThreads();
+        }
+      },
+      {
+        text: "Apagar conversa",
+        style: "destructive",
+        onPress: () =>
+          Alert.alert("Apagar conversa?", `As mensagens com @${d.username} somem só para você. Se a pessoa mandar algo novo, a conversa volta.`, [
+            { text: "Cancelar", style: "cancel" },
+            {
+              text: "Apagar",
+              style: "destructive",
+              onPress: async () => {
+                await clearThread(d).catch(() => {});
+                reloadThreads();
+              }
+            }
+          ])
+      },
+      { text: "Cancelar", style: "cancel" }
+    ]);
 
   const filteredThreads = threads.filter(d => 
     d.username.toLowerCase().includes(query.toLowerCase()) || 
@@ -136,18 +170,21 @@ export function DirectView({
             <MessageCircle size={42} color={colors.muted} />
             <Text style={[s.emptyTitle, { color: colors.text }]}>Sua caixa de mensagens está limpa</Text>
             <Text style={{ color: colors.muted, textAlign: "center", fontSize: 12, lineHeight: 18 }}>
-              Quando você trocar mensagens com outros usuários, suas conversas aparecerão aqui.
+              Quando você trocar mensagens com outros usuários, suas conversas aparecerão aqui. Segure uma conversa para fixar ou apagar.
             </Text>
           </View>
         ) : (
           filteredThreads.map(d => (
-            <Pressable key={d.id} onPress={() => setOpen(d)} style={s.thread}>
+            <Pressable key={d.id} onPress={() => setOpen(d)} onLongPress={() => threadMenu(d)} delayLongPress={350} style={s.thread}>
               <View>
                 <FastImage source={d.avatar} style={s.avatar} />
                 {onlineIds.has(d.profileId) ? <View style={[s.onlineDot, { borderColor: colors.bg }]} /> : null}
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[s.user, { color: colors.text }]}>@{d.username}</Text>
+                <Text style={[s.user, { color: colors.text }]}>
+                  @{d.username}
+                  {d.pinned ? <Text style={{ fontSize: 11 }}>  📌</Text> : null}
+                </Text>
                 <Text
                   numberOfLines={1}
                   style={{ color: d.unread ? colors.text : colors.muted, fontSize: 12, fontWeight: d.unread ? "800" : "400" }}

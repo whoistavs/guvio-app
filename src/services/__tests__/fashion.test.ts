@@ -62,3 +62,20 @@ describe("estatísticas do guarda-roupa", () => {
     expect(st.byCategory.find(c => c.label === "Calçados")?.count).toBe(2);
   });
 });
+
+import { planPacking } from "../../utils/packing";
+describe("mala de viagem", () => {
+  it("monta um look por dia, junta as peças e dá dicas", () => {
+    const fc = (date: string, min: number, max: number, rain: number) => ({
+      date, min, max, rainChance: rain, condition: rain > 50 ? "Chuva" : "Ensolarado",
+      weather: { temperature: Math.round((min + max) / 2), condition: rain > 50 ? "Chuva" : "Ensolarado", isCold: (min + max) / 2 < 16, isWarm: max >= 26 }
+    });
+    const plan = planPacking(wardrobe, [fc("2026-12-01", 4, 10, 80), fc("2026-12-02", 5, 12, 10), fc("2026-12-03", 6, 13, 0)]);
+    expect(plan.days).toHaveLength(3);
+    expect(plan.pieces.map(p => p.item.name)).toContain("Jaqueta de couro");
+    const ids = plan.pieces.map(p => p.item.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(plan.tips.some(t => t.includes("guarda-chuva"))).toBe(true);
+    expect(plan.tips.some(t => t.includes("cachecol"))).toBe(true);
+  });
+});

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { BarChart3, Camera, Check, ImagePlus, Layers, Plus, Send, Sparkles, Tag, Trash2, X } from "lucide-react-native";
+import { BarChart3, CalendarDays, Camera, Check, Heart, ImagePlus, Layers, Luggage, Plus, Send, Sparkles, Tag, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { ClothingTag, Outfit, OutfitStyle, STYLES, WardrobeItem } from "../data/mockData";
 import { StyleCard } from "./OutfitCard";
@@ -12,11 +12,17 @@ import {
   removeWardrobeItem,
   loadOutfits,
   saveOutfit,
-  deleteOutfit
+  deleteOutfit,
+  updateWardrobeItem,
+  saveOutfitLog
 } from "../services/storage";
+import { WishlistModal } from "./WishlistModal";
+import { OutfitCalendarModal, dayKey } from "./OutfitCalendarModal";
+import { TripPackingModal } from "./TripPackingModal";
 import { successFeedback, tapFeedback } from "../utils/haptics";
 import { DailyLookCard } from "./DailyLookCard";
 import { WardrobeStatsModal } from "./WardrobeStatsModal";
+import { OutfitStoryModal } from "./OutfitStoryModal";
 import { WeatherData } from "../services/weather";
 import { getSavedAuthSession } from "../services/auth";
 import { ImagePlaceholder, FastImage, preloadImages } from "./FastImage";
@@ -58,6 +64,9 @@ export function WardrobeView({
   const [outfitName, setOutfitName] = useState("");
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [showStats, setShowStats] = useState(false);
+  const [storyLook, setStoryLook] = useState<{ pieces: WardrobeItem[]; title: string } | null>(null);
+  const [tool, setTool] = useState<"wish" | "calendar" | "trip" | null>(null);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
   const [selectedStyle, setSelectedStyle] = useState<OutfitStyle | null>(null);
   const [aiResult, setAiResult] = useState<AIOutfitRecommendation | null>(null);
@@ -217,7 +226,7 @@ export function WardrobeView({
       return;
     }
     const newItem: WardrobeItem = {
-      id: `w-${Date.now()}`,
+      id: editingItemId || `w-${Date.now()}`,
       name: newName.trim(),
       category: newCategory,
       colorTag: newColorTag,
@@ -225,9 +234,11 @@ export function WardrobeView({
     };
     setSavingItem(true);
     try {
-      const updated = await addWardrobeItem(newItem, items, currentUserId);
+      const updated = editingItemId
+        ? await updateWardrobeItem(newItem, items, currentUserId)
+        : await addWardrobeItem(newItem, items, currentUserId);
       setItems(updated);
-      preloadImages([updated[0].image]);
+      preloadImages(updated.map(i => i.image).slice(0, 3));
     } catch (e: any) {
       Alert.alert("Não foi possível salvar", e?.message || "Tente novamente.");
       return;
@@ -237,8 +248,37 @@ export function WardrobeView({
 
     setNewName("");
     setNewImageUri(DEFAULT_CLOTH);
+    setEditingItemId(null);
     setAddModalVisible(false);
   };
+
+  const itemMenu = (it: WardrobeItem) =>
+    Alert.alert(it.name, `${it.category} · ${it.colorTag}`, [
+      {
+        text: "Editar",
+        onPress: () => {
+          setEditingItemId(it.id);
+          setNewName(it.name);
+          setNewCategory(it.category);
+          setNewColorTag(it.colorTag);
+          setNewImageUri(it.image);
+          setAddModalVisible(true);
+        }
+      },
+      {
+        text: "Duplicar",
+        onPress: async () => {
+          try {
+            const copy: WardrobeItem = { ...it, id: `w-${Date.now()}`, name: `${it.name} (cópia)` };
+            setItems(await addWardrobeItem(copy, items, currentUserId));
+          } catch (e: any) {
+            Alert.alert("Erro", e?.message || "Não foi possível duplicar.");
+          }
+        }
+      },
+      { text: "Apagar", style: "destructive", onPress: () => handleDeleteItem(it.id, it.name) },
+      { text: "Cancelar", style: "cancel" }
+    ]);
 
   const handleDeleteItem = (id: string, name: string) => {
     Alert.alert("Remover peça", `Deseja excluir "${name}" do seu guarda-roupa?`, [
@@ -274,7 +314,34 @@ export function WardrobeView({
             }
           }}
           onPublish={onPublishOutfit ? pieces => publishPieces(pieces, "Look do dia") : undefined}
+          onWore={async pieces => {
+            try {
+              await saveOutfitLog({ day: dayKey(new Date()), itemIds: pieces.map(p => p.id), note: "" });
+              successFeedback();
+              Alert.alert("Anotado no calendário 📅", "O look de hoje foi registrado.");
+            } catch (e: any) {
+              Alert.alert("Erro", e?.message || "Tente novamente.");
+            }
+          }}
         />
+
+        <View style={s.tools}>
+          {[
+            { id: "wish" as const, label: "Desejos", icon: Heart },
+            { id: "calendar" as const, label: "Calendário", icon: CalendarDays },
+            { id: "trip" as const, label: "Mala de viagem", icon: Luggage }
+          ].map(t => {
+            const I = t.icon;
+            return (
+              <Pressable key={t.id} onPress={() => setTool(t.id)} style={[s.toolBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <I size={18} color={colors.text} />
+                <Text style={{ color: colors.text, fontWeight: "800", fontSize: 11 }} numberOfLines={1}>
+                  {t.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
         <Text style={[s.badge, { color: colors.muted }]}>SELEÇÃO DE ESTILO</Text>
         <Text style={[s.h, { color: colors.text }]}>Qual estilo você quer hoje?</Text>
@@ -321,12 +388,20 @@ export function WardrobeView({
                       <FastImage key={p.id} source={p.image} style={s.outfitImg} contentFit="cover" />
                     ))}
                   </ScrollView>
-                  {onPublishOutfit ? (
-                    <Pressable onPress={() => publishPieces(pieces, o.name)} style={[s.outfitBtn, { backgroundColor: colors.text }]}>
-                      <Send size={14} color={colors.bg} />
-                      <Text style={{ color: colors.bg, fontWeight: "900", fontSize: 12 }}>Publicar look</Text>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <Pressable
+                      onPress={() => pieces.length && setStoryLook({ pieces, title: o.name })}
+                      style={[s.outfitBtn, { flex: 1, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border }]}
+                    >
+                      <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12 }}>◎ Story</Text>
                     </Pressable>
-                  ) : null}
+                    {onPublishOutfit ? (
+                      <Pressable onPress={() => publishPieces(pieces, o.name)} style={[s.outfitBtn, { flex: 1, backgroundColor: colors.text }]}>
+                        <Send size={14} color={colors.bg} />
+                        <Text style={{ color: colors.bg, fontWeight: "900", fontSize: 12 }}>Publicar</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
                 </View>
               );
             })}
@@ -357,7 +432,15 @@ export function WardrobeView({
                     <Text style={{ color: colors.text, fontWeight: "800", fontSize: 11 }}>Montar look</Text>
                   </Pressable>
                 ) : null}
-                <Pressable onPress={() => setAddModalVisible(true)} style={[s.add, { backgroundColor: colors.text }]}>
+                <Pressable
+              onPress={() => {
+                setEditingItemId(null);
+                setNewName("");
+                setNewImageUri(DEFAULT_CLOTH);
+                setAddModalVisible(true);
+              }}
+              style={[s.add, { backgroundColor: colors.text }]}
+            >
                   <Plus size={16} color={colors.bg} />
                   <Text style={{ color: colors.bg, fontWeight: "800", fontSize: 11 }}>Adicionar</Text>
                 </Pressable>
@@ -423,7 +506,7 @@ export function WardrobeView({
               return (
                 <Pressable
                   key={it.id}
-                  onPress={building ? () => togglePick(it.id) : undefined}
+                  onPress={building ? () => togglePick(it.id) : () => itemMenu(it)}
                   style={[
                     s.item,
                     { backgroundColor: colors.surface, borderColor: on ? colors.text : colors.border },
@@ -457,6 +540,39 @@ export function WardrobeView({
         </View>
       </ScrollView>
 
+      <WishlistModal
+        visible={tool === "wish"}
+        onClose={() => setTool(null)}
+        onMoveToWardrobe={w => {
+          setTool(null);
+          setEditingItemId(null);
+          setNewName(w.name);
+          setNewImageUri(w.image || DEFAULT_CLOTH);
+          setAddModalVisible(true);
+        }}
+      />
+      <OutfitCalendarModal visible={tool === "calendar"} onClose={() => setTool(null)} items={items} outfits={outfits} />
+      <TripPackingModal
+        visible={tool === "trip"}
+        onClose={() => setTool(null)}
+        items={items}
+        onSaveAsLook={async (name, ids) => {
+          try {
+            const o = await saveOutfit(name, ids);
+            setOutfits(prev => [o, ...prev]);
+            successFeedback();
+            Alert.alert("Mala salva", "Ela está em \"Meus looks\".");
+          } catch (e: any) {
+            Alert.alert("Erro", e?.message || "Tente novamente.");
+          }
+        }}
+      />
+      <OutfitStoryModal
+        pieces={storyLook?.pieces || null}
+        title={storyLook?.title || ""}
+        onClose={() => setStoryLook(null)}
+        onPublished={() => setStoryLook(null)}
+      />
       <WardrobeStatsModal visible={showStats} onClose={() => setShowStats(false)} items={items} outfits={outfits} />
 
       {/* AI Recommendation Modal */}
@@ -524,8 +640,13 @@ export function WardrobeView({
         <View style={s.modalBack}>
           <View style={[s.modal, { backgroundColor: colors.bg }]}>
             <View style={{ width: "100%", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={[s.modalH, { color: colors.text, fontSize: 18 }]}>Nova peça de roupa</Text>
-              <Pressable onPress={() => setAddModalVisible(false)}>
+              <Text style={[s.modalH, { color: colors.text, fontSize: 18 }]}>{editingItemId ? "Editar peça" : "Nova peça de roupa"}</Text>
+              <Pressable
+                onPress={() => {
+                  setAddModalVisible(false);
+                  setEditingItemId(null);
+                }}
+              >
                 <X size={22} color={colors.icon} />
               </Pressable>
             </View>
@@ -570,7 +691,7 @@ export function WardrobeView({
             />
 
             <Pressable onPress={handleSaveItem} style={[s.done, { backgroundColor: colors.text, marginTop: 6 }]}>
-              <Text style={{ color: colors.bg, fontWeight: "900" }}>Salvar no Guarda-roupa</Text>
+              <Text style={{ color: colors.bg, fontWeight: "900" }}>{editingItemId ? "Salvar alterações" : "Salvar no Guarda-roupa"}</Text>
             </Pressable>
           </View>
         </View>
@@ -620,6 +741,8 @@ const s = StyleSheet.create({
   pickers: { flexDirection: "row", gap: 10, marginBottom: 8, width: "100%" },
   pickerBtn: { flex: 1, height: 40, borderWidth: 1, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   chips: { gap: 6, paddingBottom: 10 },
+  tools: { flexDirection: "row", gap: 8, marginBottom: 18 },
+  toolBtn: { flex: 1, borderWidth: 1, borderRadius: 16, paddingVertical: 12, alignItems: "center", gap: 5 },
   chip: { borderWidth: 1, borderRadius: 16, paddingHorizontal: 12, height: 30, alignItems: "center", justifyContent: "center" },
   builder: { borderWidth: 1, borderRadius: 18, padding: 12, marginBottom: 12 },
   pickDot: { position: "absolute", top: 8, right: 8, width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: "#FFF", alignItems: "center", justifyContent: "center" },

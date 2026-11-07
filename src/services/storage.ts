@@ -9,6 +9,10 @@ import {
   CommentItem,
   DirectThread,
   SavedCollection,
+  Highlight,
+  StoryItem,
+  WishlistItem,
+  OutfitLogEntry,
   INITIAL_STORIES,
   MOCK_ACTIVITIES,
   MOCK_PROFILES,
@@ -48,7 +52,15 @@ const KEYS = {
   BLOCKED: "guvio_blocked_v4",
   COLLECTIONS: "guvio_collections_v1",
   STORIES_CACHE: "guvio_stories_cache_v1",
-  FEEDBACK: "guvio_feedback_v1"
+  FEEDBACK: "guvio_feedback_v1",
+  MUTED: "guvio_muted_v1",
+  HIGHLIGHTS: "guvio_highlights_v1",
+  DM_PREFS: "guvio_dm_prefs_v1",
+  WISHLIST: "guvio_wishlist_v1",
+  OUTFIT_LOG: "guvio_outfit_log_v1",
+  DRAFTS: "guvio_drafts_v1",
+  RECENT_SEARCHES: "guvio_recent_searches_v1",
+  REQUESTED: "guvio_requested_v1"
 };
 
 /** último feed salvo no aparelho, para abrir na hora (mesmo sem internet) */
@@ -170,6 +182,11 @@ export async function publishPost(input: {
 // ---------------------------------------------------------------------
 // Post único, Explorar, busca, edição e denúncia
 // ---------------------------------------------------------------------
+/** posts locais que outras pessoas podem ver (sem os arquivados) */
+function publicLocalPosts(): FeedPost[] {
+  return localPosts().filter(p => !p.archived);
+}
+
 function localPosts(): FeedPost[] {
   return FastStorage.getItemSync(KEYS.POSTS, []);
 }
@@ -181,14 +198,14 @@ export async function loadPost(id: string): Promise<FeedPost | null> {
 
 export async function loadExplore(): Promise<FeedPost[]> {
   if (await isCloud()) return cloud.fetchExplore().catch(() => []);
-  return [...localPosts()].sort((a, b) => b.likes - a.likes);
+  return publicLocalPosts().sort((a, b) => b.likes - a.likes);
 }
 
 export async function searchLooks(query: string): Promise<FeedPost[]> {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   if (await isCloud()) return cloud.searchPosts(q).catch(() => []);
-  return localPosts().filter(p =>
+  return publicLocalPosts().filter(p =>
     [p.city, p.country, p.styleTag, p.caption].some(v => (v || "").toLowerCase().includes(q))
   );
 }
@@ -247,16 +264,21 @@ export async function loadMorePosts(oldest?: string): Promise<FeedPost[]> {
   }
 }
 
+const pinnedFirst = (list: FeedPost[]) => [...list.filter(p => p.pinned), ...list.filter(p => !p.pinned)];
+
 /** Posts de um perfil específico */
 export async function loadUserPosts(profile: UserProfile): Promise<FeedPost[]> {
   if (await isCloud()) return cloud.fetchUserPosts(profile.id).catch(() => []);
   const all: FeedPost[] = FastStorage.getItemSync(KEYS.POSTS, []);
-  return all.filter(
-    p =>
-      p.userId === profile.id ||
-      p.creatorUsername === profile.username ||
-      p.creatorName === profile.displayName ||
-      p.creatorName === profile.username
+  return pinnedFirst(
+    all.filter(
+      p =>
+        !p.archived &&
+        (p.userId === profile.id ||
+          p.creatorUsername === profile.username ||
+          p.creatorName === profile.displayName ||
+          p.creatorName === profile.username)
+    )
   );
 }
 
@@ -268,7 +290,7 @@ export async function loadMyPosts(): Promise<FeedPost[]> {
     return myPostsCache;
   }
   const all: FeedPost[] = FastStorage.getItemSync(KEYS.POSTS, []);
-  return all.filter(p => p.creatorName === "Você" || p.userId === "my-profile" || p.userId?.startsWith("user-"));
+  return pinnedFirst(all.filter(p => !p.archived && (p.creatorName === "Você" || p.userId === "my-profile" || p.userId?.startsWith("user-"))));
 }
 
 /** Posts que eu salvei */
@@ -478,22 +500,53 @@ export async function loadFollowedUsers(): Promise<string[]> {
   return FastStorage.getItemSync(KEYS.FOLLOWED_USERS, ["p-elena"]);
 }
 
-/** Salva quem eu sigo. Na nuvem, segue/deixa de seguir só quem mudou. */
-export async function saveFollowedUsers(userIds: string[]): Promise<void> {
+/**
+ * Salva quem eu sigo. Na nuvem, segue/deixa de seguir só quem mudou.
+ * Retorna os ids de perfis privados que viraram "pedido para seguir" (ainda não seguindo).
+ */
+export async function saveFollowedUsers(userIds: string[]): Promise<string[]> {
   if (await isCloud()) {
     const next = new Set(userIds);
+    const requested: string[] = [];
     const jobs: Promise<any>[] = [];
     next.forEach(id => {
-      if (!followingSnapshot.has(id)) jobs.push(cloud.setFollow(id, true));
+      if (!followingSnapshot.has(id))
+        jobs.push(
+          cloud.setFollow(id, true).then(r => {
+            if (r === "requested") requested.push(id);
+          })
+        );
     });
     followingSnapshot.forEach(id => {
       if (!next.has(id)) jobs.push(cloud.setFollow(id, false));
     });
-    followingSnapshot = next;
     await Promise.all(jobs.map(j => j.catch(() => {})));
-    return;
+    requested.forEach(id => next.delete(id));
+    followingSnapshot = next;
+    return requested;
   }
   FastStorage.setItemSync(KEYS.FOLLOWED_USERS, userIds);
+  return [];
+}
+
+/** perfis privados para os quais pedi para seguir */
+export async function loadRequestedIds(): Promise<string[]> {
+  if (await isCloud()) return cloud.fetchMyRequestedIds().catch(() => []);
+  return [];
+}
+
+/** cancela um pedido para seguir */
+export async function cancelFollowRequest(targetId: string): Promise<void> {
+  if (await isCloud()) await cloud.setFollow(targetId, false);
+}
+
+export async function loadFollowRequests(): Promise<UserProfile[]> {
+  if (await isCloud()) return cloud.fetchFollowRequests().catch(() => []);
+  return [];
+}
+
+export async function answerFollowRequest(requesterId: string, accept: boolean): Promise<void> {
+  if (await isCloud()) return cloud.answerFollowRequest(requesterId, accept);
 }
 
 // Stories Storage
@@ -550,7 +603,7 @@ export async function saveStories(stories: UserStoryGroup[]): Promise<void> {
     const mine = stories.find(g => g.isMe);
     for (const st of mine?.stories || []) {
       if (!storySnapshot.has(st.id)) {
-        const created = await cloud.addStory(st.image, st.caption);
+        const created = await cloud.addStory(st.image, st.caption, st.overlay);
         storySnapshot.add(st.id);
         storySnapshot.add(created.id);
       }
@@ -699,7 +752,7 @@ const likesOf = (p: FeedPost) => p.likes || 0;
 export async function loadChallengePosts(tag: string, sinceIso: string): Promise<FeedPost[]> {
   if (await isCloud()) return cloud.fetchChallengePosts(tag, sinceIso).catch(() => []);
   const t = `#${tag.replace(/^#/, "").toLowerCase()}`;
-  return localPosts()
+  return publicLocalPosts()
     .filter(p => (p.caption || "").toLowerCase().includes(t))
     .sort((a, b) => likesOf(b) - likesOf(a));
 }
@@ -707,7 +760,7 @@ export async function loadChallengePosts(tag: string, sinceIso: string): Promise
 export async function loadCityRanking(city: string): Promise<FeedPost[]> {
   if (await isCloud()) return cloud.fetchCityRanking(city).catch(() => []);
   const c = city.trim().toLowerCase();
-  return localPosts()
+  return publicLocalPosts()
     .filter(p => (p.city || "").trim().toLowerCase() === c)
     .sort((a, b) => likesOf(b) - likesOf(a));
 }
@@ -744,7 +797,7 @@ export interface ChatMessage {
 
 export async function loadThreads(): Promise<DirectThread[]> {
   if (await isCloud()) return cloud.fetchThreads().catch(() => []);
-  return MOCK_DIRECTS;
+  return applyLocalThreadPrefs(MOCK_DIRECTS);
 }
 
 export async function loadChat(thread: DirectThread): Promise<ChatMessage[]> {
@@ -875,5 +928,276 @@ export async function deleteOutfit(id: string): Promise<void> {
   FastStorage.setItemSync(
     OUTFITS_KEY,
     FastStorage.getItemSync<Outfit[]>(OUTFITS_KEY, []).filter(o => o.id !== id)
+  );
+}
+
+
+// =====================================================================
+// MUTIRÃO 4
+// =====================================================================
+
+// ---------- posts: editar, fixar, arquivar, esconder curtidas ----------
+export async function updatePost(
+  post: FeedPost,
+  data: { caption: string; city: string; country: string; styleTag?: string; clothingTags: ClothingTag[] }
+): Promise<FeedPost> {
+  if (await isCloud()) await cloud.updatePost(post.id, data);
+  else
+    FastStorage.setItemSync(
+      KEYS.POSTS,
+      localPosts().map(p => (p.id === post.id ? { ...p, ...data, styleTag: data.styleTag || p.styleTag } : p))
+    );
+  return { ...post, ...data, styleTag: data.styleTag || post.styleTag };
+}
+
+export async function setPostFlags(post: FeedPost, flags: { archived?: boolean; pinned?: boolean; hideLikes?: boolean }): Promise<FeedPost> {
+  if (await isCloud()) {
+    await cloud.setPostFlags(post.id, flags);
+    // arquivado sai do feed: tira do snapshot para o savePosts não achar que foi apagado
+    if (flags.archived) postSnapshot.delete(post.id);
+  }
+  const next: FeedPost = {
+    ...post,
+    ...(flags.archived !== undefined ? { archived: flags.archived, pinned: flags.archived ? false : post.pinned } : {}),
+    ...(flags.pinned !== undefined ? { pinned: flags.pinned } : {}),
+    ...(flags.hideLikes !== undefined ? { hideLikes: flags.hideLikes } : {})
+  };
+  if (!(await isCloud())) FastStorage.setItemSync(KEYS.POSTS, localPosts().map(p => (p.id === post.id ? next : p)));
+  return next;
+}
+
+export async function loadArchivedPosts(): Promise<FeedPost[]> {
+  if (await isCloud()) return cloud.fetchArchivedPosts().catch(() => []);
+  return localPosts().filter(p => p.archived);
+}
+
+export async function loadTaggedPosts(username: string): Promise<FeedPost[]> {
+  if (await isCloud()) return cloud.fetchTaggedPosts(username).catch(() => []);
+  const re = new RegExp(`@${username.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9_.])`, "i");
+  return localPosts().filter(p => !p.archived && re.test(p.caption || ""));
+}
+
+export async function loadLikers(postId: string): Promise<UserProfile[]> {
+  if (await isCloud()) return cloud.fetchLikers(postId).catch(() => []);
+  return [];
+}
+
+// ---------- rascunhos (ficam só no aparelho) ----------
+export interface PostDraftData {
+  id: string;
+  images: string[];
+  caption: string;
+  tags: ClothingTag[];
+  savedAt: string;
+}
+
+/** copia a foto para a pasta do app, para o rascunho não perder a imagem */
+async function persistImage(uri: string): Promise<string> {
+  try {
+    if (!uri || /^https?:/.test(uri) || uri.startsWith("data:")) return uri;
+    const { Platform } = require("react-native");
+    if (Platform.OS === "web") return uri;
+    const fs = require("expo-file-system");
+    const src = new fs.File(uri);
+    const dir = new fs.Directory(fs.Paths.document, "drafts");
+    if (!dir.exists) dir.create();
+    const dest = new fs.File(dir, `${Date.now()}-${Math.random().toString(36).slice(2, 7)}.jpg`);
+    src.copy(dest);
+    return dest.uri;
+  } catch {
+    return uri;
+  }
+}
+
+export function loadDrafts(): PostDraftData[] {
+  return FastStorage.getItemSync(KEYS.DRAFTS, []);
+}
+
+export async function saveDraft(d: Omit<PostDraftData, "savedAt" | "id"> & { id?: string }): Promise<PostDraftData> {
+  const images = [];
+  for (const uri of d.images) images.push(await persistImage(uri));
+  const draft: PostDraftData = { id: d.id || `draft-${Date.now()}`, images, caption: d.caption, tags: d.tags, savedAt: new Date().toISOString() };
+  FastStorage.setItemSync(KEYS.DRAFTS, [draft, ...loadDrafts().filter(x => x.id !== draft.id)].slice(0, 20));
+  return draft;
+}
+
+export function deleteDraft(id: string) {
+  FastStorage.setItemSync(KEYS.DRAFTS, loadDrafts().filter(x => x.id !== id));
+}
+
+// ---------- silenciar ----------
+export async function loadMutedIds(): Promise<string[]> {
+  if (await isCloud()) return cloud.fetchMutedIds().catch(() => []);
+  return FastStorage.getItemSync(KEYS.MUTED, []);
+}
+
+export async function setMuted(userId: string, on: boolean): Promise<void> {
+  if (await isCloud()) return cloud.setMuted(userId, on);
+  const cur: string[] = FastStorage.getItemSync(KEYS.MUTED, []);
+  FastStorage.setItemSync(KEYS.MUTED, on ? Array.from(new Set([...cur, userId])) : cur.filter(x => x !== userId));
+}
+
+// ---------- destaques ----------
+type LocalHighlight = { id: string; userId: string; title: string; cover?: string; stories: StoryItem[] };
+const localHighlights = (): LocalHighlight[] => FastStorage.getItemSync(KEYS.HIGHLIGHTS, []);
+
+export async function loadHighlights(userId: string): Promise<Highlight[]> {
+  if (await isCloud()) return cloud.fetchHighlights(userId).catch(() => []);
+  return localHighlights()
+    .filter(h => h.userId === userId)
+    .map(h => ({ id: h.id, title: h.title, cover: h.cover || h.stories[0]?.image, stories: h.stories }));
+}
+
+export async function loadMyStoryArchive(): Promise<StoryItem[]> {
+  if (await isCloud()) return cloud.fetchMyStoryArchive().catch(() => []);
+  const groups: UserStoryGroup[] = FastStorage.getItemSync(KEYS.STORIES, INITIAL_STORIES);
+  return groups.find(g => g.isMe)?.stories || [];
+}
+
+export async function saveHighlight(userId: string, input: { id?: string; title: string; stories: StoryItem[]; cover?: string }): Promise<void> {
+  if (await isCloud()) {
+    await cloud.saveHighlight({ id: input.id, title: input.title, storyIds: input.stories.map(s => s.id), cover: input.cover });
+    return;
+  }
+  const h: LocalHighlight = { id: input.id || `hl-${Date.now()}`, userId, title: input.title, cover: input.cover, stories: input.stories };
+  FastStorage.setItemSync(KEYS.HIGHLIGHTS, [...localHighlights().filter(x => x.id !== h.id), h]);
+}
+
+export async function deleteHighlight(id: string): Promise<void> {
+  if (await isCloud()) return cloud.deleteHighlight(id);
+  FastStorage.setItemSync(KEYS.HIGHLIGHTS, localHighlights().filter(x => x.id !== id));
+}
+
+// ---------- Direct: fixar e apagar conversa ----------
+export async function setThreadPinned(thread: DirectThread, pinned: boolean): Promise<void> {
+  if (await isCloud()) return cloud.setDmPinned(thread.profileId, pinned);
+  const prefs = FastStorage.getItemSync(KEYS.DM_PREFS, {} as Record<string, any>);
+  FastStorage.setItemSync(KEYS.DM_PREFS, { ...prefs, [thread.id]: { ...(prefs[thread.id] || {}), pinned } });
+}
+
+export async function clearThread(thread: DirectThread): Promise<void> {
+  if (await isCloud()) return cloud.clearConversation(thread.profileId);
+  const prefs = FastStorage.getItemSync(KEYS.DM_PREFS, {} as Record<string, any>);
+  FastStorage.setItemSync(KEYS.DM_PREFS, { ...prefs, [thread.id]: { pinned: false, cleared: true } });
+  await saveDirectMessages(thread.id, []);
+}
+
+/** aplica fixar/apagar nas conversas do modo demo */
+export function applyLocalThreadPrefs(threads: DirectThread[]): DirectThread[] {
+  const prefs = FastStorage.getItemSync(KEYS.DM_PREFS, {} as Record<string, any>);
+  const list = threads
+    .filter(t => !prefs[t.id]?.cleared)
+    .map(t => ({ ...t, pinned: !!prefs[t.id]?.pinned }));
+  return [...list.filter(t => t.pinned), ...list.filter(t => !t.pinned)];
+}
+
+// ---------- pesquisas recentes ----------
+export function loadRecentSearches(): string[] {
+  return FastStorage.getItemSync(KEYS.RECENT_SEARCHES, []);
+}
+export function addRecentSearch(term: string) {
+  const t = term.trim();
+  if (t.length < 2) return;
+  const cur = loadRecentSearches().filter(x => x.toLowerCase() !== t.toLowerCase());
+  FastStorage.setItemSync(KEYS.RECENT_SEARCHES, [t, ...cur].slice(0, 12));
+}
+export function removeRecentSearch(term?: string) {
+  FastStorage.setItemSync(KEYS.RECENT_SEARCHES, term ? loadRecentSearches().filter(x => x !== term) : []);
+}
+
+// ---------- hashtags em alta ----------
+export async function loadTrendingTags(limit = 12): Promise<{ tag: string; count: number }[]> {
+  const rows = (await isCloud())
+    ? await cloud.fetchRecentCaptions(7).catch(() => [])
+    : localPosts().map(p => ({ caption: p.caption || "", likes: p.likes || 0 }));
+  return trendingFromCaptions(rows, limit);
+}
+
+/** conta as hashtags (cada post conta 1 vez, curtidas dão um empurrãozinho) */
+export function trendingFromCaptions(rows: { caption: string; likes: number }[], limit = 12) {
+  const score = new Map<string, { tag: string; count: number; score: number }>();
+  const re = /#([A-Za-z0-9_\u00C0-\u024F]{2,40})/g;
+  rows.forEach(r => {
+    const seen = new Set<string>();
+    let m: RegExpExecArray | null;
+    re.lastIndex = 0;
+    while ((m = re.exec(r.caption))) {
+      const key = m[1].toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const cur = score.get(key) || { tag: m[1], count: 0, score: 0 };
+      cur.count += 1;
+      cur.score += 1 + Math.min(r.likes, 50) / 25;
+      score.set(key, cur);
+    }
+  });
+  return Array.from(score.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(({ tag, count }) => ({ tag, count }));
+}
+
+// ---------- guarda-roupa: editar peça ----------
+export async function updateWardrobeItem(item: WardrobeItem, current: WardrobeItem[], userId?: string): Promise<WardrobeItem[]> {
+  if (await isCloud()) {
+    const saved = await cloud.updateWardrobeItem(item);
+    return current.map(i => (i.id === item.id ? saved : i));
+  }
+  const updated = current.map(i => (i.id === item.id ? item : i));
+  await saveWardrobe(updated, userId);
+  return updated;
+}
+
+// ---------- lista de desejos ----------
+export async function loadWishlist(): Promise<WishlistItem[]> {
+  if (await isCloud()) return cloud.fetchWishlist().catch(() => []);
+  return FastStorage.getItemSync(KEYS.WISHLIST, []);
+}
+
+export async function saveWish(item: WishlistItem): Promise<WishlistItem> {
+  if (await isCloud()) return cloud.saveWish(item);
+  const saved = { ...item, id: !item.id || item.id.startsWith("tmp-") ? `wish-${Date.now()}` : item.id };
+  const cur: WishlistItem[] = FastStorage.getItemSync(KEYS.WISHLIST, []);
+  const exists = cur.some(x => x.id === saved.id);
+  FastStorage.setItemSync(KEYS.WISHLIST, exists ? cur.map(x => (x.id === saved.id ? saved : x)) : [saved, ...cur]);
+  return saved;
+}
+
+export async function deleteWish(id: string): Promise<void> {
+  if (await isCloud()) return cloud.deleteWish(id);
+  FastStorage.setItemSync(KEYS.WISHLIST, (FastStorage.getItemSync(KEYS.WISHLIST, []) as WishlistItem[]).filter(x => x.id !== id));
+}
+
+// ---------- calendário de looks ----------
+export async function loadOutfitLog(fromDay: string, toDay: string): Promise<OutfitLogEntry[]> {
+  if (await isCloud()) return cloud.fetchOutfitLog(fromDay, toDay).catch(() => []);
+  return (FastStorage.getItemSync(KEYS.OUTFIT_LOG, []) as OutfitLogEntry[]).filter(e => e.day >= fromDay && e.day <= toDay);
+}
+
+export async function saveOutfitLog(entry: OutfitLogEntry): Promise<void> {
+  if (await isCloud()) return cloud.saveOutfitLog(entry);
+  const cur: OutfitLogEntry[] = FastStorage.getItemSync(KEYS.OUTFIT_LOG, []);
+  FastStorage.setItemSync(KEYS.OUTFIT_LOG, [...cur.filter(e => e.day !== entry.day), entry]);
+}
+
+export async function deleteOutfitLog(day: string): Promise<void> {
+  if (await isCloud()) return cloud.deleteOutfitLog(day);
+  const cur: OutfitLogEntry[] = FastStorage.getItemSync(KEYS.OUTFIT_LOG, []);
+  FastStorage.setItemSync(KEYS.OUTFIT_LOG, cur.filter(e => e.day !== day));
+}
+
+
+/** publica um story meu de qualquer tela (ex.: look do guarda-roupa) */
+export async function publishMyStory(imageUri: string, caption?: string, overlay?: StoryItem["overlay"]): Promise<void> {
+  if (await isCloud()) {
+    const created = await cloud.addStory(imageUri, caption, overlay);
+    storySnapshot.add(created.id);
+    return;
+  }
+  const groups: UserStoryGroup[] = FastStorage.getItemSync(KEYS.STORIES, INITIAL_STORIES);
+  const story: StoryItem = { id: `my-st-${Date.now()}`, image: imageUri, timestamp: "Agora", caption, overlay: overlay || null };
+  FastStorage.setItemSync(
+    KEYS.STORIES,
+    groups.map(g => (g.isMe ? { ...g, hasUnseen: true, stories: [...g.stories, story] } : g))
   );
 }
