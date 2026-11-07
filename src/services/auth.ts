@@ -13,6 +13,14 @@ WebBrowser.maybeCompleteAuthSession();
 export const authConfigured = supabaseConfigured;
 export const AUTH_REDIRECT = "guvio://auth/callback";
 
+/** no navegador (versão web) o login volta para o próprio site */
+function redirectUrl(): string {
+  if (Platform.OS === "web" && typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}/`;
+  }
+  return AUTH_REDIRECT;
+}
+
 /** Erro especial: conta criada, mas o Supabase exige confirmar o e-mail */
 export class ConfirmEmailError extends Error {}
 
@@ -47,7 +55,7 @@ async function cloudSignUp(email: string, password: string, username: string, di
   const { data, error } = await supabase!.auth.signUp({
     email,
     password,
-    options: { data: { username, display_name: displayName }, emailRedirectTo: AUTH_REDIRECT }
+    options: { data: { username, display_name: displayName }, emailRedirectTo: redirectUrl() }
   });
   if (error) throw new Error(translateAuthError(error.message));
   if (!data.session) {
@@ -317,7 +325,7 @@ export async function startOAuth(provider: "google" | "apple") {
   if (!supabase) throw new Error("Login com Google/Apple precisa do servidor configurado.");
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
-    options: { redirectTo: AUTH_REDIRECT, skipBrowserRedirect: Platform.OS !== "web" }
+    options: { redirectTo: redirectUrl(), skipBrowserRedirect: Platform.OS !== "web" }
   });
   if (error) throw new Error(translateAuthError(error.message));
   if (data?.url && Platform.OS !== "web") {

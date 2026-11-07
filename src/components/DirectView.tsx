@@ -1,41 +1,31 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { Image as ImageIcon, MessageCircle, Search, Send, Heart, SquarePen, X } from "lucide-react-native";
-import * as ImagePicker from "expo-image-picker";
+import React, { useState, useEffect } from "react";
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { MessageCircle, Search, SquarePen, X } from "lucide-react-native";
+import { ChatView } from "./ChatView";
 import { DirectThread, UserProfile } from "../data/mockData";
 import { ScreenHeader } from "./ScreenHeader";
 import { FastImage } from "./FastImage";
 import { useAppTheme } from "../context/AppTheme";
-import {
-  ChatMessage,
-  loadThreads,
-  loadChat,
-  sendChatMessage,
-  setChatReaction,
-  markThreadRead,
-  threadForProfile,
-  loadAllRegisteredProfiles
-} from "../services/storage";
+import { loadThreads, threadForProfile, loadAllRegisteredProfiles } from "../services/storage";
 import { isCloud } from "../services/supabase";
-import { subscribeMessages } from "../services/cloud";
+import { subscribeOnline } from "../services/cloud";
 
 export function DirectView({
   onBack,
   initialThread,
-  onOpenProfile
+  onOpenProfile,
+  onOpenPost
 }: {
   onBack: () => void;
   initialThread?: DirectThread | null;
   onOpenProfile?: (username: string) => void;
+  onOpenPost?: (postId: string) => void;
 }) {
   const { colors } = useAppTheme();
   const [threads, setThreads] = useState<DirectThread[]>([]);
   const [open, setOpen] = useState<DirectThread | null>(initialThread || null);
   const [query, setQuery] = useState("");
-  const [msgText, setMsgText] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [sending, setSending] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
+  const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
   const [picking, setPicking] = useState(false);
   const [people, setPeople] = useState<UserProfile[]>([]);
   const [peopleQuery, setPeopleQuery] = useState("");
@@ -49,65 +39,12 @@ export function DirectView({
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
     let stop: (() => void) | undefined;
-    loadChat(open).then(setMessages).catch(() => setMessages([]));
-    markThreadRead(open);
     isCloud().then(cloud => {
-      if (!cloud) return;
-      stop = subscribeMessages(open.profileId, m => {
-        setMessages(prev => (prev.some(x => x.id === m.id) ? prev.map(x => (x.id === m.id ? m : x)) : [...prev, m]));
-        if (m.sender === "other") markThreadRead(open);
-      });
+      if (cloud) stop = subscribeOnline(setOnlineIds);
     });
     return () => stop?.();
-  }, [open]);
-
-  useEffect(() => {
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
-  }, [messages.length]);
-
-  const send = async (msg: { text?: string; image?: string }) => {
-    if (!open) return;
-    setSending(true);
-    try {
-      setMessages(await sendChatMessage(open, messages, msg));
-    } catch (e: any) {
-      Alert.alert("Mensagem não enviada", e?.message || "Tente novamente.");
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleSendText = () => {
-    if (!open || !msgText.trim() || sending) return;
-    const text = msgText.trim();
-    setMsgText("");
-    send({ text });
-  };
-
-  const handlePickImage = async () => {
-    if (!open) return;
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") return;
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        quality: 0.8,
-        allowsEditing: true,
-      });
-      if (!res.canceled && res.assets?.[0]?.uri) {
-        send({ image: res.assets[0].uri });
-      }
-    } catch (e) {}
-  };
-
-  const handleToggleReaction = async (id: string, emoji: string) => {
-    if (!open) return;
-    try {
-      setMessages(await setChatReaction(open, messages, id, emoji));
-    } catch (e) {}
-  };
+  }, []);
 
   const filteredThreads = threads.filter(d => 
     d.username.toLowerCase().includes(query.toLowerCase()) || 
@@ -116,91 +53,15 @@ export function DirectView({
 
   if (open) {
     return (
-      <KeyboardAvoidingView
-        style={[s.full, { backgroundColor: colors.bg }]}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <ScreenHeader
-          title={`@${open.username}`}
-          onBack={() => {
-            if (initialThread && open.id === initialThread.id) onBack();
-            else setOpen(null);
-          }}
-          right={
-            onOpenProfile ? (
-              <Pressable onPress={() => onOpenProfile(open.username)} hitSlop={8}>
-                <FastImage source={open.avatar} style={s.headAvatar} />
-              </Pressable>
-            ) : undefined
-          }
-        />
-        <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={s.chat}>
-          {messages.length === 0 ? (
-            <Text style={{ color: colors.muted, textAlign: "center", marginTop: 40 }}>
-              Diga oi para @{open.username} 👋
-            </Text>
-          ) : null}
-          {messages.map(m => {
-            const isMe = m.sender === "me";
-            return (
-              <View key={m.id} style={isMe ? s.bubbleMeWrapper : s.bubbleOtherWrapper}>
-                <View
-                  style={[
-                    isMe ? s.bubbleMe : s.bubbleOther,
-                    { backgroundColor: isMe ? colors.text : colors.surface },
-                  ]}
-                >
-                  {m.image ? (
-                    <Image source={{ uri: m.image }} style={s.chatImage} />
-                  ) : null}
-                  {m.text ? (
-                    <Text style={{ color: isMe ? colors.bg : colors.text, fontSize: 14 }}>
-                      {m.text}
-                    </Text>
-                  ) : null}
-
-                  {/* Reações com Emojis */}
-                  <View style={s.reactionBar}>
-                    {["❤️", "🔥", "✨"].map(emoji => (
-                      <Pressable
-                        key={emoji}
-                        onPress={() => handleToggleReaction(m.id, emoji)}
-                        style={[
-                          s.reactionBtn,
-                          m.reaction === emoji && s.reactionBtnActive,
-                        ]}
-                      >
-                        <Text style={{ fontSize: 11 }}>{emoji}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-                {m.reaction ? (
-                  <View style={s.activeBadge}>
-                    <Text style={{ fontSize: 12 }}>{m.reaction}</Text>
-                  </View>
-                ) : null}
-              </View>
-            );
-          })}
-        </ScrollView>
-
-        <View style={[s.composer, { borderTopColor: colors.border, backgroundColor: colors.bg }]}>
-          <Pressable onPress={handlePickImage} style={s.iconBtn}>
-            <ImageIcon color={colors.icon} size={22} />
-          </Pressable>
-          <TextInput
-            value={msgText}
-            onChangeText={setMsgText}
-            placeholder="Mensagem..."
-            placeholderTextColor={colors.muted}
-            style={[s.input, { backgroundColor: colors.surface, color: colors.text }]}
-          />
-          <Pressable onPress={handleSendText}>
-            <Send color={colors.icon} size={22} />
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
+      <ChatView
+        thread={open}
+        onBack={() => {
+          if (initialThread && open.id === initialThread.id) onBack();
+          else setOpen(null);
+        }}
+        onOpenProfile={onOpenProfile}
+        onOpenPost={onOpenPost}
+      />
     );
   }
 
@@ -281,10 +142,16 @@ export function DirectView({
         ) : (
           filteredThreads.map(d => (
             <Pressable key={d.id} onPress={() => setOpen(d)} style={s.thread}>
-              <FastImage source={d.avatar} style={s.avatar} />
+              <View>
+                <FastImage source={d.avatar} style={s.avatar} />
+                {onlineIds.has(d.profileId) ? <View style={[s.onlineDot, { borderColor: colors.bg }]} /> : null}
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={[s.user, { color: colors.text }]}>@{d.username}</Text>
-                <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{ color: d.unread ? colors.text : colors.muted, fontSize: 12, fontWeight: d.unread ? "800" : "400" }}
+                >
                   {d.lastMessage}
                 </Text>
               </View>
@@ -309,6 +176,7 @@ const s = StyleSheet.create({
   search: { marginHorizontal: 18, height: 42, borderRadius: 14, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 13, marginBottom: 8 },
   thread: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 11 },
   avatar: { width: 56, height: 56, borderRadius: 28 },
+  onlineDot: { position: "absolute", right: 1, bottom: 1, width: 15, height: 15, borderRadius: 8, backgroundColor: "#22C55E", borderWidth: 3 },
   user: { fontSize: 14, fontWeight: "800", marginBottom: 4 },
   unread: { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: "#168CFF", alignItems: "center", justifyContent: "center" },
   unreadText: { fontSize: 10, color: "white", fontWeight: "800" },

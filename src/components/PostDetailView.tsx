@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Bookmark, Heart, MapPin, MessageCircle, MoreHorizontal, Shirt } from "lucide-react-native";
+import { Bookmark, Heart, MapPin, MessageCircle, MoreHorizontal, Send, Shirt } from "lucide-react-native";
 import { FeedPost } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
 import { ScreenHeader } from "./ScreenHeader";
@@ -8,6 +8,8 @@ import { FastImage } from "./FastImage";
 import { CommentsModal } from "./CommentsModal";
 import { askDelete, askReport, EditCaptionModal } from "./PostMenus";
 import { PostMedia } from "./PostMedia";
+import { SharePostModal } from "./SharePostModal";
+import { CollectionPickerModal } from "./CollectionPickerModal";
 import { ImageZoomModal } from "./ImageZoomModal";
 import { RichCaption } from "./RichCaption";
 import { likeFeedback, tapFeedback } from "../utils/haptics";
@@ -35,6 +37,8 @@ export function PostDetailView({
   const [showComments, setShowComments] = useState(false);
   const [editing, setEditing] = useState<FeedPost | null>(null);
   const [zoom, setZoom] = useState<number | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [picking, setPicking] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -162,8 +166,11 @@ export function PostDetailView({
           <Pressable onPress={() => setShowComments(true)} hitSlop={8}>
             <MessageCircle size={25} color={colors.icon} />
           </Pressable>
+          <Pressable onPress={() => setSharing(true)} hitSlop={8}>
+            <Send size={23} color={colors.icon} style={{ transform: [{ rotate: "-22deg" }] }} />
+          </Pressable>
           <View style={{ flex: 1 }} />
-          <Pressable onPress={toggleSave} hitSlop={8}>
+          <Pressable onPress={toggleSave} onLongPress={() => setPicking(true)} delayLongPress={350} hitSlop={8}>
             <Bookmark size={25} color={colors.icon} fill={post.isSaved ? colors.icon : "transparent"} />
           </Pressable>
         </View>
@@ -218,7 +225,21 @@ export function PostDetailView({
         post={showComments ? post : null}
         visible={showComments}
         onClose={() => setShowComments(false)}
+        onOpenProfile={u => {
+          setShowComments(false);
+          onOpenProfile?.(u);
+        }}
+        onOpenTag={t => {
+          setShowComments(false);
+          onOpenTag?.(t);
+        }}
         onCommented={(_, total) => setPost(p => (p ? { ...p, commentsCount: total } : p))}
+      />
+      <SharePostModal post={post} visible={sharing} onClose={() => setSharing(false)} />
+      <CollectionPickerModal
+        post={picking ? post : null}
+        onClose={() => setPicking(false)}
+        onSaved={() => setPost(p => (p ? { ...p, isSaved: true } : p))}
       />
       <ImageZoomModal
         images={zoom === null ? null : post.images && post.images.length ? post.images : [post.image]}

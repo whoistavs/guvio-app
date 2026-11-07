@@ -90,7 +90,7 @@ export interface UserStoryGroup {
 
 export interface ActivityItem {
   id: string;
-  type: "like" | "comment" | "follow";
+  type: "like" | "comment" | "follow" | "reply" | "comment_like";
   userId: string;
   username: string;
   userAvatar: string;
@@ -460,7 +460,22 @@ export const MOCK_ACTIVITIES: ActivityItem[] = [
   }
 ];
 
-export interface CommentItem { id: string; postId: string; userId?: string; username: string; avatar: string; text: string; createdAt: string; likes: number; canDelete?: boolean; }
+export interface CommentItem {
+  id: string;
+  postId: string;
+  userId?: string;
+  username: string;
+  avatar: string;
+  text: string;
+  createdAt: string;
+  likes: number;
+  canDelete?: boolean;
+  /** comentário respondido (respostas aparecem embaixo dele) */
+  parentId?: string | null;
+  isLiked?: boolean;
+}
+
+export interface SavedCollection { id: string; name: string; cover?: string; count: number; }
 export interface DirectThread { id: string; profileId: string; username: string; avatar: string; lastMessage: string; time: string; unread?: number; }
 
 export const MOCK_COMMENTS: CommentItem[] = [];

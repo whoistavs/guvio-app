@@ -54,13 +54,17 @@ export function ActivityView({
               s.typeBadge,
               {
                 backgroundColor:
-                  item.type === "like" ? "#FF3040" : item.type === "comment" ? "#168CFF" : "#10B981"
+                  item.type === "like" || item.type === "comment_like"
+                    ? "#FF3040"
+                    : item.type === "comment" || item.type === "reply"
+                    ? "#168CFF"
+                    : "#10B981"
               }
             ]}
           >
-            {item.type === "like" ? (
+            {item.type === "like" || item.type === "comment_like" ? (
               <Heart size={9} color="#FFF" fill="#FFF" />
-            ) : item.type === "comment" ? (
+            ) : item.type === "comment" || item.type === "reply" ? (
               <MessageCircle size={9} color="#FFF" />
             ) : (
               <UserPlus size={9} color="#FFF" />

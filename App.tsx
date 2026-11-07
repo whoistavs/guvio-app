@@ -4,6 +4,7 @@ import {
   Alert,
   Dimensions,
   Linking,
+  Pressable,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -35,11 +36,17 @@ import {
   hasUnreadActivity,
   threadForProfile,
   unreadMessages,
-  loadMorePosts
+  loadMorePosts,
+  getCachedFeed,
+  subscribeOffline
 } from "./src/services/storage";
 import { successFeedback } from "./src/utils/haptics";
 import { getCurrentPlace, CurrentPlace } from "./src/services/location";
 import { PostDetailView } from "./src/components/PostDetailView";
+import { ChallengeCard } from "./src/components/ChallengeCard";
+import { OnboardingView, onboardingDone, resetOnboarding } from "./src/components/OnboardingView";
+import { FeedbackView } from "./src/components/FeedbackView";
+import { ChallengeView } from "./src/components/ChallengeView";
 import { FollowListView } from "./src/components/FollowListView";
 import { fetchCityWeather, WeatherData } from "./src/services/weather";
 import { requestNotificationPermissions, sendLocalNotification } from "./src/services/notifications";
@@ -47,7 +54,7 @@ import { getSavedAuthSession, signOut, handleAuthRedirect, deleteAccount } from 
 import { parseProfileLink } from "./src/utils/profileLink";
 import { FastStorage } from "./src/services/FastStorage";
 import { supabase, isCloud } from "./src/services/supabase";
-import { subscribeFeed, fetchPostCounts, subscribeMyAlerts } from "./src/services/cloud";
+import { subscribeFeed, fetchPostCounts, subscribeMyAlerts, startPresence } from "./src/services/cloud";
 
 type Screen =
   | { name: "direct"; thread?: DirectThread | null }
@@ -56,6 +63,7 @@ type Screen =
   | { name: "settings" }
   | { name: "settingsPage"; kind: string }
   | { name: "post"; postId: string }
+  | { name: "challenge" }
   | { name: "follows"; profile: UserProfile; kind: "followers" | "following" };
 
 function Guvio() {
@@ -86,6 +94,8 @@ function Guvio() {
   const [searchMarkerId, setSearchMarkerId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [offline, setOffline] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   // pedido de busca vindo de uma #hashtag
@@ -167,8 +177,14 @@ function Guvio() {
   // Depois do login: carrega o feed e liga o tempo real
   useEffect(() => {
     if (!authenticated) return;
+    if (!onboardingDone()) setShowOnboarding(true);
+    const stopOffline = subscribeOffline(setOffline);
     let stop: (() => void) | undefined;
     let stopAlerts: (() => void) | undefined;
+    let stopPresence: (() => void) | undefined;
+    // abre na hora com o último feed salvo no aparelho; depois atualiza pela internet
+    const cached = getCachedFeed();
+    if (cached.length) setPosts(prev => (prev.length ? prev : cached));
     loadSavedPosts().then(setPosts);
     hasUnreadActivity().then(setUnread);
     unreadMessages().then(setUnreadDm);
@@ -181,6 +197,7 @@ function Guvio() {
 
     isCloud().then(cloud => {
       if (!cloud) return;
+      stopPresence = startPresence();
       const refreshCounts = (postId: string) => {
         fetchPostCounts(postId).then(c => {
           if (!c) return;
@@ -208,6 +225,8 @@ function Guvio() {
     return () => {
       stop?.();
       stopAlerts?.();
+      stopPresence?.();
+      stopOffline();
     };
   }, [authenticated]);
 
@@ -316,6 +335,12 @@ function Guvio() {
   if (booting) return <View style={[s.safe, { backgroundColor: colors.bg }]} />;
 
   if (!authenticated) return <AuthScreen onAuthenticated={() => setAuthenticated(true)} />;
+  if (showOnboarding)
+    return (
+      <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
+        <OnboardingView onDone={() => setShowOnboarding(false)} />
+      </SafeAreaView>
+    );
 
   const search = (x: GlobeSearchSelection) => {
     setLocation(`${x.label}${x.subtitle ? `, ${x.subtitle}` : ""}`);
@@ -356,6 +381,13 @@ function Guvio() {
 
   const openProfileObj = (p: UserProfile) => push({ name: "publicProfile", profile: p });
   const openPost = (postId: string) => push({ name: "post", postId });
+
+  /** abre "Nova publicação" já com a #hashtag do desafio na legenda */
+  const joinChallenge = (tag: string) => {
+    setDraft({ images: [], tags: [], caption: `#${tag} `, id: Date.now() });
+    setStack([]);
+    setTab("add");
+  };
   const openFollows = (p: UserProfile, kind: "followers" | "following") => push({ name: "follows", profile: p, kind });
 
   if (top) {
@@ -364,6 +396,7 @@ function Guvio() {
       case "direct":
         screen = (
           <DirectView
+            onOpenPost={openPost}
             initialThread={top.thread || null}
             onBack={() => {
               back();
@@ -410,7 +443,15 @@ function Guvio() {
         screen = (
           <SettingsView
             onBack={back}
-            onOpen={x => push({ name: "settingsPage", kind: x })}
+            onOpen={x => {
+              if (x === "tutorial") {
+                resetOnboarding();
+                setStack([]);
+                setShowOnboarding(true);
+                return;
+              }
+              push({ name: "settingsPage", kind: x });
+            }}
             onSignOut={handleSignOut}
             onDeleteAccount={async () => {
               await deleteAccount();
@@ -423,8 +464,16 @@ function Guvio() {
           />
         );
         break;
+      case "challenge":
+        screen = <ChallengeView onBack={back} onJoin={joinChallenge} onOpenPost={openPost} />;
+        break;
       case "settingsPage":
-        screen = <SimpleSettingsPage kind={top.kind} onBack={back} onOpenPost={openPost} />;
+        screen =
+          top.kind === "feedback" ? (
+            <FeedbackView onBack={back} />
+          ) : (
+            <SimpleSettingsPage kind={top.kind} onBack={back} onOpenPost={openPost} />
+          );
         break;
     }
     return <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>{screen}</SafeAreaView>;
@@ -435,6 +484,13 @@ function Guvio() {
   return (
     <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
       <StatusBar barStyle={dark ? "light-content" : "dark-content"} backgroundColor={colors.bg} />
+      {offline ? (
+        <Pressable onPress={refreshFeed} style={[s.offline, { backgroundColor: colors.surface }]}>
+          <Text style={{ color: colors.text, fontSize: 12, fontWeight: "700" }}>
+            Sem conexão · mostrando looks salvos no aparelho. <Text style={{ color: "#0095F6" }}>Tentar de novo</Text>
+          </Text>
+        </Pressable>
+      ) : null}
       {tab === "home" ? (
         <ScrollView
           ref={scroll}
@@ -473,6 +529,7 @@ function Guvio() {
             onOpenProfile={openName}
             onOpenTag={openTag}
             refreshKey={refreshKey}
+            belowStories={<ChallengeCard onJoin={joinChallenge} onOpenRanking={() => push({ name: "challenge" })} />}
           />
           {loadingMore ? <ActivityIndicator color={colors.muted} style={{ marginVertical: 24 }} /> : null}
           {!hasMore && posts.length > 0 ? (
@@ -511,6 +568,7 @@ function Guvio() {
             searchMarker
               ? {
                   title: [searchMarker.city, searchMarker.country].filter(Boolean).join(", "),
+                  city: searchMarker.city,
                   posts: posts.filter(
                     p => p.city === searchMarker.city && (p.country || "") === (searchMarker.country || "")
                   )
@@ -572,5 +630,6 @@ export default function App() {
 
 const s = StyleSheet.create({
   safe: { flex: 1 },
+  offline: { paddingHorizontal: 16, paddingVertical: 8, alignItems: "center" },
   first: { width: "100%", justifyContent: "space-between", alignItems: "center", paddingBottom: 16 }
 });

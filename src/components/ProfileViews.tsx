@@ -6,6 +6,7 @@ import {
   Clock3,
   FileText,
   Globe,
+  HelpCircle,
   Grid3X3,
   Heart,
   ImagePlus,
@@ -26,7 +27,7 @@ import {
   X
 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
-import { FeedPost, UserProfile, MOCK_FEED_POSTS } from "../data/mockData";
+import { FeedPost, UserProfile, MOCK_FEED_POSTS, SavedCollection } from "../data/mockData";
 import { ScreenHeader } from "./ScreenHeader";
 import { Toggle } from "./Toggle";
 import { useAppTheme } from "../context/AppTheme";
@@ -42,7 +43,10 @@ import {
   getCachedMyProfile,
   getCachedMyPosts,
   loadBlocked,
-  setBlocked
+  setBlocked,
+  loadCollections,
+  loadCollectionPosts,
+  deleteCollection
 } from "../services/storage";
 import { getSavedAuthSession } from "../services/auth";
 import { FastImage, preloadImages } from "./FastImage";
@@ -701,6 +705,8 @@ export function SettingsView({
     { id: "saved", l: "Salvos", i: Bookmark },
     { id: "activity", l: "Sua atividade", i: Clock3 },
     { id: "blocked", l: "Bloqueados", i: UserX },
+    { id: "feedback", l: "Enviar feedback / bug", i: MessageCircle },
+    { id: "tutorial", l: "Ver tutorial de novo", i: HelpCircle },
     { id: "privacy", l: "Política de Privacidade", i: Shield },
     { id: "terms", l: "Termos de Uso", i: FileText }
   ];
@@ -798,11 +804,42 @@ export function SimpleSettingsPage({
   const { colors } = useAppTheme();
   const [savedPosts, setSavedPosts] = useState<FeedPost[]>([]);
   const [blocked, setBlockedList] = useState<UserProfile[]>([]);
+  const [cols, setCols] = useState<SavedCollection[]>([]);
+  const [activeCol, setActiveCol] = useState<string | null>(null);
+  const [colPosts, setColPosts] = useState<FeedPost[]>([]);
 
   useEffect(() => {
-    if (kind === "saved") loadSavedOnlyPosts().then(setSavedPosts);
+    if (kind === "saved") {
+      loadSavedOnlyPosts().then(setSavedPosts);
+      loadCollections().then(setCols);
+    }
     if (kind === "blocked") loadBlocked().then(setBlockedList);
   }, [kind]);
+
+  useEffect(() => {
+    if (!activeCol) return;
+    setColPosts([]);
+    loadCollectionPosts(activeCol).then(setColPosts);
+  }, [activeCol]);
+
+  const manageCollection = (c: SavedCollection) => {
+    Alert.alert(c.name, undefined, [
+      {
+        text: "Apagar coleção",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deleteCollection(c.id);
+            setCols(prev => prev.filter(x => x.id !== c.id));
+            if (activeCol === c.id) setActiveCol(null);
+          } catch (e: any) {
+            Alert.alert("Erro", e?.message || "Não foi possível apagar.");
+          }
+        }
+      },
+      { text: "Cancelar", style: "cancel" }
+    ]);
+  };
 
   const unblock = async (p: UserProfile) => {
     try {
@@ -847,7 +884,39 @@ export function SimpleSettingsPage({
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScreenHeader title={title} onBack={onBack} />
       {kind === "saved" ? (
-        <Grid posts={savedPosts} colors={colors} onSelectPost={p => onOpenPost?.(p.id)} />
+        <>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.colRow}>
+            {[{ id: "", name: "Todos", count: savedPosts.length, cover: savedPosts[0]?.image } as SavedCollection, ...cols].map(c => {
+              const on = (activeCol || "") === c.id;
+              return (
+                <Pressable
+                  key={c.id || "all"}
+                  onPress={() => setActiveCol(c.id || null)}
+                  onLongPress={c.id ? () => manageCollection(c) : undefined}
+                  style={s.colItem}
+                >
+                  {c.cover ? (
+                    <FastImage source={c.cover} style={[s.colCover, on && { borderColor: colors.text, borderWidth: 2 }]} contentFit="cover" />
+                  ) : (
+                    <View style={[s.colCover, { backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }, on && { borderColor: colors.text, borderWidth: 2 }]}>
+                      <Bookmark size={20} color={colors.muted} />
+                    </View>
+                  )}
+                  <Text style={{ color: colors.text, fontSize: 11, fontWeight: on ? "900" : "600" }} numberOfLines={1}>
+                    {c.name}
+                  </Text>
+                  <Text style={{ color: colors.muted, fontSize: 10 }}>{c.count}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          {cols.length === 0 ? (
+            <Text style={{ color: colors.muted, fontSize: 12, paddingHorizontal: 20, marginBottom: 10 }}>
+              Dica: segure o botão de salvar de um look para guardar numa coleção.
+            </Text>
+          ) : null}
+          <Grid posts={activeCol ? colPosts : savedPosts} colors={colors} onSelectPost={p => onOpenPost?.(p.id)} />
+        </>
       ) : kind === "activity" ? (
         <View style={s.info}>
           <Clock3 size={38} color={colors.icon} />
@@ -899,6 +968,9 @@ const s = StyleSheet.create({
   editRow: { flexDirection: "row", gap: 8, marginHorizontal: 22, marginTop: 14 },
   editHalf: { flex: 1, marginHorizontal: 0, marginTop: 0 },
   legal: { padding: 22, paddingBottom: 60 },
+  colRow: { paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+  colItem: { width: 76, alignItems: "center", gap: 3 },
+  colCover: { width: 70, height: 70, borderRadius: 16 },
   legalH: { fontSize: 15, fontWeight: "900", marginTop: 18, marginBottom: 6 },
   legalP: { fontSize: 13, lineHeight: 20 },
   edit: {

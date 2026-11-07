@@ -10,6 +10,7 @@ import type {
   ActivityItem,
   CommentItem,
   DirectThread,
+  SavedCollection,
   FeedPost,
   UserProfile,
   UserStoryGroup,
@@ -386,22 +387,29 @@ export async function fetchComments(postId: string): Promise<CommentItem[]> {
   const [rows, post] = await Promise.all([
     db()
       .from("comments")
-      .select("id, post_id, user_id, text, created_at, profiles!comments_user_id_fkey(username, avatar_url)")
+      .select("id, post_id, user_id, text, created_at, parent_id, profiles!comments_user_id_fkey(username, avatar_url)")
       .eq("post_id", postId)
       .order("created_at", { ascending: true }),
     db().from("posts").select("user_id").eq("id", postId).maybeSingle()
   ]);
+  const list = check(rows) || [];
+  const ids = list.map((r: any) => r.id);
+  const likes = ids.length
+    ? ((check(await db().from("comment_likes").select("comment_id, user_id").in("comment_id", ids)) as any[]) || [])
+    : [];
   const postOwner = (post.data as any)?.user_id;
-  return (check(rows) || []).map((r: any) => ({
+  return list.map((r: any) => ({
     id: r.id,
     postId: r.post_id,
     userId: r.user_id,
+    parentId: r.parent_id || null,
     canDelete: r.user_id === uid || postOwner === uid,
     username: r.profiles?.username || "membro",
     avatar: r.profiles?.avatar_url || DEFAULT_AVATAR,
     text: r.text,
     createdAt: timeAgo(r.created_at),
-    likes: 0
+    likes: likes.filter(l => l.comment_id === r.id).length,
+    isLiked: likes.some(l => l.comment_id === r.id && l.user_id === uid)
   }));
 }
 
@@ -409,9 +417,148 @@ export async function deleteComment(commentId: string) {
   check(await db().from("comments").delete().eq("id", commentId));
 }
 
-export async function addComment(postId: string, text: string) {
+export async function addComment(postId: string, text: string, parentId?: string | null) {
   const uid = await me();
-  check(await db().from("comments").insert({ post_id: postId, user_id: uid, text }));
+  check(await db().from("comments").insert({ post_id: postId, user_id: uid, text, parent_id: parentId || null }));
+}
+
+export async function setCommentLike(commentId: string, on: boolean) {
+  const uid = await me();
+  if (on) {
+    const { error } = await db().from("comment_likes").insert({ comment_id: commentId, user_id: uid });
+    if (error && !String(error.message).includes("duplicate")) throw new Error(error.message);
+  } else {
+    check(await db().from("comment_likes").delete().eq("comment_id", commentId).eq("user_id", uid));
+  }
+}
+
+// ---------------------------------------------------------------------
+// Coleções de salvos
+// ---------------------------------------------------------------------
+export async function fetchCollections(): Promise<SavedCollection[]> {
+  const uid = await me();
+  const rows = check(
+    await db()
+      .from("collections")
+      .select("id, name, created_at, collection_items(post_id, created_at, posts(image_url))")
+      .eq("user_id", uid)
+      .order("created_at", { ascending: false })
+  ) as any[];
+  return (rows || []).map(r => {
+    const items = (r.collection_items || []).sort((a: any, b: any) => (a.created_at < b.created_at ? 1 : -1));
+    return { id: r.id, name: r.name, count: items.length, cover: items[0]?.posts?.image_url || undefined };
+  });
+}
+
+export async function createCollection(name: string): Promise<SavedCollection> {
+  const uid = await me();
+  const r = check(await db().from("collections").insert({ user_id: uid, name: name.trim().slice(0, 40) }).select("id, name").single()) as any;
+  return { id: r.id, name: r.name, count: 0 };
+}
+
+export async function renameCollection(id: string, name: string) {
+  check(await db().from("collections").update({ name: name.trim().slice(0, 40) }).eq("id", id));
+}
+
+export async function deleteCollection(id: string) {
+  check(await db().from("collections").delete().eq("id", id));
+}
+
+export async function setInCollection(collectionId: string, postId: string, on: boolean) {
+  if (on) {
+    await setSave(postId, true).catch(() => {});
+    const { error } = await db().from("collection_items").insert({ collection_id: collectionId, post_id: postId });
+    if (error && !String(error.message).includes("duplicate")) throw new Error(error.message);
+  } else {
+    check(await db().from("collection_items").delete().eq("collection_id", collectionId).eq("post_id", postId));
+  }
+}
+
+export async function fetchPostCollectionIds(postId: string): Promise<string[]> {
+  const rows = check(await db().from("collection_items").select("collection_id").eq("post_id", postId)) as any[];
+  return (rows || []).map(r => r.collection_id);
+}
+
+export async function fetchCollectionPosts(collectionId: string): Promise<FeedPost[]> {
+  const items = check(
+    await db().from("collection_items").select("post_id").eq("collection_id", collectionId).order("created_at", { ascending: false })
+  ) as any[];
+  const ids = (items || []).map(i => i.post_id);
+  if (!ids.length) return [];
+  const posts = await mapPosts(check(await db().from("feed_posts").select("*").in("id", ids)) || []);
+  return ids.map(id => posts.find(p => p.id === id)).filter(Boolean) as FeedPost[];
+}
+
+// ---------------------------------------------------------------------
+// Sugestões, desafios e rankings
+// ---------------------------------------------------------------------
+export interface SuggestedProfile extends UserProfile {
+  mutuals: number;
+}
+
+export async function fetchSuggestions(limit = 15): Promise<SuggestedProfile[]> {
+  const rows = check(await db().rpc("suggested_profiles", { lim: limit })) as any[];
+  return (rows || []).map(r => ({
+    ...toProfile({ ...r, followers_count: r.followers }),
+    isFollowing: false,
+    mutuals: r.mutuals || 0
+  }));
+}
+
+/** looks com a #tag do desafio desde o início da semana, mais curtidos primeiro */
+export async function fetchChallengePosts(tag: string, sinceIso: string, limit = 30): Promise<FeedPost[]> {
+  const clean = tag.replace(/^#/, "").replace(/[%,()]/g, "");
+  const [res, hidden] = await Promise.all([
+    db()
+      .from("feed_posts")
+      .select("*")
+      .ilike("caption", `%#${clean}%`)
+      .gte("created_at", sinceIso)
+      .order("likes_count", { ascending: false })
+      .order("created_at", { ascending: true })
+      .limit(limit),
+    hiddenSets()
+  ]);
+  return mapPosts(visible(check(res) || [], hidden));
+}
+
+/** looks mais curtidos de uma cidade */
+export async function fetchCityRanking(city: string, limit = 30): Promise<FeedPost[]> {
+  const clean = city.replace(/[%,()]/g, "").trim();
+  const [res, hidden] = await Promise.all([
+    db()
+      .from("feed_posts")
+      .select("*")
+      .ilike("city", clean)
+      .order("likes_count", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(limit),
+    hiddenSets()
+  ]);
+  return mapPosts(visible(check(res) || [], hidden));
+}
+
+// ---------------------------------------------------------------------
+// Feedback dos testers
+// ---------------------------------------------------------------------
+export async function sendFeedback(input: {
+  kind: "bug" | "ideia" | "outro";
+  text: string;
+  screenshot?: string;
+  appVersion?: string;
+}) {
+  const uid = await me();
+  const screenshot_url = input.screenshot ? await uploadImage(input.screenshot, "feedback") : null;
+  check(
+    await db().from("feedback").insert({
+      user_id: uid,
+      kind: input.kind,
+      text: input.text.trim().slice(0, 4000),
+      screenshot_url,
+      app_version: input.appVersion || null,
+      platform: Platform.OS
+    })
+  );
 }
 
 // ---------------------------------------------------------------------
@@ -538,6 +685,19 @@ export interface CloudMessage {
   reaction?: string;
   sender: "me" | "other";
   createdAt: string;
+  /** look compartilhado */
+  postId?: string;
+  /** mensagem respondida */
+  replyTo?: string;
+  deleted?: boolean;
+  readAt?: string;
+}
+
+function previewOf(m: any): string {
+  if (m.deleted_at) return "Mensagem apagada";
+  if (m.text) return m.text;
+  if (m.post_id) return "👗 Enviou um look";
+  return "📷 Foto";
 }
 
 export async function fetchThreads(): Promise<DirectThread[]> {
@@ -545,7 +705,7 @@ export async function fetchThreads(): Promise<DirectThread[]> {
   const rows = check(
     await db()
       .from("messages")
-      .select("id, sender_id, recipient_id, text, image_url, created_at, read_at")
+      .select("id, sender_id, recipient_id, text, image_url, post_id, deleted_at, created_at, read_at")
       .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
       .order("created_at", { ascending: false })
       .limit(500)
@@ -568,7 +728,7 @@ export async function fetchThreads(): Promise<DirectThread[]> {
       profileId: other,
       username: p?.username || "membro",
       avatar: p?.avatar_url || DEFAULT_AVATAR,
-      lastMessage: m.text || "📷 Foto",
+      lastMessage: previewOf(m),
       time: timeAgo(m.created_at),
       unread: unread.get(other) || 0
     };
@@ -582,7 +742,11 @@ function toMessage(m: any, uid: string): CloudMessage {
     image: m.image_url || undefined,
     reaction: m.reaction || undefined,
     sender: m.sender_id === uid ? "me" : "other",
-    createdAt: m.created_at
+    createdAt: m.created_at,
+    postId: m.post_id || undefined,
+    replyTo: m.reply_to || undefined,
+    deleted: !!m.deleted_at,
+    readAt: m.read_at || undefined
   };
 }
 
@@ -599,13 +763,23 @@ export async function fetchMessages(otherId: string): Promise<CloudMessage[]> {
   return (rows || []).map(m => toMessage(m, uid));
 }
 
-export async function sendMessage(otherId: string, msg: { text?: string; image?: string }): Promise<CloudMessage> {
+export async function sendMessage(
+  otherId: string,
+  msg: { text?: string; image?: string; postId?: string; replyTo?: string }
+): Promise<CloudMessage> {
   const uid = await me();
   const image_url = msg.image ? await uploadImage(msg.image, "direct") : null;
   const row = check(
     await db()
       .from("messages")
-      .insert({ sender_id: uid, recipient_id: otherId, text: msg.text || null, image_url })
+      .insert({
+        sender_id: uid,
+        recipient_id: otherId,
+        text: msg.text || null,
+        image_url,
+        post_id: msg.postId || null,
+        reply_to: msg.replyTo || null
+      })
       .select("*")
       .single()
   );
@@ -627,7 +801,88 @@ export async function unreadMessagesCount(): Promise<number> {
 }
 
 export async function setReaction(messageId: string, emoji: string | null) {
-  check(await db().from("messages").update({ reaction: emoji }).eq("id", messageId));
+  check(await db().rpc("react_message", { msg: messageId, emoji: emoji || "" }));
+}
+
+export async function deleteMessage(messageId: string) {
+  check(await db().rpc("delete_message", { msg: messageId }));
+}
+
+// ---------------------------------------------------------------------
+// Online e "digitando..." (Realtime Presence/Broadcast, sem gravar nada no banco)
+// ---------------------------------------------------------------------
+const onlineIds = new Set<string>();
+const onlineListeners = new Set<(ids: Set<string>) => void>();
+let presenceChannel: any = null;
+
+/** entra no canal "online" (chamar depois do login). Retorna função para sair. */
+export function startPresence(): () => void {
+  const client = db();
+  let stopped = false;
+  cloudUserId().then(uid => {
+    if (!uid || stopped || presenceChannel) return;
+    const ch = client.channel("guvio-online", { config: { presence: { key: uid } } });
+    ch.on("presence", { event: "sync" }, () => {
+      const state = ch.presenceState() as Record<string, unknown>;
+      onlineIds.clear();
+      Object.keys(state).forEach(k => onlineIds.add(k));
+      onlineListeners.forEach(fn => fn(new Set(onlineIds)));
+    }).subscribe((status: string) => {
+      if (status === "SUBSCRIBED") ch.track({ at: Date.now() }).catch(() => {});
+    });
+    presenceChannel = ch;
+  });
+  return () => {
+    stopped = true;
+    if (presenceChannel) client.removeChannel(presenceChannel);
+    presenceChannel = null;
+    onlineIds.clear();
+  };
+}
+
+export function subscribeOnline(fn: (ids: Set<string>) => void): () => void {
+  onlineListeners.add(fn);
+  fn(new Set(onlineIds));
+  return () => {
+    onlineListeners.delete(fn);
+  };
+}
+
+/** canal só da conversa para avisar "digitando..." */
+export function typingChannel(otherId: string, onTyping: (typing: boolean) => void) {
+  const client = db();
+  let uid: string | null = null;
+  let ch: any = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastSent = 0;
+  cloudUserId().then(id => {
+    uid = id;
+    if (!id) return;
+    const name = `typing-${[id, otherId].sort().join("-")}`;
+    ch = client
+      .channel(name, { config: { broadcast: { self: false } } })
+      .on("broadcast", { event: "typing" }, (msg: any) => {
+        if (msg?.payload?.from !== otherId) return;
+        onTyping(!!msg.payload.typing);
+        if (timer) clearTimeout(timer);
+        if (msg.payload.typing) timer = setTimeout(() => onTyping(false), 4000);
+      })
+      .subscribe();
+  });
+  return {
+    /** chamar a cada letra digitada; manda no máximo 1 aviso a cada 2s */
+    ping(typing = true) {
+      if (!ch || !uid) return;
+      const now = Date.now();
+      if (typing && now - lastSent < 2000) return;
+      lastSent = typing ? now : 0;
+      ch.send({ type: "broadcast", event: "typing", payload: { from: uid, typing } }).catch?.(() => {});
+    },
+    stop() {
+      if (timer) clearTimeout(timer);
+      if (ch) client.removeChannel(ch);
+    }
+  };
 }
 
 /** Escuta mensagens novas/alteradas da conversa com otherId. Retorna função para parar. */
@@ -702,6 +957,10 @@ export async function fetchActivities(): Promise<ActivityItem[]> {
         ? "curtiu seu look."
         : r.type === "comment"
         ? `comentou: ${r.text || ""}`
+        : r.type === "reply"
+        ? `respondeu seu comentário: ${r.text || ""}`
+        : r.type === "comment_like"
+        ? `curtiu seu comentário: ${r.text || ""}`
         : "começou a seguir você.",
     timeAgo: timeAgo(r.created_at),
     postImage: r.post?.image_url || undefined,
@@ -827,6 +1086,8 @@ export function subscribeMyAlerts(onAlert: (title: string, body: string, kind: "
           if (n.type === "like") onAlert("Nova curtida ❤️", `@${who} curtiu seu look.`, "activity");
           else if (n.type === "comment") onAlert("Novo comentário 💬", `@${who}: ${n.text || ""}`, "activity");
           else if (n.type === "follow") onAlert("Novo seguidor ✨", `@${who} começou a seguir você.`, "activity");
+          else if (n.type === "reply") onAlert("Nova resposta 💬", `@${who}: ${n.text || ""}`, "activity");
+          else if (n.type === "comment_like") onAlert("Curtiram seu comentário ❤️", `@${who} curtiu: ${n.text || ""}`, "activity");
         }
       )
       .on(
@@ -835,7 +1096,7 @@ export function subscribeMyAlerts(onAlert: (title: string, body: string, kind: "
         async payload => {
           const m: any = payload.new;
           const who = await usernameOf(m.sender_id);
-          onAlert(`@${who}`, m.text || "📷 Enviou uma foto", "message");
+          onAlert(`@${who}`, m.text || (m.post_id ? "👗 Enviou um look" : "📷 Enviou uma foto"), "message");
         }
       )
       .subscribe();

@@ -8,6 +8,7 @@ import {
   ActivityItem,
   CommentItem,
   DirectThread,
+  SavedCollection,
   INITIAL_STORIES,
   MOCK_ACTIVITIES,
   MOCK_PROFILES,
@@ -44,8 +45,32 @@ const KEYS = {
   SAVED_POST_IDS: "guvio_saved_post_ids_v4",
   REGISTERED_USERS: "guvio_registered_users_v4",
   COMMENTS: "guvio_comments_v4",
-  BLOCKED: "guvio_blocked_v4"
+  BLOCKED: "guvio_blocked_v4",
+  COLLECTIONS: "guvio_collections_v1",
+  STORIES_CACHE: "guvio_stories_cache_v1",
+  FEEDBACK: "guvio_feedback_v1"
 };
+
+/** último feed salvo no aparelho, para abrir na hora (mesmo sem internet) */
+export function getCachedFeed(): FeedPost[] {
+  return FastStorage.getItemSync(KEYS.POSTS, []);
+}
+
+/** true quando a última tentativa de falar com o servidor falhou */
+let offline = false;
+const offlineListeners = new Set<(off: boolean) => void>();
+function setOffline(v: boolean) {
+  if (offline === v) return;
+  offline = v;
+  offlineListeners.forEach(fn => fn(v));
+}
+export function subscribeOffline(fn: (off: boolean) => void): () => void {
+  offlineListeners.add(fn);
+  fn(offline);
+  return () => {
+    offlineListeners.delete(fn);
+  };
+}
 
 export const INITIAL_USER_PROFILE: UserProfile = {
   id: "my-profile",
@@ -66,9 +91,13 @@ export async function loadSavedPosts(): Promise<FeedPost[]> {
       const posts = await cloud.fetchFeed();
       snapshotPosts(posts);
       FastStorage.setItemSync(KEYS.POSTS, posts); // cache para abrir rápido offline
+      setOffline(false);
       return posts;
     } catch (e) {
-      return FastStorage.getItemSync(KEYS.POSTS, []);
+      setOffline(true);
+      const cached: FeedPost[] = FastStorage.getItemSync(KEYS.POSTS, []);
+      snapshotPosts(cached);
+      return cached;
     }
   }
   return FastStorage.getItemSync(KEYS.POSTS, []);
@@ -370,6 +399,11 @@ export function getCachedMyPosts(): FeedPost[] | null {
 export function clearMyCache() {
   FastStorage.setItemSync(ME_CACHE_KEY, null);
   myPostsCache = null;
+  // o feed salvo tem curtidas/salvos da conta que saiu
+  if (supabaseConfigured) {
+    FastStorage.setItemSync(KEYS.POSTS, []);
+    FastStorage.setItemSync(KEYS.STORIES_CACHE, []);
+  }
 }
 
 export async function loadSavedProfile(userId?: string): Promise<UserProfile> {
@@ -463,13 +497,21 @@ export async function saveFollowedUsers(userIds: string[]): Promise<void> {
 }
 
 // Stories Storage
+/** stories salvos no aparelho (para mostrar na hora enquanto carrega) */
+export function getCachedStories(): UserStoryGroup[] {
+  return FastStorage.getItemSync(KEYS.STORIES_CACHE, []);
+}
+
 export async function loadStories(): Promise<UserStoryGroup[]> {
   if (await isCloud()) {
     try {
       const groups = await cloud.fetchStories();
       storySnapshot = new Set(groups.flatMap(g => g.stories.map(st => st.id)));
+      FastStorage.setItemSync(KEYS.STORIES_CACHE, groups);
       return groups;
     } catch (e) {
+      const cached: UserStoryGroup[] = FastStorage.getItemSync(KEYS.STORIES_CACHE, []);
+      if (cached.length) return cached;
       // mesmo se a busca falhar, mostra a bolinha "Seu story" para poder publicar
       const me = await cloud.getMyProfile().catch(() => null);
       return me
@@ -549,9 +591,9 @@ export async function deleteComment(postId: string, commentId: string): Promise<
   return rest.filter(c => c.postId === postId);
 }
 
-export async function addComment(postId: string, text: string): Promise<CommentItem[]> {
+export async function addComment(postId: string, text: string, parentId?: string | null): Promise<CommentItem[]> {
   if (await isCloud()) {
-    await cloud.addComment(postId, text);
+    await cloud.addComment(postId, text, parentId);
     return cloud.fetchComments(postId);
   }
   const me = await loadSavedProfile();
@@ -564,10 +606,124 @@ export async function addComment(postId: string, text: string): Promise<CommentI
     text,
     createdAt: "agora",
     likes: 0,
-    canDelete: true
+    canDelete: true,
+    parentId: parentId || null
   };
   FastStorage.setItemSync(KEYS.COMMENTS, [...all, item]);
   return [...all, item].filter(c => c.postId === postId);
+}
+
+export async function setCommentLike(comment: CommentItem, on: boolean): Promise<void> {
+  if (await isCloud()) return cloud.setCommentLike(comment.id, on);
+  const all: CommentItem[] = FastStorage.getItemSync(KEYS.COMMENTS, MOCK_COMMENTS);
+  FastStorage.setItemSync(
+    KEYS.COMMENTS,
+    all.map(c => (c.id === comment.id ? { ...c, isLiked: on, likes: Math.max(0, c.likes + (on ? 1 : -1)) } : c))
+  );
+}
+
+// ---------------------------------------------------------------------
+// Coleções de salvos
+// ---------------------------------------------------------------------
+type LocalCollection = { id: string; name: string; postIds: string[] };
+const localCollections = (): LocalCollection[] => FastStorage.getItemSync(KEYS.COLLECTIONS, []);
+
+export async function loadCollections(): Promise<SavedCollection[]> {
+  if (await isCloud()) return cloud.fetchCollections().catch(() => []);
+  const posts = localPosts();
+  return localCollections().map(c => ({
+    id: c.id,
+    name: c.name,
+    count: c.postIds.length,
+    cover: posts.find(p => p.id === c.postIds[0])?.image
+  }));
+}
+
+export async function createCollection(name: string): Promise<SavedCollection> {
+  if (await isCloud()) return cloud.createCollection(name);
+  const c = { id: `col-${Date.now()}`, name: name.trim().slice(0, 40), postIds: [] };
+  FastStorage.setItemSync(KEYS.COLLECTIONS, [c, ...localCollections()]);
+  return { id: c.id, name: c.name, count: 0 };
+}
+
+export async function renameCollection(id: string, name: string): Promise<void> {
+  if (await isCloud()) return cloud.renameCollection(id, name);
+  FastStorage.setItemSync(KEYS.COLLECTIONS, localCollections().map(c => (c.id === id ? { ...c, name } : c)));
+}
+
+export async function deleteCollection(id: string): Promise<void> {
+  if (await isCloud()) return cloud.deleteCollection(id);
+  FastStorage.setItemSync(KEYS.COLLECTIONS, localCollections().filter(c => c.id !== id));
+}
+
+export async function setPostInCollection(collectionId: string, post: FeedPost, on: boolean): Promise<void> {
+  if (await isCloud()) {
+    await cloud.setInCollection(collectionId, post.id, on);
+    if (on) postSnapshot.set(post.id, { ...(postSnapshot.get(post.id) || { isLiked: !!post.isLiked }), isSaved: true, userId: post.userId });
+    return;
+  }
+  FastStorage.setItemSync(
+    KEYS.COLLECTIONS,
+    localCollections().map(c =>
+      c.id !== collectionId
+        ? c
+        : { ...c, postIds: on ? [post.id, ...c.postIds.filter(x => x !== post.id)] : c.postIds.filter(x => x !== post.id) }
+    )
+  );
+  if (on) FastStorage.setItemSync(KEYS.POSTS, localPosts().map(p => (p.id === post.id ? { ...p, isSaved: true } : p)));
+}
+
+export async function loadPostCollectionIds(postId: string): Promise<string[]> {
+  if (await isCloud()) return cloud.fetchPostCollectionIds(postId).catch(() => []);
+  return localCollections().filter(c => c.postIds.includes(postId)).map(c => c.id);
+}
+
+export async function loadCollectionPosts(collectionId: string): Promise<FeedPost[]> {
+  if (await isCloud()) return cloud.fetchCollectionPosts(collectionId).catch(() => []);
+  const ids = localCollections().find(c => c.id === collectionId)?.postIds || [];
+  const posts = localPosts();
+  return ids.map(id => posts.find(p => p.id === id)).filter(Boolean) as FeedPost[];
+}
+
+// ---------------------------------------------------------------------
+// Sugestões, desafio da semana e ranking por cidade
+// ---------------------------------------------------------------------
+export async function loadSuggestions(limit = 15): Promise<(UserProfile & { mutuals?: number })[]> {
+  if (await isCloud()) return cloud.fetchSuggestions(limit).catch(() => []);
+  const followed: string[] = FastStorage.getItemSync(KEYS.FOLLOWED_USERS, []);
+  return MOCK_PROFILES.filter(p => !followed.includes(p.id) && !followed.includes(p.username)).slice(0, limit);
+}
+
+const likesOf = (p: FeedPost) => p.likes || 0;
+
+export async function loadChallengePosts(tag: string, sinceIso: string): Promise<FeedPost[]> {
+  if (await isCloud()) return cloud.fetchChallengePosts(tag, sinceIso).catch(() => []);
+  const t = `#${tag.replace(/^#/, "").toLowerCase()}`;
+  return localPosts()
+    .filter(p => (p.caption || "").toLowerCase().includes(t))
+    .sort((a, b) => likesOf(b) - likesOf(a));
+}
+
+export async function loadCityRanking(city: string): Promise<FeedPost[]> {
+  if (await isCloud()) return cloud.fetchCityRanking(city).catch(() => []);
+  const c = city.trim().toLowerCase();
+  return localPosts()
+    .filter(p => (p.city || "").trim().toLowerCase() === c)
+    .sort((a, b) => likesOf(b) - likesOf(a));
+}
+
+// ---------------------------------------------------------------------
+// Feedback dos testers
+// ---------------------------------------------------------------------
+export async function sendFeedback(input: {
+  kind: "bug" | "ideia" | "outro";
+  text: string;
+  screenshot?: string;
+  appVersion?: string;
+}): Promise<void> {
+  if (await isCloud()) return cloud.sendFeedback(input);
+  const all = FastStorage.getItemSync(KEYS.FEEDBACK, []) as any[];
+  FastStorage.setItemSync(KEYS.FEEDBACK, [{ ...input, at: new Date().toISOString() }, ...all]);
 }
 
 // ---------------------------------------------------------------------
@@ -579,6 +735,11 @@ export interface ChatMessage {
   image?: string;
   reaction?: string;
   sender: "me" | "other";
+  createdAt?: string;
+  postId?: string;
+  replyTo?: string;
+  deleted?: boolean;
+  readAt?: string;
 }
 
 export async function loadThreads(): Promise<DirectThread[]> {
@@ -600,13 +761,16 @@ export async function loadChat(thread: DirectThread): Promise<ChatMessage[]> {
 export async function sendChatMessage(
   thread: DirectThread,
   current: ChatMessage[],
-  msg: { text?: string; image?: string }
+  msg: { text?: string; image?: string; postId?: string; replyTo?: string }
 ): Promise<ChatMessage[]> {
   if (await isCloud()) {
     const sent = await cloud.sendMessage(thread.profileId, msg);
     return current.some(m => m.id === sent.id) ? current : [...current, sent];
   }
-  const updated = [...current, { id: `m-${Date.now()}`, ...msg, sender: "me" as const }];
+  const updated = [
+    ...current,
+    { id: `m-${Date.now()}`, ...msg, sender: "me" as const, createdAt: new Date().toISOString() }
+  ];
   await saveDirectMessages(thread.id, updated as any);
   return updated;
 }
@@ -625,6 +789,35 @@ export async function setChatReaction(
   }
   await saveDirectMessages(thread.id, updated as any);
   return updated;
+}
+
+export async function deleteChatMessage(
+  thread: DirectThread,
+  current: ChatMessage[],
+  id: string
+): Promise<ChatMessage[]> {
+  const updated = current.map(m =>
+    m.id === id ? { ...m, deleted: true, text: undefined, image: undefined, postId: undefined, reaction: undefined } : m
+  );
+  if (await isCloud()) {
+    await cloud.deleteMessage(id);
+    return updated;
+  }
+  await saveDirectMessages(thread.id, updated as any);
+  return updated;
+}
+
+/** manda um look para várias conversas de uma vez */
+export async function sharePostToProfiles(post: FeedPost, profiles: UserProfile[], note?: string): Promise<void> {
+  for (const p of profiles) {
+    const thread = threadForProfile(p);
+    if (await isCloud()) {
+      await cloud.sendMessage(p.id, { postId: post.id, text: note?.trim() || undefined });
+    } else {
+      const current = await loadChat(thread);
+      await sendChatMessage(thread, current, { postId: post.id, text: note?.trim() || undefined });
+    }
+  }
 }
 
 export async function markThreadRead(thread: DirectThread): Promise<void> {

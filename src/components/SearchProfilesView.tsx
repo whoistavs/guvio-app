@@ -8,9 +8,12 @@ import {
   loadExplore,
   loadFollowedUsers,
   saveFollowedUsers,
-  searchLooks
+  searchLooks,
+  loadCityRanking
 } from "../services/storage";
+import { RankingGrid } from "./RankingGrid";
 import { FastImage } from "./FastImage";
+import { SuggestionsRow } from "./SuggestionsRow";
 
 const n = (v: string) =>
   v
@@ -37,7 +40,7 @@ export function SearchProfilesView({
   /** globo mostrado acima de "Em alta na comunidade" */
   globe?: React.ReactNode;
   /** cidade tocada no globo e os looks dela */
-  cityFocus?: { title: string; posts: FeedPost[] } | null;
+  cityFocus?: { title: string; city?: string; posts: FeedPost[] } | null;
   onClearCityFocus?: () => void;
   scrollEnabled?: boolean;
   /** texto para pesquisar ao abrir (ex.: uma #hashtag tocada no feed) */
@@ -53,6 +56,19 @@ export function SearchProfilesView({
   const [loadingExplore, setLoadingExplore] = useState(true);
   const [searching, setSearching] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [cityRank, setCityRank] = useState<FeedPost[] | null>(null);
+
+  // ranking da cidade tocada no globo (busca no servidor os mais curtidos de lá)
+  useEffect(() => {
+    setCityRank(null);
+    const city = cityFocus?.city;
+    if (!city) return;
+    let alive = true;
+    loadCityRanking(city).then(list => alive && setCityRank(list));
+    return () => {
+      alive = false;
+    };
+  }, [cityFocus?.city]);
 
   useEffect(() => {
     if (searchRequest?.text) {
@@ -223,18 +239,24 @@ export function SearchProfilesView({
             <>
               <View style={s.cityHead}>
                 <Text style={[s.label, { color: colors.muted, marginTop: 0, marginBottom: 0, flex: 1 }]} numberOfLines={1}>
-                  LOOKS DE {cityFocus.title.toUpperCase()}
+                  🏆 TOP LOOKS DE {cityFocus.title.toUpperCase()}
                 </Text>
                 <Pressable onPress={onClearCityFocus} hitSlop={10} style={[s.clear, { backgroundColor: colors.surface }]}>
                   <X size={13} color={colors.text} />
                   <Text style={{ color: colors.text, fontWeight: "800", fontSize: 11 }}>Limpar</Text>
                 </Pressable>
               </View>
-              {cityFocus.posts.length === 0 ? (
-                <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 6 }}>Nenhum look nessa cidade ainda.</Text>
-              ) : (
-                renderGrid(cityFocus.posts)
-              )}
+              {(() => {
+                const ranked =
+                  cityRank && cityRank.length
+                    ? cityRank
+                    : [...cityFocus.posts].sort((a, b) => (b.likes || 0) - (a.likes || 0));
+                return ranked.length === 0 ? (
+                  <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 6 }}>Nenhum look nessa cidade ainda.</Text>
+                ) : (
+                  <RankingGrid posts={ranked} onOpenPost={onOpenPost} />
+                );
+              })()}
             </>
           ) : null}
           <Text style={[s.label, { color: colors.muted }]}>EM ALTA NA COMUNIDADE</Text>
@@ -248,6 +270,9 @@ export function SearchProfilesView({
           ) : (
             renderGrid(explore)
           )}
+          <View style={{ marginHorizontal: -20, marginTop: 10 }}>
+            <SuggestionsRow onOpenProfile={onOpenProfile} title="Quem seguir" />
+          </View>
           <Text style={[s.label, { color: colors.muted }]}>MEMBROS DA COMUNIDADE</Text>
           {renderPeople(profiles.slice(0, 20))}
         </>

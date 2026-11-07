@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { Camera, Check, ImagePlus, Layers, Plus, Send, Sparkles, Tag, Trash2, X } from "lucide-react-native";
+import { BarChart3, Camera, Check, ImagePlus, Layers, Plus, Send, Sparkles, Tag, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { ClothingTag, Outfit, OutfitStyle, STYLES, WardrobeItem } from "../data/mockData";
 import { StyleCard } from "./OutfitCard";
@@ -15,6 +15,8 @@ import {
   deleteOutfit
 } from "../services/storage";
 import { successFeedback, tapFeedback } from "../utils/haptics";
+import { DailyLookCard } from "./DailyLookCard";
+import { WardrobeStatsModal } from "./WardrobeStatsModal";
 import { WeatherData } from "../services/weather";
 import { getSavedAuthSession } from "../services/auth";
 import { ImagePlaceholder, FastImage, preloadImages } from "./FastImage";
@@ -55,6 +57,7 @@ export function WardrobeView({
   const [picked, setPicked] = useState<string[]>([]);
   const [outfitName, setOutfitName] = useState("");
   const [outfits, setOutfits] = useState<Outfit[]>([]);
+  const [showStats, setShowStats] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
   const [selectedStyle, setSelectedStyle] = useState<OutfitStyle | null>(null);
   const [aiResult, setAiResult] = useState<AIOutfitRecommendation | null>(null);
@@ -257,11 +260,21 @@ export function WardrobeView({
   return (
     <>
       <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={s.c}>
-        {/* Banner Dica de Estilo da IA por Clima */}
-        <View style={[s.weatherTipBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Sparkles size={16} color="#007AFF" />
-          <Text style={[s.weatherTipText, { color: colors.text }]}>{weatherTip}</Text>
-        </View>
+        <DailyLookCard
+          items={items}
+          weather={currentWeather}
+          onSave={async pieces => {
+            try {
+              const o = await saveOutfit("Look do dia", pieces.map(p => p.id));
+              setOutfits(prev => [o, ...prev]);
+              successFeedback();
+              Alert.alert("Look salvo", "Está em \"Meus looks\", mais abaixo.");
+            } catch (e: any) {
+              Alert.alert("Não foi possível salvar", e?.message || "Tente novamente.");
+            }
+          }}
+          onPublish={onPublishOutfit ? pieces => publishPieces(pieces, "Look do dia") : undefined}
+        />
 
         <Text style={[s.badge, { color: colors.muted }]}>SELEÇÃO DE ESTILO</Text>
         <Text style={[s.h, { color: colors.text }]}>Qual estilo você quer hoje?</Text>
@@ -333,6 +346,11 @@ export function WardrobeView({
               </Pressable>
             ) : (
               <View style={{ flexDirection: "row", gap: 8 }}>
+                {items.length > 0 ? (
+                  <Pressable onPress={() => setShowStats(true)} style={[s.add, { backgroundColor: colors.surface }]}>
+                    <BarChart3 size={16} color={colors.text} />
+                  </Pressable>
+                ) : null}
                 {items.length >= 2 ? (
                   <Pressable onPress={() => setBuilding(true)} style={[s.add, { backgroundColor: colors.surface }]}>
                     <Layers size={16} color={colors.text} />
@@ -438,6 +456,8 @@ export function WardrobeView({
           </View>
         </View>
       </ScrollView>
+
+      <WardrobeStatsModal visible={showStats} onClose={() => setShowStats(false)} items={items} outfits={outfits} />
 
       {/* AI Recommendation Modal */}
       <Modal visible={!!selectedStyle} transparent animationType="fade" onRequestClose={() => setSelectedStyle(null)}>

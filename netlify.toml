@@ -1,0 +1,16 @@
+# Deploy da versão web do Guvio na Netlify (conectando o repositório ou arrastando a pasta dist)
+[build]
+  command = "npx expo export --platform web --output-dir dist"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # chave pública (publishable) do Supabase: pode ficar no código
+  EXPO_PUBLIC_SUPABASE_URL = "https://kammkctketpkkdnukfme.supabase.co"
+  EXPO_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_0B7Co6SegZB_VxJ61uHQCA_UgOuNOO5"
+
+# o app é de uma página só: qualquer endereço abre o index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

@@ -25,10 +25,12 @@ import { likeFeedback, tapFeedback } from "../utils/haptics";
 import { isCloud } from "../services/supabase";
 import { CommentsModal } from "./CommentsModal";
 import { StoryViewerModal, CreateStoryModal } from "./StoryViewerModal";
+import { CollectionPickerModal } from "./CollectionPickerModal";
+import { SuggestionsRow } from "./SuggestionsRow";
 import { SharePostModal } from "./SharePostModal";
 import { useAppTheme } from "../context/AppTheme";
 import { FastImage, preloadImages } from "./FastImage";
-import { loadStories, saveStories, loadFollowedUsers, saveFollowedUsers } from "../services/storage";
+import { loadStories, saveStories, loadFollowedUsers, saveFollowedUsers, getCachedStories } from "../services/storage";
 import { FeedPostSkeleton } from "./SkeletonLoader";
 
 export function HomeFeed({
@@ -40,7 +42,8 @@ export function HomeFeed({
   onClearFilter,
   onOpenProfile,
   onOpenTag,
-  refreshKey = 0
+  refreshKey = 0,
+  belowStories
 }: {
   posts: FeedPost[];
   setPosts: React.Dispatch<React.SetStateAction<FeedPost[]>>;
@@ -52,6 +55,8 @@ export function HomeFeed({
   onOpenTag?: (tag: string) => void;
   /** muda quando o usuário puxa para atualizar: recarrega os stories */
   refreshKey?: number;
+  /** algo entre os stories e o feed (ex.: desafio da semana) */
+  belowStories?: React.ReactNode;
 }) {
   const { colors } = useAppTheme();
   const [isLoading, setIsLoading] = useState(true);
@@ -60,7 +65,8 @@ export function HomeFeed({
   const [feedTab, setFeedTab] = useState<"forYou" | "following">("forYou");
   const [commentPost, setCommentPost] = useState<FeedPost | null>(null);
   const [sharePost, setSharePost] = useState<FeedPost | null>(null);
-  const [stories, setStories] = useState<UserStoryGroup[]>([]);
+  const [collectionPost, setCollectionPost] = useState<FeedPost | null>(null);
+  const [stories, setStories] = useState<UserStoryGroup[]>(() => getCachedStories());
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 800);
@@ -283,6 +289,8 @@ export function HomeFeed({
         })}
       </ScrollView>
 
+      {!cityFilter && !countryFilter && belowStories ? belowStories : null}
+
       {/* For You / Following Tab Switcher */}
       {!cityFilter && !countryFilter && (
         <View style={[s.feedTabsContainer, { borderBottomColor: colors.border }]}>
@@ -362,6 +370,11 @@ export function HomeFeed({
               ? "Siga criadores de moda no feed ou na busca para ver publicações deles aqui."
               : "Ainda não temos publicações desse destino no feed. Publique o primeiro look para inaugurar!"}
           </Text>
+          {feedTab === "following" ? (
+            <View style={{ alignSelf: "stretch", marginTop: 8 }}>
+              <SuggestionsRow onOpenProfile={prof => onOpenProfile?.(prof.username)} title="Quem seguir" reloadKey={refreshKey} />
+            </View>
+          ) : null}
         </View>
       ) : (
         visiblePosts.map((p, pIdx) => {
@@ -474,7 +487,15 @@ export function HomeFeed({
                       <Send size={23} color={colors.icon} style={{ transform: [{ rotate: "-22deg" }] }} />
                     </Pressable>
                   </View>
-                  <Pressable onPress={() => toggleLikeOrSave(p.id, "isSaved")} hitSlop={8}>
+                  <Pressable
+                    onPress={() => toggleLikeOrSave(p.id, "isSaved")}
+                    onLongPress={() => {
+                      tapFeedback();
+                      setCollectionPost(p);
+                    }}
+                    delayLongPress={350}
+                    hitSlop={8}
+                  >
                     <Bookmark size={24} color={colors.icon} fill={p.isSaved ? colors.icon : "none"} />
                   </Pressable>
                 </View>
@@ -510,39 +531,11 @@ export function HomeFeed({
                 </View>
               </View>
 
-              {/* Instagram Style: Suggested Accounts Carousel after 2nd post */}
-              {pIdx === 1 && (
-                <View style={[s.suggestionsSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <Text style={[s.suggestionsTitle, { color: colors.text }]}>Sugestões para você seguir</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.suggestionsScroll}>
-                    {suggested.filter(prof => prof.id !== myId).map(prof => {
-                      const isF = followedUserIds.includes(prof.id);
-                      return (
-                        <View key={prof.id} style={[s.suggestedCard, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-                          <FastImage source={prof.avatar} style={s.suggestedAvatar} contentFit="cover" />
-                          <Text numberOfLines={1} style={[s.suggestedName, { color: colors.text }]}>
-                            {prof.displayName}
-                          </Text>
-                          <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 10 }}>
-                            {prof.location}
-                          </Text>
-                          <Pressable
-                            onPress={() => handleToggleFollow(prof.id)}
-                            style={[
-                              s.suggestedFollowBtn,
-                              { backgroundColor: isF ? colors.surface : "#0095F6" }
-                            ]}
-                          >
-                            <Text style={[s.suggestedFollowText, { color: isF ? colors.text : "#FFF" }]}>
-                              {isF ? "Seguindo" : "Seguir"}
-                            </Text>
-                          </Pressable>
-                        </View>
-                      );
-                    })}
-                  </ScrollView>
+              {pIdx === 1 ? (
+                <View style={[s.suggestionsSection, { backgroundColor: colors.surface, borderColor: colors.border, paddingHorizontal: 0, paddingVertical: 0 }]}>
+                  <SuggestionsRow onOpenProfile={prof => onOpenProfile?.(prof.username)} reloadKey={refreshKey} />
                 </View>
-              )}
+              ) : null}
             </React.Fragment>
           );
         })
@@ -559,11 +552,24 @@ export function HomeFeed({
         post={commentPost}
         visible={!!commentPost}
         onClose={() => setCommentPost(null)}
+        onOpenProfile={u => {
+          setCommentPost(null);
+          onOpenProfile?.(u);
+        }}
+        onOpenTag={t => {
+          setCommentPost(null);
+          onOpenTag?.(t);
+        }}
         onCommented={(postId, total) =>
           setPosts(prev => prev.map(p => (p.id === postId ? { ...p, commentsCount: total } : p)))
         }
       />
       <SharePostModal post={sharePost} visible={!!sharePost} onClose={() => setSharePost(null)} />
+      <CollectionPickerModal
+        post={collectionPost}
+        onClose={() => setCollectionPost(null)}
+        onSaved={id => setPosts(prev => prev.map(x => (x.id === id ? { ...x, isSaved: true } : x)))}
+      />
       <StoryViewerModal
         visible={activeStoryIdx !== null}
         onClose={() => setActiveStoryIdx(null)}
