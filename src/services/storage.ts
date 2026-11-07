@@ -427,7 +427,11 @@ export async function loadStories(): Promise<UserStoryGroup[]> {
       storySnapshot = new Set(groups.flatMap(g => g.stories.map(st => st.id)));
       return groups;
     } catch (e) {
-      return [];
+      // mesmo se a busca falhar, mostra a bolinha "Seu story" para poder publicar
+      const me = await cloud.getMyProfile().catch(() => null);
+      return me
+        ? [{ id: me.id, username: me.username, displayName: "Seu story", avatar: me.avatar, isMe: true, hasUnseen: false, stories: [] }]
+        : [];
     }
   }
   return FastStorage.getItemSync(KEYS.STORIES, INITIAL_STORIES);
