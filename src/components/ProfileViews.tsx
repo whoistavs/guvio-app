@@ -25,6 +25,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { FeedPost, UserProfile, MOCK_FEED_POSTS } from "../data/mockData";
 import { ScreenHeader } from "./ScreenHeader";
+import { Toggle } from "./Toggle";
 import { useAppTheme } from "../context/AppTheme";
 import {
   loadSavedProfile,
@@ -725,11 +726,11 @@ export function SettingsView({
           </Pressable>
         );
       })}
-      <View style={[s.setting, { borderBottomColor: colors.border }]}>
+      <Pressable onPress={toggle} style={[s.setting, { borderBottomColor: colors.border }]}>
         <Moon size={21} color={colors.icon} />
         <Text style={[s.settingText, { color: colors.text }]}>Modo noturno</Text>
-        <Switch value={dark} onValueChange={toggle} />
-      </View>
+        <Toggle value={dark} onValueChange={toggle} />
+      </Pressable>
       {onSignOut ? (
         <Pressable onPress={handleConfirmSignOut} style={[s.setting, { borderBottomColor: colors.border, marginTop: 12 }]}>
           <LogOut size={21} color="#FF3B30" />
