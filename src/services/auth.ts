@@ -2,7 +2,7 @@ import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { FastStorage } from "./FastStorage";
-import { registerNewProfile, isUsernameTaken, loadSavedProfile } from "./storage";
+import { registerNewProfile, isUsernameTaken, loadSavedProfile, clearMyCache } from "./storage";
 import { supabase, supabaseConfigured } from "./supabase";
 import type { Session } from "@supabase/supabase-js";
 import * as WebBrowser from "expo-web-browser";
@@ -363,6 +363,7 @@ export async function getSavedAuthSession(): Promise<AuthSession | null> {
 }
 
 export async function signOut(): Promise<void> {
+  clearMyCache();
   if (supabase) {
     try {
       await supabase.auth.signOut();

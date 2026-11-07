@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import {
   Bookmark,
   Camera,
@@ -35,6 +35,8 @@ import {
   loadUserPosts,
   loadMyPosts,
   loadSavedOnlyPosts,
+  getCachedMyProfile,
+  getCachedMyPosts,
   loadBlocked,
   setBlocked
 } from "../services/storage";
@@ -303,8 +305,9 @@ export function MyProfileView({
   onOpenFollows?: (p: UserProfile, kind: "followers" | "following") => void;
 }) {
   const { colors } = useAppTheme();
-  const [profile, setProfileState] = useState<UserProfile>(INITIAL_USER_PROFILE);
-  const [userPosts, setUserPosts] = useState<FeedPost[]>([]);
+  // começa com o último perfil salvo (sem piscar a tela de exemplo)
+  const [profile, setProfileState] = useState<UserProfile | null>(() => getCachedMyProfile());
+  const [userPosts, setUserPosts] = useState<FeedPost[]>(() => getCachedMyPosts() || []);
   const [savedPosts, setSavedPosts] = useState<FeedPost[]>([]);
   const [selectedPost, setSelectedPost] = useState<FeedPost | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
@@ -320,6 +323,17 @@ export function MyProfileView({
   const [editWebsite, setEditWebsite] = useState("");
   const [editLocation, setEditLocation] = useState("");
   const [editAvatar, setEditAvatar] = useState("");
+
+  useEffect(() => {
+    const p = getCachedMyProfile();
+    if (!p) return;
+    setEditName(p.displayName);
+    setEditUsername(p.username);
+    setEditBio(p.bio || "");
+    setEditWebsite(p.website || "");
+    setEditLocation(p.location);
+    setEditAvatar(p.avatar);
+  }, []);
 
   useEffect(() => {
     getSavedAuthSession().then(session => {
@@ -375,7 +389,7 @@ export function MyProfileView({
   };
 
   const handleSaveProfile = async () => {
-    if (savingProfile) return;
+    if (savingProfile || !profile) return;
     const updated: UserProfile = {
       ...profile,
       displayName: editName.trim() || profile.displayName,
@@ -398,6 +412,14 @@ export function MyProfileView({
       setSavingProfile(false);
     }
   };
+
+  if (!profile) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator color={colors.muted} />
+      </View>
+    );
+  }
 
   return (
     <>

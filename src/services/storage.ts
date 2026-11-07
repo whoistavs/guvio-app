@@ -217,7 +217,8 @@ export async function loadUserPosts(profile: UserProfile): Promise<FeedPost[]> {
 export async function loadMyPosts(): Promise<FeedPost[]> {
   if (await isCloud()) {
     const me = await cloud.getMyProfile();
-    return cloud.fetchUserPosts(me.id);
+    myPostsCache = await cloud.fetchUserPosts(me.id);
+    return myPostsCache;
   }
   const all: FeedPost[] = FastStorage.getItemSync(KEYS.POSTS, []);
   return all.filter(p => p.creatorName === "Você" || p.userId === "my-profile" || p.userId?.startsWith("user-"));
@@ -336,11 +337,33 @@ export async function findProfile(idOrUsername: string): Promise<UserProfile | n
   return all.find(p => p.id === idOrUsername || p.username.toLowerCase() === clean || p.displayName.toLowerCase() === clean) || null;
 }
 
+// Último perfil carregado: abre o Perfil na hora, sem piscar dados de exemplo
+const ME_CACHE_KEY = "guvio_me_cache_v1";
+let myPostsCache: FeedPost[] | null = null;
+
+export function getCachedMyProfile(): UserProfile | null {
+  return FastStorage.getItemSync<UserProfile | null>(ME_CACHE_KEY, null);
+}
+
+export function getCachedMyPosts(): FeedPost[] | null {
+  return myPostsCache;
+}
+
+export function clearMyCache() {
+  FastStorage.setItemSync(ME_CACHE_KEY, null);
+  myPostsCache = null;
+}
+
 export async function loadSavedProfile(userId?: string): Promise<UserProfile> {
   if (await isCloud()) {
     try {
-      return await cloud.getMyProfile();
-    } catch (e) {}
+      const me = await cloud.getMyProfile();
+      FastStorage.setItemSync(ME_CACHE_KEY, me);
+      return me;
+    } catch (e) {
+      const cached = getCachedMyProfile();
+      if (cached) return cached;
+    }
   }
   const key = userId ? `${KEYS.PROFILE}_${userId}` : KEYS.PROFILE;
   const customUsers: UserProfile[] = FastStorage.getItemSync(KEYS.REGISTERED_USERS, []);
@@ -360,7 +383,9 @@ export async function loadSavedProfile(userId?: string): Promise<UserProfile> {
 
 export async function saveProfile(profile: UserProfile, userId?: string): Promise<UserProfile> {
   if (await isCloud()) {
-    return cloud.updateMyProfile(profile); // lança erro se o @ já existir
+    const saved = await cloud.updateMyProfile(profile); // lança erro se o @ já existir
+    FastStorage.setItemSync(ME_CACHE_KEY, saved);
+    return saved;
   }
   const cleanUsername = profile.username.trim().toLowerCase().replace(/^@/, "");
   const formatted: UserProfile = {
