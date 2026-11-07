@@ -443,7 +443,7 @@ export function CreateStoryModal({
 }
 
 const s = StyleSheet.create({
-  ownerBar: { position: "absolute", bottom: 34, left: 0, right: 0, flexDirection: "row", justifyContent: "center", gap: 40 },
+  ownerBar: { flexDirection: "row", justifyContent: "center", gap: 40, paddingBottom: 30, zIndex: 10 },
   ownerBtn: { alignItems: "center", gap: 4 },
   ownerText: { color: "#FFF", fontSize: 11, fontWeight: "800" },
   viewersSheet: {
