@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Dimensions, Linking, SafeAreaView, ScrollView, StatusBar, StyleSheet, View } from "react-native";
 import { AppThemeProvider, useAppTheme } from "./src/context/AppTheme";
+import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import { Header } from "./src/components/Header";
 import { Globe3D, GlobeFocusTarget, GlobeMarker } from "./src/components/Globe3D";
 import { GlobeLocationSearch, GlobeSearchSelection } from "./src/components/GlobeLocationSearch";
@@ -419,10 +420,33 @@ function Guvio() {
   );
 }
 
+// Erros de JavaScript fora da tela (timers, rede) não fecham mais o app:
+// mostram um aviso com a mensagem, para sabermos o que aconteceu.
+const errorUtils = (global as any).ErrorUtils;
+if (errorUtils && !__DEV__) {
+  const previous = errorUtils.getGlobalHandler?.();
+  let lastShown = 0;
+  errorUtils.setGlobalHandler((error: any, isFatal?: boolean) => {
+    const now = Date.now();
+    if (now - lastShown > 4000) {
+      lastShown = now;
+      try {
+        Alert.alert(
+          "Ops, algo deu errado",
+          `${String(error?.message || error).slice(0, 300)}\n\nMande um print desta mensagem para corrigirmos.`
+        );
+      } catch (e) {}
+    }
+    if (!isFatal) previous?.(error, isFatal);
+  });
+}
+
 export default function App() {
   return (
     <AppThemeProvider>
-      <Guvio />
+      <ErrorBoundary>
+        <Guvio />
+      </ErrorBoundary>
     </AppThemeProvider>
   );
 }

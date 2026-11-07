@@ -5,11 +5,25 @@ import type {} from "@react-three/fiber";
 import { latLonToVector3 } from "../data/mockData";
 import { GLOBE_DOTS_B64, GLOBE_DOTS_COUNT } from "../data/globeDots";
 import { useAppTheme } from "../context/AppTheme";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { rotationToFace as rotationToFaceBase } from "../utils/globeMath";
 
 const Fiber = Platform.OS === "web" ? require("@react-three/fiber") : require("@react-three/fiber/native");
 const Canvas = Fiber.Canvas as React.ComponentType<any>;
-const useFrame = Fiber.useFrame as (callback: (state: any, delta: number) => void) => void;
+const rawUseFrame = Fiber.useFrame as (callback: (state: any, delta: number) => void) => void;
+/** useFrame que nunca derruba o app: se der erro, o quadro é ignorado */
+const useFrame = (cb: (state: any, delta: number) => void) =>
+  rawUseFrame((state: any, delta: number) => {
+    try {
+      cb(state, delta);
+    } catch (e) {}
+  });
+
+// Proteção contra o app fechar ao desenhar o globo: se fechar com o globo aberto,
+// na próxima vez usamos um modo mais simples (0 = completo, 1 = simples, 2 = desligado)
+const GUARD_KEY = "guvio_globe_guard_v1";
+const LEVEL_KEY = "guvio_globe_level_v1";
 
 // ---------------------------------------------------------------------
 // Tipos públicos
@@ -192,6 +206,20 @@ function LandDots({ color, pixelRatio }: { color: string; pixelRatio: number }) 
   return <points geometry={geometry} material={material} frustumCulled={false} />;
 }
 
+/** versão simples dos pontos (sem shader próprio), usada no modo seguro */
+function LandDotsLite({ color }: { color: string }) {
+  const geometry = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(landDotPositions(), 3));
+    return g;
+  }, []);
+  return (
+    <points geometry={geometry} frustumCulled={false}>
+      <pointsMaterial color={color} size={0.03} sizeAttenuation />
+    </points>
+  );
+}
+
 function Atmosphere({ color }: { color: string }) {
   const material = useMemo(
     () =>
@@ -349,6 +377,7 @@ function Arc({ from, to, color }: { from: { lat: number; lon: number }; to: { la
 }
 
 interface SceneProps {
+  lite: boolean;
   dark: boolean;
   pixelRatio: number;
   markers: GlobeMarker[];
@@ -363,6 +392,7 @@ interface SceneProps {
 }
 
 function Scene({
+  lite,
   dark,
   pixelRatio,
   markers,
@@ -414,13 +444,13 @@ function Scene({
 
   return (
     <>
-      <Atmosphere color={colors.glow} />
+      {lite ? null : <Atmosphere color={colors.glow} />}
       <group ref={groupRef}>
         <mesh>
           <sphereGeometry args={[R * 0.995, 64, 64]} />
           <meshBasicMaterial color={colors.ocean} />
         </mesh>
-        <LandDots color={colors.dots} pixelRatio={pixelRatio} />
+        {lite ? <LandDotsLite color={colors.dots} /> : <LandDots color={colors.dots} pixelRatio={pixelRatio} />}
         <Markers markers={markers} selectedId={selected?.id} color={colors.marker} />
         {origin ? <MyLocation origin={origin} color={colors.me} /> : null}
         {origin && selected ? <Arc from={origin} to={selected} color={colors.arc} /> : null}
@@ -437,7 +467,41 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
     const { dark } = useAppTheme();
     const screenWidth = Dimensions.get("window").width;
     const size = Math.min(screenWidth * 0.9, 380);
-    const pixelRatio = Math.min(PixelRatio.get(), 2.5);
+    const pixelRatio = Math.min(PixelRatio.get(), 2);
+    const [level, setLevel] = useState<number | null>(null);
+
+    // decide o modo do globo (e arma a proteção) antes de desenhar
+    useEffect(() => {
+      let cleared: ReturnType<typeof setTimeout> | undefined;
+      (async () => {
+        try {
+          const [guard, saved] = await Promise.all([AsyncStorage.getItem(GUARD_KEY), AsyncStorage.getItem(LEVEL_KEY)]);
+          let lvl = Number(saved || 0) || 0;
+          if (guard === "1") {
+            lvl = Math.min(2, lvl + 1); // fechou da última vez: usa um modo mais simples
+            await AsyncStorage.setItem(LEVEL_KEY, String(lvl));
+          }
+          if (lvl < 2) await AsyncStorage.setItem(GUARD_KEY, "1");
+          setLevel(lvl);
+          // passou alguns segundos desenhando sem fechar: está seguro
+          cleared = setTimeout(() => AsyncStorage.removeItem(GUARD_KEY).catch(() => {}), 6000);
+        } catch (e) {
+          setLevel(1);
+        }
+      })();
+      return () => {
+        if (cleared) clearTimeout(cleared);
+        AsyncStorage.removeItem(GUARD_KEY).catch(() => {});
+      };
+    }, []);
+
+    const disableGlobe = (err?: Error) => {
+      AsyncStorage.setItem(LEVEL_KEY, "2").catch(() => {});
+      AsyncStorage.removeItem(GUARD_KEY).catch(() => {});
+      setGlobeError(err?.message || "erro gráfico");
+      setLevel(2);
+    };
+    const [globeError, setGlobeError] = useState<string | null>(null);
 
     const startRot = origin ? rotationToFace(origin.lat, origin.lon) : { x: 0.35, y: -0.6 };
     const rotationRef = useRef<Rotation>(startRot);
@@ -588,26 +652,51 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
           onLayout={e => setLayout(e.nativeEvent.layout)}
           {...pan.panHandlers}
         >
-          <Canvas
-            camera={{ position: [0, 0, CAMERA_Z], fov: 42, near: 0.1, far: 100 }}
-            style={{ width: "100%", height: "100%", backgroundColor: "transparent" }}
-            gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
-            dpr={pixelRatio}
-          >
-            <Scene
-              dark={dark}
-              pixelRatio={pixelRatio}
-              markers={markers}
-              selected={selected}
-              origin={origin}
-              rotationRef={rotationRef}
-              velocityRef={velocityRef}
-              targetRef={targetRef}
-              interactingRef={interactingRef}
-              idleRef={idleRef}
-              cameraZRef={cameraZRef}
-            />
-          </Canvas>
+          {level === null ? null : level >= 2 ? (
+            <Pressable
+              style={styles.off}
+              onLongPress={() => {
+                // segurar reativa o globo completo
+                AsyncStorage.multiRemove([LEVEL_KEY, GUARD_KEY]).catch(() => {});
+                setGlobeError(null);
+                setLevel(0);
+              }}
+            >
+              <Text style={[styles.offText, { color: dark ? "#8E8E93" : "#8A8A8E" }]}>
+                🌍 Globo em modo de segurança
+              </Text>
+              {globeError ? (
+                <Text style={[styles.offSub, { color: dark ? "#6C6C70" : "#A0A0A5" }]} numberOfLines={3}>
+                  {globeError}
+                </Text>
+              ) : null}
+              <Text style={[styles.offSub, { color: dark ? "#6C6C70" : "#A0A0A5" }]}>Segure aqui para tentar de novo</Text>
+            </Pressable>
+          ) : (
+            <ErrorBoundary fallback={() => null} onError={disableGlobe}>
+                        <Canvas
+              camera={{ position: [0, 0, CAMERA_Z], fov: 42, near: 0.1, far: 100 }}
+              style={{ width: "100%", height: "100%", backgroundColor: "transparent" }}
+              gl={{ alpha: true, antialias: false, powerPreference: "default" }}
+              dpr={level === 0 ? pixelRatio : 1}
+            >
+              <Scene
+                lite={level !== 0}
+                dark={dark}
+                pixelRatio={pixelRatio}
+                markers={markers}
+                selected={selected}
+                origin={origin}
+                rotationRef={rotationRef}
+                velocityRef={velocityRef}
+                targetRef={targetRef}
+                interactingRef={interactingRef}
+                idleRef={idleRef}
+                cameraZRef={cameraZRef}
+              />
+            </Canvas>
+            </ErrorBoundary>
+          )}
         </View>
 
         {selected ? (
@@ -655,5 +744,8 @@ const styles = StyleSheet.create({
   badgeDot: { width: 8, height: 8, borderRadius: 4 },
   badgeTitle: { fontSize: 14, fontWeight: "800" },
   badgeSub: { fontSize: 10, fontWeight: "600", marginTop: 1 },
-  hint: { position: "absolute", bottom: 4, fontSize: 11, fontWeight: "600" }
+  hint: { position: "absolute", bottom: 4, fontSize: 11, fontWeight: "600" },
+  off: { flex: 1, alignItems: "center", justifyContent: "center", gap: 6, padding: 24 },
+  offText: { fontSize: 14, fontWeight: "800" },
+  offSub: { fontSize: 11, textAlign: "center" }
 });
