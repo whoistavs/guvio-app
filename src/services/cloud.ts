@@ -76,7 +76,10 @@ function imageSize(uri: string): Promise<{ width: number; height: number } | nul
 }
 
 /** Reduz a foto para no máximo 1440px e JPEG 80% antes de enviar (bem mais rápido no 4G) */
-async function compress(uri: string): Promise<string> {
+// tamanho máximo (lado maior) por tipo de foto: avatar aparece pequeno, não precisa de 1440px
+const SIDE_BY_FOLDER: Record<string, number> = { avatar: 480, wardrobe: 1000, wishlist: 800, feedback: 1280 };
+
+async function compress(uri: string, folder = ""): Promise<string> {
   if (Platform.OS === "web") return uri;
   try {
     const { manipulateAsync, SaveFormat } = require("expo-image-manipulator") as typeof import("expo-image-manipulator");
@@ -84,7 +87,7 @@ async function compress(uri: string): Promise<string> {
     const actions: any[] = [];
     // economia de dados: fotos menores e mais comprimidas
     const saver = require("./settings").isDataSaver() as boolean;
-    const side = saver ? 1080 : MAX_SIDE;
+    const side = Math.min(saver ? 1080 : MAX_SIDE, SIDE_BY_FOLDER[folder] || MAX_SIDE);
     if (size && Math.max(size.width, size.height) > side) {
       actions.push({ resize: size.width >= size.height ? { width: side } : { height: side } });
     }
@@ -99,7 +102,7 @@ async function compress(uri: string): Promise<string> {
 export async function uploadImage(uri: string, folder: string): Promise<string> {
   if (!uri || isRemote(uri)) return uri;
   const uid = await me();
-  uri = await compress(uri);
+  uri = await compress(uri, folder);
   const ext = (uri.split("?")[0].split(".").pop() || "jpg").toLowerCase().slice(0, 5);
   const safeExt = ["jpg", "jpeg", "png", "webp", "heic", "gif"].includes(ext) ? ext : "jpg";
   const contentType = safeExt === "jpg" ? "image/jpeg" : `image/${safeExt}`;
@@ -245,8 +248,21 @@ async function mapPosts(rows: any[]): Promise<FeedPost[]> {
 }
 
 /** ids de quem eu bloqueei/silenciei e dos posts que denunciei (somem do meu feed) */
+// guardado por 60s: o feed, o Explorar e o tempo real pedem isso várias vezes seguidas
+let hiddenCache: { at: number; uid: string; v: { users: Set<string>; posts: Set<string> } } | null = null;
+export function invalidateHidden() {
+  hiddenCache = null;
+}
+
 async function hiddenSets(): Promise<{ users: Set<string>; posts: Set<string> }> {
   const uid = await me();
+  if (hiddenCache && hiddenCache.uid === uid && Date.now() - hiddenCache.at < 60000) return hiddenCache.v;
+  const v = await loadHiddenSets(uid);
+  hiddenCache = { at: Date.now(), uid, v };
+  return v;
+}
+
+async function loadHiddenSets(uid: string): Promise<{ users: Set<string>; posts: Set<string> }> {
   const [b, r, m] = await Promise.all([
     db().from("blocks").select("blocked_id").eq("blocker_id", uid),
     db().from("reports").select("post_id").eq("reporter_id", uid),
@@ -308,6 +324,7 @@ export async function updateCaption(postId: string, caption: string) {
 
 export async function reportPost(postId: string, reason: string) {
   const uid = await me();
+  invalidateHidden();
   const r = await db().from("reports").insert({ reporter_id: uid, post_id: postId, reason });
   if (r.error && r.error.code !== "23505") throw new Error(r.error.message);
 }
@@ -731,9 +748,13 @@ export async function fetchMutedIds(): Promise<string[]> {
 export async function setMuted(targetId: string, on: boolean) {
   const uid = await me();
   if (on) {
+    invalidateHidden();
     const r = await db().from("mutes").insert({ muter_id: uid, muted_id: targetId });
     if (r.error && r.error.code !== "23505") throw new Error(r.error.message);
-  } else check(await db().from("mutes").delete().eq("muter_id", uid).eq("muted_id", targetId));
+  } else {
+    invalidateHidden();
+    check(await db().from("mutes").delete().eq("muter_id", uid).eq("muted_id", targetId));
+  }
 }
 
 export async function fetchFollowList(userId: string, kind: "followers" | "following"): Promise<UserProfile[]> {
@@ -1191,10 +1212,12 @@ export async function fetchBlocked(): Promise<UserProfile[]> {
 export async function setBlocked(targetId: string, on: boolean) {
   const uid = await me();
   if (on) {
+    invalidateHidden();
     const r = await db().from("blocks").insert({ blocker_id: uid, blocked_id: targetId });
     if (r.error && r.error.code !== "23505") throw new Error(r.error.message);
     await setFollow(targetId, false).catch(() => {});
   } else {
+    invalidateHidden();
     check(await db().from("blocks").delete().eq("blocker_id", uid).eq("blocked_id", targetId));
   }
 }
@@ -1204,6 +1227,7 @@ export async function setBlocked(targetId: string, on: boolean) {
 // ---------------------------------------------------------------------
 export function subscribeFeed(handlers: {
   onNewPost?: (p: FeedPost) => void;
+  onUpdatedPost?: (p: FeedPost) => void;
   onDeletedPost?: (id: string) => void;
   onLikesChanged?: (postId: string) => void;
   onCommentsChanged?: (postId: string) => void;
@@ -1212,10 +1236,22 @@ export function subscribeFeed(handlers: {
   const ch = client
     .channel(`feed-${Date.now()}`)
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, async payload => {
-      const id = (payload.new as any)?.id;
-      if (!id || !handlers.onNewPost) return;
-      const p = await fetchPost(id).catch(() => null);
+      const row = payload.new as any;
+      if (!row?.id || !handlers.onNewPost || row.archived) return;
+      // não mostra posts de quem eu silenciei/bloqueei
+      const hidden = await hiddenSets().catch(() => null);
+      if (hidden && (hidden.users.has(row.user_id) || hidden.posts.has(row.id))) return;
+      const p = await fetchPost(row.id).catch(() => null);
       if (p) handlers.onNewPost(p);
+    })
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "posts" }, async payload => {
+      const row = payload.new as any;
+      if (!row?.id) return;
+      // arquivado (ou ficou invisível para mim): sai do feed; editado: atualiza legenda/cidade/peças
+      if (row.archived) return handlers.onDeletedPost?.(row.id);
+      if (!handlers.onUpdatedPost) return;
+      const p = await fetchPost(row.id).catch(() => null);
+      if (p) handlers.onUpdatedPost(p);
     })
     .on("postgres_changes", { event: "DELETE", schema: "public", table: "posts" }, payload => {
       const id = (payload.old as any)?.id;

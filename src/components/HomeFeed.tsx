@@ -35,6 +35,14 @@ import { FastImage, preloadImages } from "./FastImage";
 import { loadStories, saveStories, loadFollowedUsers, saveFollowedUsers, getCachedStories, setMuted } from "../services/storage";
 import { FeedPostSkeleton } from "./SkeletonLoader";
 
+/** desenha de novo só quando algum item de "deps" mudar */
+const MemoRow = React.memo(
+  function MemoRow({ render }: { render: () => React.ReactNode; deps: unknown[] }) {
+    return <>{render()}</>;
+  },
+  (a, b) => a.deps.length === b.deps.length && a.deps.every((d, i) => Object.is(d, b.deps[i]))
+);
+
 export function HomeFeed({
   posts,
   setPosts,
@@ -234,19 +242,6 @@ export function HomeFeed({
     }
   };
 
-  const handleDeletePost = (id: string) => {
-    Alert.alert("Excluir publicação", "Tem certeza que deseja apagar este look do feed?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Excluir",
-        style: "destructive",
-        onPress: () => {
-          setPosts(v => v.filter(p => p.id !== id));
-        }
-      }
-    ]);
-  };
-
   // Filter posts according to Feed Tab, City, or Country
   let visiblePosts = posts.filter(p => !p.archived);
   if (cityFilter) {
@@ -398,8 +393,14 @@ export function HomeFeed({
       ) : (
         visiblePosts.map((p, pIdx) => {
           const isTagsVisible = visibleTagsPostId === p.id;
+          // Só redesenha este post quando algo dele mudou (curtir um look não redesenha o feed inteiro).
+          // Os handlers usados aqui leem o estado mais recente (setPosts(prev => ...)), então pular é seguro.
           return (
-            <FadeIn key={p.id} delay={pIdx < 4 ? pIdx * 70 : 0} from={14}>
+            <MemoRow
+              key={p.id}
+              deps={[p, isTagsVisible, heartAnimPostId === p.id, colors, myId, pIdx === 1 ? refreshKey : 0, pIdx < 4]}
+              render={() => (
+            <FadeIn delay={pIdx < 4 ? pIdx * 70 : 0} from={14}>
             <React.Fragment key={p.id}>
               <View style={[s.post, { borderBottomColor: colors.border }]}>
                 {/* Post Header */}
@@ -573,6 +574,8 @@ export function HomeFeed({
               ) : null}
             </React.Fragment>
             </FadeIn>
+              )}
+            />
           );
         })
       )}

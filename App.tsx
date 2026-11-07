@@ -107,6 +107,8 @@ function Guvio() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [offline, setOffline] = useState(false);
   const [newLooks, setNewLooks] = useState(0);
+  const postsRef = useRef<FeedPost[]>([]);
+  postsRef.current = posts;
   const scrollY = useRef(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -210,13 +212,24 @@ function Guvio() {
     isCloud().then(cloud => {
       if (!cloud) return;
       stopPresence = startPresence();
+      // junta várias curtidas seguidas do mesmo post numa consulta só, e só para posts que estão na tela
+      const pending = new Map<string, ReturnType<typeof setTimeout>>();
       const refreshCounts = (postId: string) => {
-        fetchPostCounts(postId).then(c => {
-          if (!c) return;
-          setPosts(prev =>
-            prev.map(p => (p.id === postId ? { ...p, likes: c.likes, commentsCount: c.comments } : p))
-          );
-        });
+        if (!postsRef.current.some(p => p.id === postId)) return;
+        const t = pending.get(postId);
+        if (t) clearTimeout(t);
+        pending.set(
+          postId,
+          setTimeout(() => {
+            pending.delete(postId);
+            fetchPostCounts(postId).then(c => {
+              if (!c) return;
+              setPosts(prev =>
+                prev.map(p => (p.id === postId ? { ...p, likes: c.likes, commentsCount: c.comments } : p))
+              );
+            });
+          }, 600)
+        );
       };
       stopAlerts = subscribeMyAlerts((title, body, kind, type) => {
         if (kind === "activity") setUnread(true);
@@ -238,12 +251,18 @@ function Guvio() {
           // se você está lá embaixo no feed, mostra o aviso em vez de pular a tela
           if (scrollY.current > 500) setNewLooks(n => n + 1);
         },
+        onUpdatedPost: up =>
+          setPosts(prev =>
+            prev.map(p =>
+              p.id === up.id
+                ? // mantém o que é só meu (curti/salvei) e atualiza o resto
+                  { ...up, isLiked: p.isLiked, isSaved: p.isSaved }
+                : p
+            )
+          ),
         onDeletedPost: id => setPosts(prev => prev.filter(p => p.id !== id)),
         onLikesChanged: refreshCounts,
-        onCommentsChanged: id => {
-          refreshCounts(id);
-          hasUnreadActivity().then(setUnread);
-        }
+        onCommentsChanged: refreshCounts
       });
     });
     return () => {

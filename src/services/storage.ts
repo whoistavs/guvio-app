@@ -120,8 +120,6 @@ export async function savePosts(posts: FeedPost[]): Promise<void> {
   FastStorage.setItemSync(KEYS.POSTS, posts);
   if (!(await isCloud())) return;
 
-  const myId = await cloudUserId();
-  const current = new Set(posts.map(p => p.id));
   const jobs: Promise<any>[] = [];
 
   for (const p of posts) {
@@ -130,9 +128,8 @@ export async function savePosts(posts: FeedPost[]): Promise<void> {
     if (before.isLiked !== !!p.isLiked) jobs.push(cloud.setLike(p.id, !!p.isLiked));
     if (before.isSaved !== !!p.isSaved) jobs.push(cloud.setSave(p.id, !!p.isSaved));
   }
-  postSnapshot.forEach((before, id) => {
-    if (!current.has(id) && before.userId && before.userId === myId) jobs.push(cloud.deletePost(id));
-  });
+  // Apagar post NUNCA acontece por "sumiu da lista" (arquivar, silenciar, recarregar...).
+  // Só removePost() apaga de verdade.
   snapshotPosts(posts);
   await Promise.all(jobs.map(j => j.catch(() => {})));
 }
