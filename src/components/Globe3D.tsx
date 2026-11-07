@@ -66,6 +66,8 @@ interface Globe3DProps {
   onSelectMarker?: (m: GlobeMarker) => void;
   onClearSelection?: () => void;
   focusTarget?: GlobeFocusTarget | null;
+  /** avisa quando o dedo está no globo (a tela de fora deve parar de rolar) */
+  onInteractionChange?: (active: boolean) => void;
 }
 
 type Rotation = { x: number; y: number };
@@ -566,7 +568,11 @@ function Scene({
 // Componente
 // ---------------------------------------------------------------------
 export const Globe3D: React.FC<Globe3DProps> = React.memo(
-  ({ markers = [], origin, selectedId, onSelectMarker, onClearSelection, focusTarget }) => {
+  ({ markers = [], origin, selectedId, onSelectMarker, onClearSelection, focusTarget, onInteractionChange }) => {
+    // guarda a função mais recente sem recriar o PanResponder
+    const interactionCb = useRef(onInteractionChange);
+    interactionCb.current = onInteractionChange;
+    const setTouching = (active: boolean) => interactionCb.current?.(active);
     const { dark } = useAppTheme();
     const screenWidth = Dimensions.get("window").width;
     const size = Math.min(screenWidth * 0.9, 380);
@@ -744,8 +750,12 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
         PanResponder.create({
           onStartShouldSetPanResponder: () => true,
           onMoveShouldSetPanResponder: () => true,
+          // o globo pega o gesto antes da tela que rola
+          onStartShouldSetPanResponderCapture: () => true,
+          onMoveShouldSetPanResponderCapture: () => true,
           onPanResponderTerminationRequest: () => false,
           onPanResponderGrant: e => {
+            setTouching(true);
             const g = gesture.current;
             interactingRef.current = true;
             targetRef.current = null;
@@ -793,6 +803,7 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
             v.x = v.x * 0.6 + ((dy * k) / dt) * 0.4;
           },
           onPanResponderRelease: () => {
+            setTouching(false);
             const g = gesture.current;
             interactingRef.current = false;
             idleRef.current = 0;
@@ -803,6 +814,7 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
             if (g.moved < 10) pickAt(g.startX, g.startY);
           },
           onPanResponderTerminate: () => {
+            setTouching(false);
             interactingRef.current = false;
           }
         }),
@@ -817,6 +829,10 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
           style={{ width: size, height: size }}
           onLayout={e => setLayout(e.nativeEvent.layout)}
           {...pan.panHandlers}
+          // trava a rolagem da tela no instante em que o dedo encosta (antes do iOS começar a rolar)
+          onTouchStart={() => setTouching(true)}
+          onTouchEnd={() => setTouching(false)}
+          onTouchCancel={() => setTouching(false)}
         >
           {level === null ? null : level >= 2 ? (
             <Pressable

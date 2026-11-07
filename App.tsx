@@ -67,6 +67,7 @@ function Guvio() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [unread, setUnread] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [globeTouching, setGlobeTouching] = useState(false);
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
 
   // pontos do globo: cidades onde há looks com localização
@@ -362,6 +363,7 @@ function Guvio() {
           contentContainerStyle={{ flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          scrollEnabled={!globeTouching}
         >
           <View style={[s.first, { minHeight: h - 40, backgroundColor: colors.bg }]}>
             <Header
@@ -384,6 +386,7 @@ function Guvio() {
                 onSelectMarker={selectGlobeMarker}
                 onClearSelection={clearGlobeSelection}
                 focusTarget={focus}
+                onInteractionChange={setGlobeTouching}
               />
             </View>
             <ScrollIndicator onPress={() => scroll.current?.scrollTo({ y: h - 60, animated: true })} />
