@@ -20,6 +20,19 @@ const useFrame = (cb: (state: any, delta: number) => void) =>
     } catch (e) {}
   });
 
+// Diagnóstico do desenho (temporário): mostrado em letras pequenas embaixo do globo
+const DIAG = {
+  created: false,
+  frames: 0,
+  calls: 0,
+  points: 0,
+  triangles: 0,
+  buffer: "",
+  glError: 0,
+  lastError: "",
+  version: ""
+};
+
 // Proteção contra o app fechar ao desenhar o globo: se fechar com o globo aberto,
 // na próxima vez usamos um modo mais simples (0 = completo, 1 = simples, 2 = desligado)
 const GUARD_KEY = "guvio_globe_guard_v2";
@@ -239,11 +252,11 @@ function LandDotsLite({ color }: { color: string }) {
   const material = useMemo(
     () =>
       new THREE.PointsMaterial({
-        size: 0.058,
+        size: Platform.OS === "web" ? 0.058 : 0.046,
         sizeAttenuation: true,
-        map: roundDotTexture(),
+        // textura só na web: no iPhone (expo-gl) usamos pontos simples, como o globo antigo
+        ...(Platform.OS === "web" ? { map: roundDotTexture(), alphaTest: 0.35 } : {}),
         transparent: true,
-        alphaTest: 0.35,
         depthWrite: false
       }),
     []
@@ -628,29 +641,53 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
     const onCreated = (state: any) => {
       try {
         const gl = state.gl;
-        if (gl?.debug) {
-          gl.debug.checkShaderErrors = true;
-          gl.debug.onShaderError = (ctx: any, _program: any, vs: any, fs: any) => {
-            let log = "";
-            try {
-              log = `${ctx.getShaderInfoLog(vs) || ""} ${ctx.getShaderInfoLog(fs) || ""}`.trim();
-            } catch (e) {}
-            reportRenderProblem(`shader: ${log || "falhou ao compilar"}`);
-          };
-        }
+        const ctx = gl.getContext?.();
+        DIAG.created = true;
+        DIAG.frames = 0;
+        DIAG.lastError = "";
+        try {
+          DIAG.buffer = `${ctx?.drawingBufferWidth}x${ctx?.drawingBufferHeight}`;
+          DIAG.version = String(ctx?.getParameter?.(ctx.VERSION) || "").slice(0, 40);
+        } catch (e) {}
         const render = gl.render.bind(gl);
         gl.render = (scene: any, camera: any) => {
           try {
             render(scene, camera);
+            DIAG.frames += 1;
+            DIAG.calls = gl.info?.render?.calls ?? 0;
+            DIAG.points = gl.info?.render?.points ?? 0;
+            DIAG.triangles = gl.info?.render?.triangles ?? 0;
+            if (DIAG.frames % 30 === 1) {
+              const err = ctx?.getError?.();
+              if (err) DIAG.glError = err;
+            }
           } catch (e: any) {
+            DIAG.lastError = String(e?.message || e).slice(0, 160);
             reportRenderProblem(`render: ${e?.message || e}`);
             try {
-              gl.getContext()?.endFrameEXP?.();
+              ctx?.endFrameEXP?.();
             } catch (err) {}
           }
         };
-      } catch (e) {}
+      } catch (e: any) {
+        DIAG.lastError = `onCreated: ${e?.message || e}`;
+      }
     };
+
+    // atualiza o texto do diagnóstico 1x por segundo
+    const [diagText, setDiagText] = useState("");
+    useEffect(() => {
+      const id = setInterval(() => {
+        setDiagText(
+          `nível ${level} · gl ${DIAG.created ? "ok" : "não criado"} · ${DIAG.buffer} · quadros ${DIAG.frames} · ` +
+            `draws ${DIAG.calls} · pts ${DIAG.points} · tri ${DIAG.triangles}` +
+            (DIAG.glError ? ` · glErr ${DIAG.glError}` : "") +
+            (DIAG.lastError ? ` · erro: ${DIAG.lastError}` : "") +
+            (DIAG.version ? ` · ${DIAG.version}` : "")
+        );
+      }, 1000);
+      return () => clearInterval(id);
+    }, [level]);
 
     const startRot = origin ? rotationToFace(origin.lat, origin.lon) : { x: 0.35, y: -0.6 };
     const rotationRef = useRef<Rotation>(startRot);
@@ -874,6 +911,11 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
             Toque num ponto para ver os looks da cidade
           </Text>
         ) : null}
+        {Platform.OS !== "web" && diagText ? (
+          <Text selectable style={[styles.diagBottom, { color: dark ? "#6C6C70" : "#A0A0A5" }]}>
+            {diagText}
+          </Text>
+        ) : null}
         {diag && level === 1 ? (
           // diagnóstico temporário: mostra por que saiu do modo completo
           <Text style={[styles.diag, { color: dark ? "#5A5A60" : "#B0B0B5" }]} numberOfLines={2}>
@@ -902,6 +944,7 @@ const styles = StyleSheet.create({
   badgeTitle: { fontSize: 14, fontWeight: "800" },
   badgeSub: { fontSize: 10, fontWeight: "600", marginTop: 1 },
   hint: { position: "absolute", bottom: 4, fontSize: 11, fontWeight: "600" },
+  diagBottom: { fontSize: 9, textAlign: "center", paddingHorizontal: 16, marginTop: 4 },
   diag: { position: "absolute", top: 0, fontSize: 9, textAlign: "center", paddingHorizontal: 20 },
   off: { flex: 1, alignItems: "center", justifyContent: "center", gap: 6, padding: 24 },
   offText: { fontSize: 14, fontWeight: "800" },
