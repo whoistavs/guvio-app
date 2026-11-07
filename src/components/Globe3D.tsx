@@ -35,10 +35,7 @@ const DIAG = {
   camera: ""
 };
 
-// Proteção contra o app fechar ao desenhar o globo: se fechar com o globo aberto,
-// na próxima vez usamos um modo mais simples (0 = completo, 1 = simples, 2 = desligado)
-const GUARD_KEY = "guvio_globe_guard_v2";
-const LEVEL_KEY = "guvio_globe_level_v2";
+// Modos do globo: 0 = completo (web), 1 = compatível (celular), 2 = desligado após erro
 
 // ---------------------------------------------------------------------
 // Tipos públicos
@@ -579,37 +576,20 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
     const pixelRatio = Math.min(PixelRatio.get(), 2);
     const [level, setLevel] = useState<number | null>(null);
 
-    // decide o modo do globo (e arma a proteção) antes de desenhar
+    // modo do globo: completo na web, compatível no celular (expo-gl).
+    // Não fica mais salvo entre aberturas: um erro só desliga o globo até fechar o app.
     useEffect(() => {
-      let cleared: ReturnType<typeof setTimeout> | undefined;
-      (async () => {
-        try {
-          const [guard, saved] = await Promise.all([AsyncStorage.getItem(GUARD_KEY), AsyncStorage.getItem(LEVEL_KEY)]);
-          let lvl = Number(saved || 0) || 0;
-          // no iPhone/Android o modo completo (shaders próprios) não desenha no expo-gl:
-          // começa direto no modo compatível, que só usa materiais padrão
-          if (Platform.OS !== "web") lvl = Math.max(lvl, 1);
-          if (guard === "1") {
-            lvl = Math.min(2, lvl + 1); // fechou da última vez: usa um modo mais simples
-            await AsyncStorage.setItem(LEVEL_KEY, String(lvl));
-          }
-          if (lvl < 2) await AsyncStorage.setItem(GUARD_KEY, "1");
-          setLevel(lvl);
-          // passou alguns segundos desenhando sem fechar: está seguro
-          cleared = setTimeout(() => AsyncStorage.removeItem(GUARD_KEY).catch(() => {}), 6000);
-        } catch (e) {
-          setLevel(1);
-        }
-      })();
-      return () => {
-        if (cleared) clearTimeout(cleared);
-        AsyncStorage.removeItem(GUARD_KEY).catch(() => {});
-      };
+      setLevel(Platform.OS === "web" ? 0 : 1);
+      // limpa marcações antigas da proteção que causavam alarme falso
+      AsyncStorage.multiRemove([
+        "guvio_globe_guard_v1",
+        "guvio_globe_level_v1",
+        "guvio_globe_guard_v2",
+        "guvio_globe_level_v2"
+      ]).catch(() => {});
     }, []);
 
     const disableGlobe = (err?: Error) => {
-      AsyncStorage.setItem(LEVEL_KEY, "2").catch(() => {});
-      AsyncStorage.removeItem(GUARD_KEY).catch(() => {});
       setGlobeError(err?.message || "erro gráfico");
       setLevel(2);
     };
@@ -624,7 +604,6 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
       setDiag(msg.slice(0, 240));
       setLevel(prev => {
         const next = (prev ?? 0) >= 1 ? 2 : 1;
-        AsyncStorage.setItem(LEVEL_KEY, String(next)).catch(() => {});
         if (next === 2) setGlobeError(msg.slice(0, 240));
         return next;
       });
@@ -839,9 +818,8 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
               style={styles.off}
               onLongPress={() => {
                 // segurar reativa o globo completo
-                AsyncStorage.multiRemove([LEVEL_KEY, GUARD_KEY]).catch(() => {});
                 setGlobeError(null);
-                setLevel(0);
+                setLevel(Platform.OS === "web" ? 0 : 1);
               }}
             >
               <Text style={[styles.offText, { color: dark ? "#8E8E93" : "#8A8A8E" }]}>
