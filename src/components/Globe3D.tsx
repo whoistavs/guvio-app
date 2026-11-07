@@ -207,16 +207,70 @@ function LandDots({ color, pixelRatio }: { color: string; pixelRatio: number }) 
 }
 
 /** versão simples dos pontos (sem shader próprio), usada no modo seguro */
+/** textura de um círculo branco feita em memória (funciona no iPhone, não precisa de canvas) */
+let dotTexture: THREE.DataTexture | null = null;
+function roundDotTexture() {
+  if (dotTexture) return dotTexture;
+  const n = 32;
+  const data = new Uint8Array(n * n * 4);
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const dx = x + 0.5 - n / 2;
+      const dy = y + 0.5 - n / 2;
+      const d = Math.sqrt(dx * dx + dy * dy) / (n / 2);
+      const a = d >= 1 ? 0 : d > 0.78 ? (1 - d) / 0.22 : 1; // borda suave
+      const i = (y * n + x) * 4;
+      data[i] = data[i + 1] = data[i + 2] = 255;
+      data[i + 3] = Math.round(a * 255);
+    }
+  }
+  dotTexture = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
+  dotTexture.needsUpdate = true;
+  return dotTexture;
+}
+
+/** pontos dos continentes só com materiais padrão do three (modo compatível) */
 function LandDotsLite({ color }: { color: string }) {
   const geometry = useMemo(() => {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(landDotPositions(), 3));
     return g;
   }, []);
+  const material = useMemo(
+    () =>
+      new THREE.PointsMaterial({
+        size: 0.058,
+        sizeAttenuation: true,
+        map: roundDotTexture(),
+        transparent: true,
+        alphaTest: 0.35,
+        depthWrite: false
+      }),
+    []
+  );
+  useEffect(() => {
+    material.color.set(color);
+  }, [color]);
+  return <points geometry={geometry} material={material} frustumCulled={false} />;
+}
+
+/** brilho da atmosfera com esferas transparentes (modo compatível) */
+function AtmosphereLite({ color }: { color: string }) {
+  const layers = [
+    { scale: 1.02, opacity: 0.32 },
+    { scale: 1.05, opacity: 0.18 },
+    { scale: 1.09, opacity: 0.09 },
+    { scale: 1.14, opacity: 0.04 }
+  ];
   return (
-    <points geometry={geometry} frustumCulled={false}>
-      <pointsMaterial color={color} size={0.03} sizeAttenuation />
-    </points>
+    <>
+      {layers.map(l => (
+        <mesh key={l.scale} scale={l.scale}>
+          <sphereGeometry args={[R, 48, 48]} />
+          <meshBasicMaterial color={color} transparent opacity={l.opacity} side={THREE.BackSide} depthWrite={false} />
+        </mesh>
+      ))}
+    </>
   );
 }
 
@@ -492,7 +546,7 @@ function Scene({
 
   return (
     <>
-      {lite ? null : <Atmosphere color={colors.glow} />}
+      {lite ? <AtmosphereLite color={colors.glow} /> : <Atmosphere color={colors.glow} />}
       <group ref={groupRef}>
         <mesh>
           <sphereGeometry args={[R * 0.995, 64, 64]} />
@@ -525,6 +579,9 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
         try {
           const [guard, saved] = await Promise.all([AsyncStorage.getItem(GUARD_KEY), AsyncStorage.getItem(LEVEL_KEY)]);
           let lvl = Number(saved || 0) || 0;
+          // no iPhone/Android o modo completo (shaders próprios) não desenha no expo-gl:
+          // começa direto no modo compatível, que só usa materiais padrão
+          if (Platform.OS !== "web") lvl = Math.max(lvl, 1);
           if (guard === "1") {
             lvl = Math.min(2, lvl + 1); // fechou da última vez: usa um modo mais simples
             await AsyncStorage.setItem(LEVEL_KEY, String(lvl));
@@ -550,6 +607,50 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
       setLevel(2);
     };
     const [globeError, setGlobeError] = useState<string | null>(null);
+    const [diag, setDiag] = useState<string | null>(null);
+    const failedRef = useRef(false);
+
+    /** algo falhou ao desenhar: tenta o modo compatível; se já estava nele, desliga e mostra o motivo */
+    const reportRenderProblem = (msg: string) => {
+      if (failedRef.current) return;
+      failedRef.current = true;
+      setDiag(msg.slice(0, 240));
+      setLevel(prev => {
+        const next = (prev ?? 0) >= 1 ? 2 : 1;
+        AsyncStorage.setItem(LEVEL_KEY, String(next)).catch(() => {});
+        if (next === 2) setGlobeError(msg.slice(0, 240));
+        return next;
+      });
+      // libera uma nova tentativa no modo seguinte
+      setTimeout(() => (failedRef.current = false), 500);
+    };
+
+    const onCreated = (state: any) => {
+      try {
+        const gl = state.gl;
+        if (gl?.debug) {
+          gl.debug.checkShaderErrors = true;
+          gl.debug.onShaderError = (ctx: any, _program: any, vs: any, fs: any) => {
+            let log = "";
+            try {
+              log = `${ctx.getShaderInfoLog(vs) || ""} ${ctx.getShaderInfoLog(fs) || ""}`.trim();
+            } catch (e) {}
+            reportRenderProblem(`shader: ${log || "falhou ao compilar"}`);
+          };
+        }
+        const render = gl.render.bind(gl);
+        gl.render = (scene: any, camera: any) => {
+          try {
+            render(scene, camera);
+          } catch (e: any) {
+            reportRenderProblem(`render: ${e?.message || e}`);
+            try {
+              gl.getContext()?.endFrameEXP?.();
+            } catch (err) {}
+          }
+        };
+      } catch (e) {}
+    };
 
     const startRot = origin ? rotationToFace(origin.lat, origin.lon) : { x: 0.35, y: -0.6 };
     const rotationRef = useRef<Rotation>(startRot);
@@ -723,6 +824,8 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
           ) : (
             <ErrorBoundary fallback={() => null} onError={disableGlobe}>
                         <Canvas
+                          key={`globe-${level}`}
+                          onCreated={onCreated}
               camera={{ position: [0, 0, CAMERA_Z], fov: 42, near: 0.1, far: 100 }}
               style={{ width: "100%", height: "100%", backgroundColor: "transparent" }}
               gl={{ alpha: true, antialias: false, powerPreference: "default" }}
@@ -771,6 +874,12 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
             Toque num ponto para ver os looks da cidade
           </Text>
         ) : null}
+        {diag && level === 1 ? (
+          // diagnóstico temporário: mostra por que saiu do modo completo
+          <Text style={[styles.diag, { color: dark ? "#5A5A60" : "#B0B0B5" }]} numberOfLines={2}>
+            modo compatível · {diag}
+          </Text>
+        ) : null}
       </View>
     );
   }
@@ -793,6 +902,7 @@ const styles = StyleSheet.create({
   badgeTitle: { fontSize: 14, fontWeight: "800" },
   badgeSub: { fontSize: 10, fontWeight: "600", marginTop: 1 },
   hint: { position: "absolute", bottom: 4, fontSize: 11, fontWeight: "600" },
+  diag: { position: "absolute", top: 0, fontSize: 9, textAlign: "center", paddingHorizontal: 20 },
   off: { flex: 1, alignItems: "center", justifyContent: "center", gap: 6, padding: 24 },
   offText: { fontSize: 14, fontWeight: "800" },
   offSub: { fontSize: 11, textAlign: "center" }
