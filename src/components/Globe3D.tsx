@@ -222,28 +222,6 @@ function LandDots({ color, pixelRatio }: { color: string; pixelRatio: number }) 
 }
 
 /** versão simples dos pontos (sem shader próprio), usada no modo seguro */
-/** textura de um círculo branco feita em memória (funciona no iPhone, não precisa de canvas) */
-let dotTexture: THREE.DataTexture | null = null;
-function roundDotTexture() {
-  if (dotTexture) return dotTexture;
-  const n = 32;
-  const data = new Uint8Array(n * n * 4);
-  for (let y = 0; y < n; y++) {
-    for (let x = 0; x < n; x++) {
-      const dx = x + 0.5 - n / 2;
-      const dy = y + 0.5 - n / 2;
-      const d = Math.sqrt(dx * dx + dy * dy) / (n / 2);
-      const a = d >= 1 ? 0 : d > 0.78 ? (1 - d) / 0.22 : 1; // borda suave
-      const i = (y * n + x) * 4;
-      data[i] = data[i + 1] = data[i + 2] = 255;
-      data[i + 3] = Math.round(a * 255);
-    }
-  }
-  dotTexture = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
-  dotTexture.needsUpdate = true;
-  return dotTexture;
-}
-
 /** pontos dos continentes só com materiais padrão do three (modo compatível) */
 function LandDotsLite({ color }: { color: string }) {
   const geometry = useMemo(() => {
@@ -251,18 +229,26 @@ function LandDotsLite({ color }: { color: string }) {
     g.setAttribute("position", new THREE.BufferAttribute(landDotPositions(), 3));
     return g;
   }, []);
-  const material = useMemo(
-    () =>
-      new THREE.PointsMaterial({
-        size: Platform.OS === "web" ? 0.058 : 0.046,
-        sizeAttenuation: true,
-        // textura só na web: no iPhone (expo-gl) usamos pontos simples, como o globo antigo
-        ...(Platform.OS === "web" ? { map: roundDotTexture(), alphaTest: 0.35 } : {}),
-        transparent: true,
-        depthWrite: false
-      }),
-    []
-  );
+  const material = useMemo(() => {
+    const m = new THREE.PointsMaterial({ size: 0.05, sizeAttenuation: true, transparent: true, depthWrite: false });
+    // pontos redondos sem textura: descarta o que fica fora do círculo (funciona no iPhone e na web)
+    m.onBeforeCompile = shader => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <clipping_planes_fragment>",
+        `vec2 guvioCoord = gl_PointCoord - vec2(0.5);
+        float guvioDist = length(guvioCoord);
+        if (guvioDist > 0.5) discard;
+        #include <clipping_planes_fragment>`
+      );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <premultiplied_alpha_fragment>",
+        `gl_FragColor.a *= 1.0 - smoothstep(0.36, 0.5, guvioDist);
+        #include <premultiplied_alpha_fragment>`
+      );
+    };
+    m.customProgramCacheKey = () => "guvio-round-dots";
+    return m;
+  }, []);
   useEffect(() => {
     material.color.set(color);
   }, [color]);
@@ -682,20 +668,6 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
       }
     };
 
-    // atualiza o texto do diagnóstico 1x por segundo
-    const [diagText, setDiagText] = useState("");
-    useEffect(() => {
-      const id = setInterval(() => {
-        setDiagText(
-          `nível ${level} · gl ${DIAG.created ? "ok" : "não criado"} · ${DIAG.buffer} · quadros ${DIAG.frames} · ` +
-            `draws ${DIAG.calls} · pts ${DIAG.points} · tri ${DIAG.triangles} · obj ${DIAG.sceneObjs} · cam ${DIAG.camera}` +
-            (DIAG.glError ? ` · glErr ${DIAG.glError}` : "") +
-            (DIAG.lastError ? ` · erro: ${DIAG.lastError}` : "") +
-            (DIAG.version ? ` · ${DIAG.version}` : "")
-        );
-      }, 1000);
-      return () => clearInterval(id);
-    }, [level]);
 
     const startRot = origin ? rotationToFace(origin.lat, origin.lon) : { x: 0.35, y: -0.6 };
     const rotationRef = useRef<Rotation>(startRot);
@@ -871,6 +843,7 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
                         <Canvas
                           key={`globe-${level}`}
                           onCreated={onCreated}
+                          pointerEvents="none"
               camera={{ position: [0, 0, CAMERA_Z], fov: 42, near: 0.1, far: 100 }}
               style={{ width: "100%", height: "100%", backgroundColor: "transparent" }}
               gl={{ alpha: true, antialias: false, powerPreference: "default" }}
@@ -917,11 +890,6 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
         ) : markers.length > 0 ? (
           <Text style={[styles.hint, { color: dark ? "#8E8E93" : "#8A8A8E" }]}>
             Toque num ponto para ver os looks da cidade
-          </Text>
-        ) : null}
-        {Platform.OS !== "web" && diagText ? (
-          <Text selectable style={[styles.diagBottom, { color: dark ? "#6C6C70" : "#A0A0A5" }]}>
-            {diagText}
           </Text>
         ) : null}
         {diag && level === 1 ? (
