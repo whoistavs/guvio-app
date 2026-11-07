@@ -1,3 +1,4 @@
+import { toast } from "./motion";
 import React, { useRef, useState } from "react";
 import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { X } from "lucide-react-native";
@@ -95,7 +96,7 @@ export function OutfitStoryModal({
           try {
             await publishMyStory(uri, caption, overlay);
             successFeedback();
-            Alert.alert("Story publicado! ✨", "Seu look está nos stories.");
+            toast("Story publicado!", "✨");
             onPublished?.();
           } catch (e: any) {
             Alert.alert("Story não publicado", e?.message || "Tente novamente.");

@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { X } from "lucide-react-native";
 import { UserProfile } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
+import { PressableScale } from "./motion";
 import { FastImage } from "./FastImage";
 import { loadFollowedUsers, loadSuggestions, saveFollowedUsers } from "../services/storage";
 import { tapFeedback } from "../utils/haptics";
@@ -68,14 +69,14 @@ export function SuggestionsRow({
                   ? `Seguido por ${p.mutuals} ${p.mutuals === 1 ? "pessoa" : "pessoas"} que você segue`
                   : p.location || `${(p.followers || 0).toLocaleString("pt-BR")} seguidores`}
               </Text>
-              <Pressable
+              <PressableScale
                 onPress={() => toggleFollow(p)}
                 style={[s.btn, { backgroundColor: on ? colors.bg : "#0095F6", borderColor: on ? colors.border : "#0095F6" }]}
               >
                 <Text style={{ color: on ? colors.text : "#FFF", fontWeight: "800", fontSize: 12 }}>
                   {on ? "Seguindo" : "Seguir"}
                 </Text>
-              </Pressable>
+              </PressableScale>
             </Pressable>
           );
         })}

@@ -5,6 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { ClothingTag, Outfit, OutfitStyle, STYLES, WardrobeItem } from "../data/mockData";
 import { StyleCard } from "./OutfitCard";
 import { useAppTheme } from "../context/AppTheme";
+import { toast } from "./motion";
 import { generateSmartOutfit, getWeatherRecommendationTip, AIOutfitRecommendation } from "../services/aiStyling";
 import {
   loadSavedWardrobe,
@@ -23,6 +24,7 @@ import { successFeedback, tapFeedback } from "../utils/haptics";
 import { DailyLookCard } from "./DailyLookCard";
 import { WardrobeStatsModal } from "./WardrobeStatsModal";
 import { OutfitStoryModal } from "./OutfitStoryModal";
+import { PressableScale } from "./motion";
 import { WeatherData } from "../services/weather";
 import { getSavedAuthSession } from "../services/auth";
 import { ImagePlaceholder, FastImage, preloadImages } from "./FastImage";
@@ -308,7 +310,7 @@ export function WardrobeView({
               const o = await saveOutfit("Look do dia", pieces.map(p => p.id));
               setOutfits(prev => [o, ...prev]);
               successFeedback();
-              Alert.alert("Look salvo", "Está em \"Meus looks\", mais abaixo.");
+              toast("Look salvo em Meus looks", "👗");
             } catch (e: any) {
               Alert.alert("Não foi possível salvar", e?.message || "Tente novamente.");
             }
@@ -318,7 +320,7 @@ export function WardrobeView({
             try {
               await saveOutfitLog({ day: dayKey(new Date()), itemIds: pieces.map(p => p.id), note: "" });
               successFeedback();
-              Alert.alert("Anotado no calendário 📅", "O look de hoje foi registrado.");
+              toast("Look de hoje anotado no calendário", "📅");
             } catch (e: any) {
               Alert.alert("Erro", e?.message || "Tente novamente.");
             }
@@ -333,12 +335,12 @@ export function WardrobeView({
           ].map(t => {
             const I = t.icon;
             return (
-              <Pressable key={t.id} onPress={() => setTool(t.id)} style={[s.toolBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <PressableScale haptic key={t.id} onPress={() => setTool(t.id)} style={[s.toolBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <I size={18} color={colors.text} />
                 <Text style={{ color: colors.text, fontWeight: "800", fontSize: 11 }} numberOfLines={1}>
                   {t.label}
                 </Text>
-              </Pressable>
+              </PressableScale>
             );
           })}
         </View>
@@ -561,7 +563,7 @@ export function WardrobeView({
             const o = await saveOutfit(name, ids);
             setOutfits(prev => [o, ...prev]);
             successFeedback();
-            Alert.alert("Mala salva", "Ela está em \"Meus looks\".");
+            toast("Mala salva em Meus looks", "🧳");
           } catch (e: any) {
             Alert.alert("Erro", e?.message || "Tente novamente.");
           }

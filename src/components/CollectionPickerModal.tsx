@@ -15,6 +15,7 @@ import {
 import { Bookmark, Check, FolderPlus, X } from "lucide-react-native";
 import { FeedPost, SavedCollection } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
+import { ListSkeleton } from "./SkeletonLoader";
 import { FastImage } from "./FastImage";
 import {
   createCollection,
@@ -100,7 +101,7 @@ export function CollectionPickerModal({
           </View>
 
           {loading ? (
-            <ActivityIndicator color={colors.muted} style={{ marginVertical: 24 }} />
+            <ListSkeleton rows={3} avatar={48} lines={2} />
           ) : (
             <ScrollView style={{ maxHeight: 320 }} keyboardShouldPersistTaps="handled">
               {cols.length === 0 && !creating ? (

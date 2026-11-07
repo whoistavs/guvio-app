@@ -3,6 +3,7 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View
 import { X } from "lucide-react-native";
 import { FeedPost, Outfit, WardrobeItem } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
+import { ListSkeleton } from "./SkeletonLoader";
 import { FastImage } from "./FastImage";
 import { loadMyPosts } from "../services/storage";
 import { computeWardrobeStats } from "../utils/wardrobeStats";
@@ -52,7 +53,7 @@ export function WardrobeStatsModal({
           </Pressable>
         </View>
         {posts === null ? (
-          <ActivityIndicator color={colors.muted} style={{ marginTop: 40 }} />
+          <ListSkeleton rows={6} avatar={40} lines={1} style={{ padding: 20 }} />
         ) : (
           <ScrollView contentContainerStyle={s.c}>
             <View style={s.kpis}>

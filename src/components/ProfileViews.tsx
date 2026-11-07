@@ -66,6 +66,7 @@ import {
 import { getSavedAuthSession } from "../services/auth";
 import { FastImage, preloadImages } from "./FastImage";
 import { ShareProfileModal } from "./ShareProfileModal";
+import { GridSkeleton, ProfileSkeleton } from "./SkeletonLoader";
 import { HighlightsRow } from "./HighlightsRow";
 import { BioLink } from "./BioExtras";
 import { AchievementsRow } from "./AchievementsRow";
@@ -344,7 +345,7 @@ export function PublicProfileView({
             {tab === "posts" ? (
               <Grid posts={posts} colors={colors} onSelectPost={p => (onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))} />
             ) : tagged === null ? (
-              <ActivityIndicator color={colors.muted} style={{ marginTop: 24 }} />
+              <GridSkeleton count={6} />
             ) : (
               <Grid
                 posts={tagged}
@@ -567,8 +568,9 @@ export function MyProfileView({
 
   if (!profile) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator color={colors.muted} />
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <ProfileSkeleton />
+        <GridSkeleton count={9} />
       </View>
     );
   }
@@ -709,7 +711,7 @@ export function MyProfileView({
 
         {activeTab === "tagged" && (
           tagged === null ? (
-            <ActivityIndicator color={colors.muted} style={{ marginTop: 24 }} />
+            <GridSkeleton count={6} />
           ) : (
             <Grid
               posts={tagged}
@@ -1093,7 +1095,7 @@ export function SimpleSettingsPage({
       <ScreenHeader title={title} onBack={onBack} />
       {kind === "archived" ? (
         archived === null ? (
-          <ActivityIndicator color={colors.muted} style={{ marginTop: 30 }} />
+          <GridSkeleton count={9} />
         ) : (
           <>
             <Text style={{ color: colors.muted, fontSize: 12, paddingHorizontal: 20, paddingVertical: 10 }}>

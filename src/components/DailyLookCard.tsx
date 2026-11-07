@@ -4,6 +4,7 @@ import { RefreshCw, Send, Sun, Bookmark } from "lucide-react-native";
 import { WardrobeItem } from "../data/mockData";
 import { WeatherData } from "../services/weather";
 import { useAppTheme } from "../context/AppTheme";
+import { PressableScale } from "./motion";
 import { FastImage } from "./FastImage";
 import { suggestDailyLook } from "../utils/dailyLook";
 import { tapFeedback } from "../utils/haptics";
@@ -77,21 +78,21 @@ export function DailyLookCard({
       </ScrollView>
       <View style={s.actions}>
         {onWore ? (
-          <Pressable onPress={() => onWore(look.items)} style={[s.btn, { backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1 }]}>
+          <PressableScale haptic onPress={() => onWore(look.items)} style={[s.btn, { backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1 }]}>
             <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12 }}>✓ Usei hoje</Text>
-          </Pressable>
+          </PressableScale>
         ) : null}
         {onSave ? (
-          <Pressable onPress={() => onSave(look.items)} style={[s.btn, { backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1 }]}>
+          <PressableScale haptic onPress={() => onSave(look.items)} style={[s.btn, { backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1 }]}>
             <Bookmark size={14} color={colors.text} />
             <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12 }}>Salvar</Text>
-          </Pressable>
+          </PressableScale>
         ) : null}
         {onPublish ? (
-          <Pressable onPress={() => onPublish(look.items)} style={[s.btn, { backgroundColor: colors.text }]}>
+          <PressableScale haptic onPress={() => onPublish(look.items)} style={[s.btn, { backgroundColor: colors.text }]}>
             <Send size={14} color={colors.bg} />
             <Text style={{ color: colors.bg, fontWeight: "900", fontSize: 12 }}>Publicar</Text>
-          </Pressable>
+          </PressableScale>
         ) : null}
       </View>
     </View>

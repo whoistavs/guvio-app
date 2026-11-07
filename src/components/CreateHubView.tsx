@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Tex
 import { Camera, Check, Crop, FileText, ImagePlus, RotateCw, Shirt, Sparkles, Trash2, Upload, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useAppTheme } from "../context/AppTheme";
+import { toast } from "./motion";
 import { ImagePlaceholder } from "./FastImage";
 import { OutfitPromoExporter } from "./OutfitPromoExporter";
 import { ClothingTag, WardrobeItem } from "../data/mockData";
@@ -142,7 +143,7 @@ export function CreateHubView({
       setDrafts(loadDrafts());
       resetPost();
       setMode("hub");
-      Alert.alert("Rascunho salvo", "Ele fica em Criar › Rascunhos.");
+      toast("Rascunho salvo em Criar › Rascunhos", "📝");
     } catch (e: any) {
       Alert.alert("Erro", e?.message || "Não foi possível salvar o rascunho.");
     }

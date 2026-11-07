@@ -3,6 +3,7 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View
 import { X } from "lucide-react-native";
 import { UserProfile } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
+import { ListSkeleton } from "./SkeletonLoader";
 import { FastImage } from "./FastImage";
 import { loadLikers } from "../services/storage";
 
@@ -37,7 +38,7 @@ export function LikersModal({
             </Pressable>
           </View>
           {list === null ? (
-            <ActivityIndicator color={colors.muted} style={{ margin: 30 }} />
+            <ListSkeleton rows={6} avatar={44} style={{ paddingHorizontal: 18 }} />
           ) : list.length === 0 ? (
             <Text style={{ color: colors.muted, textAlign: "center", margin: 30 }}>Ninguém curtiu ainda.</Text>
           ) : (

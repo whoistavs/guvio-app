@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Tex
 import { Check, Plus, X } from "lucide-react-native";
 import { Highlight, StoryItem, UserStoryGroup } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
+import { GridSkeleton } from "./SkeletonLoader";
 import { FastImage } from "./FastImage";
 import { StoryViewerModal } from "./StoryViewerModal";
 import { deleteHighlight, loadHighlights, loadMyStoryArchive, saveHighlight } from "../services/storage";
@@ -159,7 +160,7 @@ function HighlightEditor({
           Escolha os stories (inclusive os que já sumiram depois de 24h):
         </Text>
         {archive === null ? (
-          <ActivityIndicator color={colors.muted} style={{ marginTop: 30 }} />
+          <GridSkeleton count={6} ratio={16 / 9} />
         ) : archive.length === 0 ? (
           <Text style={{ color: colors.muted, textAlign: "center", marginTop: 30, paddingHorizontal: 30 }}>
             Você ainda não publicou nenhum story. Publique um pela bolinha "Seu story" na Home.

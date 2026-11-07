@@ -3,6 +3,7 @@ import { ActivityIndicator, Dimensions, Pressable, ScrollView, StyleSheet, Text,
 import { BadgeCheck, Clock3, Compass, Hash, Search, TrendingUp, Users, X } from "lucide-react-native";
 import { FeedPost, UserProfile } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
+import { GridSkeleton } from "./SkeletonLoader";
 import {
   loadAllRegisteredProfiles,
   loadExplore,
@@ -289,7 +290,7 @@ export function SearchProfilesView({
           </View>
           {mode === "looks" ? (
             searching ? (
-              <ActivityIndicator color={colors.muted} style={{ marginTop: 30 }} />
+              <GridSkeleton count={9} />
             ) : looks.length === 0 ? (
               <View style={s.empty}>
                 <Compass size={38} color={colors.muted} />
@@ -372,7 +373,7 @@ export function SearchProfilesView({
             })}
           </ScrollView>
           {loadingExplore ? (
-            <ActivityIndicator color={colors.muted} style={{ marginTop: 30 }} />
+            <GridSkeleton count={9} />
           ) : exploreShown.length === 0 ? (
             <View style={s.empty}>
               <Compass size={38} color={colors.muted} />

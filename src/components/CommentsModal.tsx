@@ -16,9 +16,11 @@ import {
 import { Heart, Send, Trash2, X } from "lucide-react-native";
 import { CommentItem, FeedPost } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
+import { ListSkeleton } from "./SkeletonLoader";
 import { FastImage } from "./FastImage";
 import { addComment, deleteComment, loadComments, setCommentLike } from "../services/storage";
 import { RichCaption } from "./RichCaption";
+import { PopOnActive } from "./motion";
 import { likeFeedback, tapFeedback } from "../utils/haptics";
 
 export function CommentsModal({
@@ -171,7 +173,9 @@ export function CommentsModal({
         </View>
       </View>
       <Pressable onPress={() => toggleLike(c)} hitSlop={10} style={{ paddingTop: 4, alignItems: "center" }}>
-        <Heart size={14} color={c.isLiked ? "#FF3B30" : colors.muted} fill={c.isLiked ? "#FF3B30" : "transparent"} />
+        <PopOnActive active={!!c.isLiked}>
+          <Heart size={14} color={c.isLiked ? "#FF3B30" : colors.muted} fill={c.isLiked ? "#FF3B30" : "transparent"} />
+        </PopOnActive>
       </Pressable>
     </Pressable>
   );
@@ -189,7 +193,7 @@ export function CommentsModal({
           </View>
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: replyTo ? 130 : 90 }} keyboardShouldPersistTaps="handled">
             {loading ? (
-              <ActivityIndicator color={colors.muted} style={{ marginTop: 30 }} />
+              <ListSkeleton rows={5} avatar={36} />
             ) : comments.length === 0 ? (
               <Text style={{ color: colors.muted, textAlign: "center", marginTop: 30 }}>
                 Seja o primeiro a comentar este look.

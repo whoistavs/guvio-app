@@ -3,11 +3,13 @@ import { ActivityIndicator, Alert, Dimensions, Pressable, ScrollView, StyleSheet
 import { Bookmark, Heart, MapPin, MessageCircle, MoreHorizontal, Send, Shirt } from "lucide-react-native";
 import { FeedPost } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
+import { PostDetailSkeleton } from "./SkeletonLoader";
 import { ScreenHeader } from "./ScreenHeader";
 import { FastImage } from "./FastImage";
 import { CommentsModal } from "./CommentsModal";
 import { askReport, EditPostModal, openOwnPostMenu } from "./PostMenus";
 import { LikersModal } from "./LikersModal";
+import { PopOnActive } from "./motion";
 import { PostMedia } from "./PostMedia";
 import { SharePostModal } from "./SharePostModal";
 import { CollectionPickerModal } from "./CollectionPickerModal";
@@ -54,7 +56,7 @@ export function PostDetailView({
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <ScreenHeader title="Look" onBack={onBack} />
-        <ActivityIndicator color={colors.muted} style={{ marginTop: 60 }} />
+        <PostDetailSkeleton />
       </View>
     );
   }
@@ -157,7 +159,9 @@ export function PostDetailView({
 
         <View style={s.actions}>
           <Pressable onPress={() => toggleLike()} hitSlop={8}>
-            <Heart size={26} color={post.isLiked ? "#FF3B30" : colors.icon} fill={post.isLiked ? "#FF3B30" : "transparent"} />
+            <PopOnActive active={!!post.isLiked}>
+              <Heart size={26} color={post.isLiked ? "#FF3B30" : colors.icon} fill={post.isLiked ? "#FF3B30" : "transparent"} />
+            </PopOnActive>
           </Pressable>
           <Pressable onPress={() => setShowComments(true)} hitSlop={8}>
             <MessageCircle size={25} color={colors.icon} />
@@ -169,7 +173,9 @@ export function PostDetailView({
           </Pressable>
           <View style={{ flex: 1 }} />
           <Pressable onPress={toggleSave} onLongPress={() => setPicking(true)} delayLongPress={350} hitSlop={8}>
-            <Bookmark size={25} color={colors.icon} fill={post.isSaved ? colors.icon : "transparent"} />
+            <PopOnActive active={!!post.isSaved}>
+              <Bookmark size={25} color={colors.icon} fill={post.isSaved ? colors.icon : "transparent"} />
+            </PopOnActive>
           </Pressable>
         </View>
 

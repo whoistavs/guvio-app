@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { ClothingTag, FeedPost, WardrobeItem } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
+import { toast } from "./motion";
 import { loadSavedWardrobe, removePost, reportPost, setPostFlags, updatePost } from "../services/storage";
 import { getSavedAuthSession } from "../services/auth";
 
@@ -28,7 +29,7 @@ export function askReport(post: FeedPost): Promise<boolean> {
         onPress: async () => {
           try {
             await reportPost(post.id, reason);
-            Alert.alert("Obrigado pela denúncia", "Vamos analisar. Este post não vai mais aparecer para você.");
+            toast("Obrigado pela denúncia. Esse post sumiu do seu feed", "🛡️");
             resolve(true);
           } catch (e: any) {
             Alert.alert("Erro", e?.message || "Não foi possível denunciar.");
@@ -77,7 +78,7 @@ export function openOwnPostMenu(
       const updated = await setPostFlags(post, flags);
       // arquivado continua na lista com archived: true (as telas escondem); nunca é apagado
       h.onChanged(updated);
-      if (msg) Alert.alert(msg);
+      if (msg) toast(msg, flags.archived ? "📦" : "✓");
     } catch (e: any) {
       Alert.alert("Erro", e?.message || "Não foi possível alterar o post.");
     }
@@ -96,10 +97,10 @@ export function openOwnPostMenu(
     },
     { text: post.hideLikes ? "Mostrar curtidas" : "Esconder curtidas", onPress: () => run({ hideLikes: !post.hideLikes }) },
     post.archived
-      ? { text: "Mostrar no perfil de novo", onPress: () => run({ archived: false }, "Look de volta ao seu perfil.") }
+      ? { text: "Mostrar no perfil de novo", onPress: () => run({ archived: false }, "Look de volta ao seu perfil") }
       : {
           text: "Arquivar",
-          onPress: () => run({ archived: true }, "Look arquivado. Ele fica em Configurações › Arquivados, só para você.")
+          onPress: () => run({ archived: true }, "Arquivado: está em Configurações › Arquivados")
         },
     {
       text: "Apagar",

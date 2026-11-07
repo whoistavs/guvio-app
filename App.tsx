@@ -40,7 +40,8 @@ import {
   getCachedFeed,
   subscribeOffline
 } from "./src/services/storage";
-import { successFeedback } from "./src/utils/haptics";
+import { successFeedback, tapFeedback } from "./src/utils/haptics";
+import { FadeIn, SlideInScreen, ToastHost, toast } from "./src/components/motion";
 import { shouldNotify } from "./src/services/settings";
 import { getCurrentPlace, CurrentPlace } from "./src/services/location";
 import { PostDetailView } from "./src/components/PostDetailView";
@@ -79,8 +80,16 @@ function Guvio() {
   const [tab, setTab] = useState("home");
   // pilha de telas abertas por cima das abas (voltar = tirar a de cima)
   const [stack, setStack] = useState<Screen[]>([]);
-  const push = (sc: Screen) => setStack(prev => [...prev, sc]);
-  const back = () => setStack(prev => prev.slice(0, -1));
+  // sentido da animação: avançar entra pela direita, voltar entra pela esquerda
+  const goingBack = useRef(false);
+  const push = (sc: Screen) => {
+    goingBack.current = false;
+    setStack(prev => [...prev, sc]);
+  };
+  const back = () => {
+    goingBack.current = true;
+    setStack(prev => prev.slice(0, -1));
+  };
   const top = stack[stack.length - 1];
   const [place, setPlace] = useState<CurrentPlace | null>(null);
   const [unreadDm, setUnreadDm] = useState(0);
@@ -322,11 +331,8 @@ function Guvio() {
       });
       successFeedback();
       setDraft(null);
-      sendLocalNotification(
-        "Novo look publicado! ✨",
-        `Seu look em ${p.city} já está visível para a comunidade Guvio.`
-      );
       setTab("home");
+      setTimeout(() => toast(p.city ? `Look publicado em ${p.city}!` : "Look publicado!", "✨"), 250);
       return true;
     } catch (e: any) {
       Alert.alert("Não foi possível publicar", e?.message || "Tente novamente.");
@@ -491,7 +497,14 @@ function Guvio() {
           );
         break;
     }
-    return <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>{screen}</SafeAreaView>;
+    return (
+      <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
+        <SlideInScreen key={`${stack.length}-${top.name}`} from={goingBack.current ? -60 : 60}>
+          {screen}
+        </SlideInScreen>
+        <ToastHost bottom={40} />
+      </SafeAreaView>
+    );
   }
 
   const weatherText = weather ? `${weather.condition} ${weather.temperature}°C` : undefined;
@@ -507,6 +520,7 @@ function Guvio() {
         </Pressable>
       ) : null}
       {tab === "home" ? (
+        <FadeIn key="home" from={0} duration={220} style={{ flex: 1 }}>
         <ScrollView
           ref={scroll}
           style={{ flex: 1, backgroundColor: colors.bg }}
@@ -556,6 +570,7 @@ function Guvio() {
           ) : null}
           <View style={{ height: 110 }} />
         </ScrollView>
+        </FadeIn>
       ) : null}
       {tab === "home" && newLooks > 0 ? (
         <Pressable
@@ -570,7 +585,9 @@ function Guvio() {
           </Text>
         </Pressable>
       ) : null}
-      {tab === "home" ? null : tab === "wardrobe" ? (
+      {tab === "home" ? null : (
+        <FadeIn key={tab} from={0} duration={220} style={{ flex: 1 }}>
+      {tab === "wardrobe" ? (
         <WardrobeView
           onAdd={() => setTab("add")}
           currentWeather={weather}
@@ -623,7 +640,16 @@ function Guvio() {
           draft={draft}
         />
       )}
-      <BottomNavLiquid activeTab={tab} onTabChange={setTab} />
+        </FadeIn>
+      )}
+      <BottomNavLiquid
+        activeTab={tab}
+        onTabChange={t => {
+          if (t !== tab) tapFeedback();
+          setTab(t);
+        }}
+      />
+      <ToastHost />
     </SafeAreaView>
   );
 }

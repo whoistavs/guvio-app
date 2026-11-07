@@ -1,7 +1,8 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { ChevronRight, Trophy } from "lucide-react-native";
 import { useAppTheme } from "../context/AppTheme";
+import { PressableScale } from "./motion";
 import { currentChallenge } from "../data/challenges";
 
 /** Cartão do desafio da semana (Home) */
@@ -9,7 +10,7 @@ export function ChallengeCard({ onJoin, onOpenRanking }: { onJoin: (tag: string)
   const { colors } = useAppTheme();
   const ch = currentChallenge();
   return (
-    <Pressable onPress={onOpenRanking} style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <PressableScale scaleTo={0.98} onPress={onOpenRanking} style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={s.top}>
         <Text style={s.emoji}>{ch.emoji}</Text>
         <View style={{ flex: 1 }}>
@@ -26,15 +27,15 @@ export function ChallengeCard({ onJoin, onOpenRanking }: { onJoin: (tag: string)
         <ChevronRight size={18} color={colors.muted} />
       </View>
       <View style={s.actions}>
-        <Pressable onPress={() => onJoin(ch.tag)} style={[s.btn, { backgroundColor: colors.text }]}>
+        <PressableScale onPress={() => onJoin(ch.tag)} style={[s.btn, { backgroundColor: colors.text }]}>
           <Text style={{ color: colors.bg, fontWeight: "900", fontSize: 12 }}>Participar</Text>
-        </Pressable>
-        <Pressable onPress={onOpenRanking} style={[s.btn, { backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border }]}>
+        </PressableScale>
+        <PressableScale onPress={onOpenRanking} style={[s.btn, { backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border }]}>
           <Trophy size={14} color={colors.text} />
           <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12 }}>Ranking</Text>
-        </Pressable>
+        </PressableScale>
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 

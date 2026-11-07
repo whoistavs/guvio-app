@@ -18,6 +18,7 @@ import { DirectThread, FeedPost } from "../data/mockData";
 import { FastImage } from "./FastImage";
 import { ImageZoomModal } from "./ImageZoomModal";
 import { useAppTheme } from "../context/AppTheme";
+import { Skeleton } from "./SkeletonLoader";
 import {
   ChatMessage,
   loadChat,
@@ -55,7 +56,7 @@ function SharedPostCard({
     });
   }, [postId]);
 
-  if (post === undefined) return <ActivityIndicator color={colors.muted} style={{ margin: 20 }} />;
+  if (post === undefined) return <Skeleton width={220} height={300} borderRadius={14} />;
   if (!post)
     return (
       <Text style={{ color: isMe ? colors.bg : colors.muted, fontStyle: "italic", fontSize: 13 }}>Este look não está mais disponível</Text>
@@ -297,7 +298,13 @@ export function ChatView({
       ) : null}
 
       <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={s.chat} keyboardShouldPersistTaps="handled">
-        {loading ? <ActivityIndicator color={colors.muted} style={{ marginTop: 40 }} /> : null}
+        {loading ? (
+          <View style={{ gap: 10 }}>
+            {[150, 210, 120, 180, 90].map((w, i) => (
+              <Skeleton key={i} width={w} height={36} borderRadius={18} style={{ alignSelf: i % 2 ? "flex-end" : "flex-start" }} />
+            ))}
+          </View>
+        ) : null}
         {!loading && messages.length === 0 ? (
           <Text style={{ color: colors.muted, textAlign: "center", marginTop: 40 }}>Diga oi para @{thread.username} 👋</Text>
         ) : null}

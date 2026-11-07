@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { FeedPost } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
+import { GridSkeleton } from "./SkeletonLoader";
 import { ScreenHeader } from "./ScreenHeader";
 import { RankingGrid } from "./RankingGrid";
 import { currentChallenge } from "../data/challenges";
@@ -46,7 +47,7 @@ export function ChallengeView({
 
         <Text style={[s.label, { color: colors.muted }]}>RANKING ({posts.length})</Text>
         {loading ? (
-          <ActivityIndicator color={colors.muted} style={{ marginTop: 20 }} />
+          <GridSkeleton count={6} />
         ) : posts.length === 0 ? (
           <Text style={{ color: colors.muted, textAlign: "center", marginTop: 10 }}>
             Ninguém participou ainda. Seja o primeiro e garanta o 🥇!

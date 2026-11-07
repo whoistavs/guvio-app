@@ -4,6 +4,7 @@ import { Bug, ImagePlus, Lightbulb, MessageSquare, X } from "lucide-react-native
 import * as ImagePicker from "expo-image-picker";
 import Constants from "expo-constants";
 import { useAppTheme } from "../context/AppTheme";
+import { toast } from "./motion";
 import { ScreenHeader } from "./ScreenHeader";
 import { sendFeedback } from "../services/storage";
 import { successFeedback } from "../utils/haptics";
@@ -43,7 +44,7 @@ export function FeedbackView({ onBack }: { onBack: () => void }) {
     try {
       await sendFeedback({ kind, text, screenshot: shot || undefined, appVersion: APP_VERSION });
       successFeedback();
-      Alert.alert("Obrigado! 💜", "Seu feedback chegou para a equipe do Guvio.");
+      toast("Obrigado! Seu feedback chegou", "💜");
       onBack();
     } catch (e: any) {
       Alert.alert("Não foi possível enviar", e?.message || "Tente novamente.");

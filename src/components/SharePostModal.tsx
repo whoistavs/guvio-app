@@ -16,6 +16,8 @@ import {
 import { Check, Link2, Search, X } from "lucide-react-native";
 import { FeedPost, UserProfile } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
+import { toast } from "./motion";
+import { ListSkeleton } from "./SkeletonLoader";
 import { FastImage } from "./FastImage";
 import { loadAllRegisteredProfiles, loadThreads, sharePostToProfiles } from "../services/storage";
 import { successFeedback, tapFeedback } from "../utils/haptics";
@@ -102,7 +104,7 @@ export function SharePostModal({
     try {
       await sharePostToProfiles(post, selected, note);
       successFeedback();
-      Alert.alert("Enviado!", selected.length === 1 ? `Look enviado para @${selected[0].username}.` : `Look enviado para ${selected.length} pessoas.`);
+      toast(selected.length === 1 ? `Look enviado para @${selected[0].username}` : `Look enviado para ${selected.length} pessoas`, "✈️");
       onClose();
     } catch (e: any) {
       Alert.alert("Falha ao enviar", e?.message || "Tente novamente.");
@@ -164,7 +166,7 @@ export function SharePostModal({
 
           <ScrollView style={s.list} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {loading ? (
-              <ActivityIndicator color={colors.muted} style={{ marginVertical: 24 }} />
+              <ListSkeleton rows={5} avatar={46} />
             ) : filtered.length === 0 ? (
               <Text style={{ color: colors.muted, textAlign: "center", marginVertical: 24 }}>Ninguém encontrado.</Text>
             ) : (

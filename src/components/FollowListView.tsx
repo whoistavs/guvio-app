@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { UserProfile } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
+import { ListSkeleton } from "./SkeletonLoader";
 import { ScreenHeader } from "./ScreenHeader";
 import { FastImage } from "./FastImage";
 import { loadFollowList, loadFollowedUsers, saveFollowedUsers, loadSavedProfile } from "../services/storage";
@@ -43,7 +44,7 @@ export function FollowListView({
       <ScreenHeader title={kind === "followers" ? "Seguidores" : "Seguindo"} onBack={onBack} />
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         {loading ? (
-          <ActivityIndicator color={colors.muted} style={{ marginTop: 40 }} />
+          <ListSkeleton rows={8} avatar={50} style={{ paddingHorizontal: 18 }} />
         ) : list.length === 0 ? (
           <Text style={{ color: colors.muted, textAlign: "center", marginTop: 40 }}>
             {kind === "followers" ? "Ninguém segue este perfil ainda." : "Este perfil ainda não segue ninguém."}

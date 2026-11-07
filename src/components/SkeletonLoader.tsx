@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { Animated, DimensionValue, StyleSheet, View } from "react-native";
+import { Animated, DimensionValue, Platform, StyleSheet, View } from "react-native";
 import { useAppTheme } from "../context/AppTheme";
 
 interface SkeletonProps {
@@ -17,6 +17,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
 }) => {
   const { colors, dark } = useAppTheme();
   const opacity = useRef(new Animated.Value(0.3)).current;
+  const nd = Platform.OS !== "web";
 
   useEffect(() => {
     const animation = Animated.loop(
@@ -24,12 +25,12 @@ export const Skeleton: React.FC<SkeletonProps> = ({
         Animated.timing(opacity, {
           toValue: 0.85,
           duration: 750,
-          useNativeDriver: true,
+          useNativeDriver: nd,
         }),
         Animated.timing(opacity, {
           toValue: 0.3,
           duration: 750,
-          useNativeDriver: true,
+          useNativeDriver: nd,
         }),
       ])
     );
@@ -101,6 +102,65 @@ export const ProfileSkeleton: React.FC = () => {
     </View>
   );
 };
+
+/** grade de fotos carregando (Explorar, perfil, salvos) */
+export const GridSkeleton: React.FC<{ count?: number; columns?: number; ratio?: number; gap?: number }> = ({
+  count = 9,
+  columns = 3,
+  ratio = 1.25,
+  gap = 2
+}) => (
+  <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>
+    {Array.from({ length: count }).map((_, i) => (
+      <View key={i} style={{ width: `${100 / columns - 1}%`, aspectRatio: 1 / ratio }}>
+        <Skeleton width="100%" height="100%" borderRadius={4} />
+      </View>
+    ))}
+  </View>
+);
+
+/** lista de pessoas/conversas/comentários carregando */
+export const ListSkeleton: React.FC<{ rows?: number; avatar?: number; lines?: 1 | 2; style?: any }> = ({
+  rows = 6,
+  avatar = 46,
+  lines = 2,
+  style
+}) => (
+  <View style={style}>
+    {Array.from({ length: rows }).map((_, i) => (
+      <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 9 }}>
+        <Skeleton width={avatar} height={avatar} borderRadius={avatar / 2} />
+        <View style={{ flex: 1, gap: 6 }}>
+          <Skeleton width={`${45 + ((i * 17) % 30)}%`} height={12} borderRadius={4} />
+          {lines === 2 ? <Skeleton width={`${30 + ((i * 23) % 35)}%`} height={10} borderRadius={4} /> : null}
+        </View>
+      </View>
+    ))}
+  </View>
+);
+
+/** post aberto carregando */
+export const PostDetailSkeleton: React.FC = () => (
+  <View>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 14 }}>
+      <Skeleton width={36} height={36} borderRadius={18} />
+      <View style={{ gap: 6, flex: 1 }}>
+        <Skeleton width="40%" height={12} borderRadius={4} />
+        <Skeleton width="25%" height={10} borderRadius={4} />
+      </View>
+    </View>
+    <Skeleton width="100%" height={460} borderRadius={0} />
+    <View style={{ flexDirection: "row", gap: 14, padding: 14 }}>
+      <Skeleton width={26} height={26} borderRadius={13} />
+      <Skeleton width={26} height={26} borderRadius={13} />
+      <Skeleton width={26} height={26} borderRadius={13} />
+    </View>
+    <View style={{ paddingHorizontal: 14, gap: 8 }}>
+      <Skeleton width="30%" height={12} borderRadius={4} />
+      <Skeleton width="80%" height={12} borderRadius={4} />
+    </View>
+  </View>
+);
 
 const styles = StyleSheet.create({
   card: {

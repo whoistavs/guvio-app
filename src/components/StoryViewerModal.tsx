@@ -53,6 +53,7 @@ export function StoryViewerModal({
   const [replyText, setReplyText] = useState("");
   const [reactionHeart, setReactionHeart] = useState(false);
   const [reactionEmoji, setReactionEmoji] = useState("❤️");
+  const [reactionLabel, setReactionLabel] = useState("Reação enviada");
 
   const progressAnim = useRef(new Animated.Value(0)).current;
   const [viewers, setViewers] = useState<{ username: string; avatar: string; time: string }[] | null>(null);
@@ -139,6 +140,7 @@ export function StoryViewerModal({
 
   const handleSendReaction = (emoji: string) => {
     setReactionEmoji(emoji);
+    setReactionLabel("Reação enviada");
     setReactionHeart(true);
     setTimeout(() => setReactionHeart(false), 1100);
     sendToAuthor(`${emoji} Reagiu ao seu story`).catch(() => {});
@@ -150,7 +152,11 @@ export function StoryViewerModal({
     setReplyText("");
     try {
       await sendToAuthor(`Respondeu ao seu story: ${text}`);
-      Alert.alert("Enviado", `Sua resposta foi para o Direct de @${currentGroup?.username}.`);
+      // mesmo aviso animado das reações, sem pop-up
+      setReactionLabel("Resposta enviada no Direct");
+      setReactionEmoji("✉️");
+      setReactionHeart(true);
+      setTimeout(() => setReactionHeart(false), 1200);
     } catch (e: any) {
       Alert.alert("Não enviado", e?.message || "Tente novamente.");
     }
@@ -199,7 +205,7 @@ export function StoryViewerModal({
         {reactionHeart && (
           <View pointerEvents="none" style={s.reactionOverlay}>
             <Text style={{ fontSize: 96 }}>{reactionEmoji}</Text>
-            <Text style={{ color: "#FFF", fontWeight: "800", marginTop: 6 }}>Reação enviada</Text>
+            <Text style={{ color: "#FFF", fontWeight: "800", marginTop: 6 }}>{reactionLabel}</Text>
           </View>
         )}
 

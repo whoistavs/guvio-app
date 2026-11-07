@@ -28,6 +28,7 @@ import { StoryViewerModal, CreateStoryModal } from "./StoryViewerModal";
 import { CollectionPickerModal } from "./CollectionPickerModal";
 import { SuggestionsRow } from "./SuggestionsRow";
 import { LikersModal } from "./LikersModal";
+import { FadeIn, PopOnActive, toast } from "./motion";
 import { SharePostModal } from "./SharePostModal";
 import { useAppTheme } from "../context/AppTheme";
 import { FastImage, preloadImages } from "./FastImage";
@@ -215,7 +216,7 @@ export function HomeFeed({
             try {
               await setMuted(p.userId, true);
               setPosts(v => v.filter(x => x.userId !== p.userId));
-              Alert.alert("Silenciado", `Os looks de @${p.creatorUsername || p.creatorName} não aparecem mais no seu feed. Para desfazer, abra o perfil e toque em (…).`);
+              toast(`@${p.creatorUsername || p.creatorName} silenciado no seu feed`, "🔕");
             } catch (e: any) {
               Alert.alert("Erro", e?.message || "Tente novamente.");
             }
@@ -398,6 +399,7 @@ export function HomeFeed({
         visiblePosts.map((p, pIdx) => {
           const isTagsVisible = visibleTagsPostId === p.id;
           return (
+            <FadeIn key={p.id} delay={pIdx < 4 ? pIdx * 70 : 0} from={14}>
             <React.Fragment key={p.id}>
               <View style={[s.post, { borderBottomColor: colors.border }]}>
                 {/* Post Header */}
@@ -492,11 +494,13 @@ export function HomeFeed({
                 <View style={s.actions}>
                   <View style={s.leftActions}>
                     <Pressable onPress={() => toggleLikeOrSave(p.id, "isLiked")} hitSlop={8}>
-                      <Heart
-                        size={25}
-                        color={p.isLiked ? "#FF3040" : colors.icon}
-                        fill={p.isLiked ? "#FF3040" : "none"}
-                      />
+                      <PopOnActive active={!!p.isLiked}>
+                        <Heart
+                          size={25}
+                          color={p.isLiked ? "#FF3040" : colors.icon}
+                          fill={p.isLiked ? "#FF3040" : "none"}
+                        />
+                      </PopOnActive>
                     </Pressable>
                     <Pressable onPress={() => setCommentPost(p)} hitSlop={8}>
                       <MessageCircle size={24} color={colors.icon} />
@@ -516,7 +520,9 @@ export function HomeFeed({
                     delayLongPress={350}
                     hitSlop={8}
                   >
-                    <Bookmark size={24} color={colors.icon} fill={p.isSaved ? colors.icon : "none"} />
+                    <PopOnActive active={!!p.isSaved}>
+                      <Bookmark size={24} color={colors.icon} fill={p.isSaved ? colors.icon : "none"} />
+                    </PopOnActive>
                   </Pressable>
                 </View>
 
@@ -566,6 +572,7 @@ export function HomeFeed({
                 </View>
               ) : null}
             </React.Fragment>
+            </FadeIn>
           );
         })
       )}

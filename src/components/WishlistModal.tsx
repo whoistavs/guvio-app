@@ -4,6 +4,7 @@ import { Check, ExternalLink, ImagePlus, Plus, Trash2, X } from "lucide-react-na
 import * as ImagePicker from "expo-image-picker";
 import { WishlistItem } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
+import { ListSkeleton } from "./SkeletonLoader";
 import { FastImage } from "./FastImage";
 import { deleteWish, loadWishlist, saveWish } from "../services/storage";
 import { successFeedback } from "../utils/haptics";
@@ -121,7 +122,7 @@ export function WishlistModal({
           </Pressable>
         </View>
         {list === null ? (
-          <ActivityIndicator color={colors.muted} style={{ marginTop: 40 }} />
+          <ListSkeleton rows={4} avatar={56} style={{ padding: 20 }} />
         ) : (
           <ScrollView contentContainerStyle={s.c}>
             <Pressable onPress={() => setForm({ id: "tmp-new", name: "" })} style={[s.add, { backgroundColor: colors.text }]}>
