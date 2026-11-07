@@ -374,7 +374,7 @@ export async function fetchComments(postId: string): Promise<CommentItem[]> {
   const [rows, post] = await Promise.all([
     db()
       .from("comments")
-      .select("id, post_id, user_id, text, created_at, profiles(username, avatar_url)")
+      .select("id, post_id, user_id, text, created_at, profiles!comments_user_id_fkey(username, avatar_url)")
       .eq("post_id", postId)
       .order("created_at", { ascending: true }),
     db().from("posts").select("user_id").eq("id", postId).maybeSingle()
@@ -441,7 +441,7 @@ export async function fetchStories(): Promise<UserStoryGroup[]> {
   const [rows, mine] = await Promise.all([
     db()
       .from("stories")
-      .select("id, user_id, image_url, caption, created_at, profiles(username, display_name, avatar_url)")
+      .select("id, user_id, image_url, caption, created_at, profiles!stories_user_id_fkey(username, display_name, avatar_url)")
       .gte("created_at", since)
       .order("created_at", { ascending: true }),
     getMyProfile()
@@ -505,7 +505,7 @@ export async function fetchStoryViewers(storyId: string): Promise<{ username: st
   const rows = check(
     await db()
       .from("story_views")
-      .select("created_at, profiles(username, avatar_url)")
+      .select("created_at, profiles!story_views_viewer_id_fkey(username, avatar_url)")
       .eq("story_id", storyId)
       .order("created_at", { ascending: false })
   ) as any[];

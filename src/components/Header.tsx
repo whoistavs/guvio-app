@@ -32,7 +32,7 @@ export function Header({
       <View style={styles.right}>
         <View style={styles.loc}>
           <MapPin size={13} color={colors.icon} />
-          <Text style={[styles.lt, { color: colors.muted }]}>
+          <Text numberOfLines={1} style={[styles.lt, { color: colors.muted }]}>
             {locationText} {weatherText ? `· ${weatherText}` : ""}
           </Text>
         </View>
@@ -60,9 +60,9 @@ const styles = StyleSheet.create({
   left: { flexDirection: "row", alignItems: "center", gap: 10 },
   logoBadge: { width: 34, height: 34, borderRadius: 10 },
   title: { fontSize: 24, fontWeight: "900", letterSpacing: 2 },
-  right: { flexDirection: "row", alignItems: "center", gap: 14 },
-  loc: { flexDirection: "row", alignItems: "center", gap: 4 },
-  lt: { fontSize: 11, fontWeight: "600" },
+  right: { flexDirection: "row", alignItems: "center", gap: 14, flexShrink: 1, marginLeft: 12 },
+  loc: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 },
+  lt: { fontSize: 11, fontWeight: "600", flexShrink: 1 },
   iconBtn: { position: "relative", padding: 2 },
   dmBadge: {
     position: "absolute",
