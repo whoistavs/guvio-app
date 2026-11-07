@@ -18,6 +18,10 @@ import {
 import { FeedPost, UserStoryGroup, MOCK_PROFILES, UserProfile, ClothingTag } from "../data/mockData";
 import { loadAllRegisteredProfiles, loadSavedProfile } from "../services/storage";
 import { askReport, EditCaptionModal } from "./PostMenus";
+import { PostMedia } from "./PostMedia";
+import { ImageZoomModal } from "./ImageZoomModal";
+import { RichCaption } from "./RichCaption";
+import { likeFeedback, tapFeedback } from "../utils/haptics";
 import { isCloud } from "../services/supabase";
 import { CommentsModal } from "./CommentsModal";
 import { StoryViewerModal, CreateStoryModal } from "./StoryViewerModal";
@@ -34,7 +38,9 @@ export function HomeFeed({
   countryFilter,
   cityFilter,
   onClearFilter,
-  onOpenProfile
+  onOpenProfile,
+  onOpenTag,
+  refreshKey = 0
 }: {
   posts: FeedPost[];
   setPosts: React.Dispatch<React.SetStateAction<FeedPost[]>>;
@@ -43,6 +49,9 @@ export function HomeFeed({
   cityFilter?: string | null;
   onClearFilter?: () => void;
   onOpenProfile?: (name: string) => void;
+  onOpenTag?: (tag: string) => void;
+  /** muda quando o usuário puxa para atualizar: recarrega os stories */
+  refreshKey?: number;
 }) {
   const { colors } = useAppTheme();
   const [isLoading, setIsLoading] = useState(true);
@@ -72,6 +81,12 @@ export function HomeFeed({
   const [suggested, setSuggested] = useState<UserProfile[]>(MOCK_PROFILES);
 
   useEffect(() => {
+    if (refreshKey > 0) loadStories().then(setStories);
+  }, [refreshKey]);
+
+  const [zoom, setZoom] = useState<{ images: string[]; index: number } | null>(null);
+
+  useEffect(() => {
     loadStories().then(setStories);
     loadFollowedUsers().then(setFollowedUserIds);
     loadSavedProfile().then(p => setMyId(p.id));
@@ -93,6 +108,8 @@ export function HomeFeed({
   }, [posts, stories]);
 
   const toggleLikeOrSave = (id: string, key: "isLiked" | "isSaved") => {
+    if (key === "isLiked") likeFeedback();
+    else tapFeedback();
     setPosts(prev =>
       prev.map(p => {
         if (p.id === id) {
@@ -108,10 +125,11 @@ export function HomeFeed({
     );
   };
 
-  const triggerDoubleTap = (p: FeedPost) => {
+  const triggerDoubleTap = (p: FeedPost, confirmed = false) => {
     const now = Date.now();
     const prev = lastTap.current[p.id] || 0;
-    if (now - prev < 350) {
+    if (confirmed || now - prev < 350) {
+      likeFeedback();
       if (!p.isLiked) {
         toggleLikeOrSave(p.id, "isLiked");
       }
@@ -381,9 +399,12 @@ export function HomeFeed({
                   </View>
                 </View>
 
-                {/* Post Image with Double-Tap to Like & Clothing Tags */}
-                <Pressable onPress={() => triggerDoubleTap(p)} style={s.imageWrapper}>
-                  <FastImage source={p.image} style={s.image} contentFit="cover" transition={120} />
+                {/* Foto(s) do post: carrossel, dois toques para curtir, segurar para zoom */}
+                <PostMedia
+                  images={p.images && p.images.length ? p.images : [p.image]}
+                  onDoubleTap={() => triggerDoubleTap(p, true)}
+                  onOpenZoom={i => setZoom({ images: p.images && p.images.length ? p.images : [p.image], index: i })}
+                >
 
                   {/* Animated Pop Heart on Double Tap */}
                   {heartAnimPostId === p.id && (
@@ -434,7 +455,7 @@ export function HomeFeed({
                         ))}
                     </>
                   )}
-                </Pressable>
+                </PostMedia>
 
                 {/* Action Icons Bar */}
                 <View style={s.actions}>
@@ -463,10 +484,13 @@ export function HomeFeed({
                   <Text style={[s.likes, { color: colors.text }]}>
                     {p.likes.toLocaleString("pt-BR")} curtidas
                   </Text>
-                  <Text style={[s.caption, { color: colors.text }]}>
-                    <Text style={{ fontWeight: "900" }}>{p.creatorName} </Text>
-                    {p.caption}
-                  </Text>
+                  <RichCaption
+                    text={p.caption}
+                    style={[s.caption, { color: colors.text }]}
+                    prefix={<Text style={{ fontWeight: "900" }}>{p.creatorName} </Text>}
+                    onTag={onOpenTag}
+                    onMention={u => onOpenProfile?.(u)}
+                  />
                   <Pressable onPress={() => setCommentPost(p)}>
                     <Text style={{ color: colors.muted, fontSize: 12, marginTop: 6, fontWeight: "500" }}>
                       Ver todos os {p.commentsCount} comentários
@@ -525,6 +549,7 @@ export function HomeFeed({
       )}
 
       {/* Modals */}
+      <ImageZoomModal images={zoom?.images || null} index={zoom?.index || 0} onClose={() => setZoom(null)} />
       <EditCaptionModal
         post={editingPost}
         onClose={() => setEditingPost(null)}

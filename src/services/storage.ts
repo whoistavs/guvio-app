@@ -1,5 +1,7 @@
 import {
   FeedPost,
+  ClothingTag,
+  Outfit,
   WardrobeItem,
   UserProfile,
   UserStoryGroup,
@@ -103,6 +105,8 @@ export async function publishPost(input: {
   styleTag: string;
   lat?: number;
   lng?: number;
+  images?: string[];
+  clothingTags?: ClothingTag[];
 }): Promise<FeedPost> {
   if (await isCloud()) {
     const post = await cloud.createPost(input);
@@ -120,6 +124,8 @@ export async function publishPost(input: {
     country: input.country,
     styleTag: input.styleTag,
     image: input.image,
+    images: input.images && input.images.length ? input.images : [input.image],
+    clothingTags: input.clothingTags || [],
     caption: input.caption,
     likes: 0,
     commentsCount: 0,
@@ -198,6 +204,18 @@ export async function removePost(post: FeedPost): Promise<void> {
 
 export async function reportPost(postId: string, reason: string): Promise<void> {
   if (await isCloud()) return cloud.reportPost(postId, reason);
+}
+
+/** Mais posts do feed, mais antigos que o último que já está na tela */
+export async function loadMorePosts(oldest?: string): Promise<FeedPost[]> {
+  if (!oldest || !(await isCloud())) return [];
+  try {
+    const more = await cloud.fetchFeed(30, oldest);
+    more.forEach(p => postSnapshot.set(p.id, { isLiked: !!p.isLiked, isSaved: !!p.isSaved, userId: p.userId }));
+    return more;
+  } catch (e) {
+    return [];
+  }
 }
 
 /** Posts de um perfil específico */
@@ -640,4 +658,29 @@ export async function setBlocked(profile: UserProfile, on: boolean): Promise<voi
 
 export async function saveActivities(activities: ActivityItem[]): Promise<void> {
   FastStorage.setItemSync(KEYS.ACTIVITIES, activities);
+}
+
+// ---------------------------------------------------------------------
+// Looks montados
+// ---------------------------------------------------------------------
+const OUTFITS_KEY = "guvio_outfits_v1";
+
+export async function loadOutfits(): Promise<Outfit[]> {
+  if (await isCloud()) return cloud.fetchOutfits().catch(() => []);
+  return FastStorage.getItemSync(OUTFITS_KEY, []);
+}
+
+export async function saveOutfit(name: string, itemIds: string[]): Promise<Outfit> {
+  if (await isCloud()) return cloud.saveOutfit(name, itemIds);
+  const o: Outfit = { id: `outfit-${Date.now()}`, name, itemIds, createdAt: new Date().toISOString() };
+  FastStorage.setItemSync(OUTFITS_KEY, [o, ...FastStorage.getItemSync<Outfit[]>(OUTFITS_KEY, [])]);
+  return o;
+}
+
+export async function deleteOutfit(id: string): Promise<void> {
+  if (await isCloud()) return cloud.deleteOutfit(id);
+  FastStorage.setItemSync(
+    OUTFITS_KEY,
+    FastStorage.getItemSync<Outfit[]>(OUTFITS_KEY, []).filter(o => o.id !== id)
+  );
 }

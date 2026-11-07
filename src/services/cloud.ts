@@ -5,6 +5,8 @@
 import { Image as RNImage, Platform } from "react-native";
 import { supabase, cloudUserId } from "./supabase";
 import type {
+  ClothingTag,
+  Outfit,
   ActivityItem,
   CommentItem,
   DirectThread,
@@ -194,6 +196,7 @@ function toPost(r: any, liked: Set<string>, saved: Set<string>): FeedPost {
     country: r.country || "",
     styleTag: r.style_tag || "Novo look",
     image: r.image_url,
+    images: [r.image_url, ...(Array.isArray(r.images) ? r.images : [])].filter(Boolean),
     caption: r.caption || "",
     likes: r.likes_count ?? 0,
     commentsCount: r.comments_count ?? 0,
@@ -242,11 +245,10 @@ function visible(rows: any[], hidden: { users: Set<string>; posts: Set<string> }
   return rows.filter(r => !hidden.users.has(r.user_id) && !hidden.posts.has(r.id));
 }
 
-export async function fetchFeed(limit = 60): Promise<FeedPost[]> {
-  const [res, hidden] = await Promise.all([
-    db().from("feed_posts").select("*").order("created_at", { ascending: false }).limit(limit),
-    hiddenSets()
-  ]);
+export async function fetchFeed(limit = 30, before?: string): Promise<FeedPost[]> {
+  let q = db().from("feed_posts").select("*").order("created_at", { ascending: false }).limit(limit);
+  if (before) q = q.lt("created_at", before);
+  const [res, hidden] = await Promise.all([q, hiddenSets()]);
   return mapPosts(visible(check(res) || [], hidden));
 }
 
@@ -320,9 +322,15 @@ export async function createPost(input: {
   styleTag: string;
   lat?: number;
   lng?: number;
+  images?: string[];
+  clothingTags?: ClothingTag[];
 }): Promise<FeedPost> {
   const uid = await me();
-  const image_url = await uploadImage(input.image, "posts");
+  const all = (input.images && input.images.length ? input.images : [input.image]).slice(0, 10);
+  // sobe as fotos em sequência (mais estável no 4G)
+  const uploaded: string[] = [];
+  for (const uri of all) uploaded.push(await uploadImage(uri, "posts"));
+  const image_url = uploaded[0];
   const row = check(
     await db()
       .from("posts")
@@ -334,7 +342,9 @@ export async function createPost(input: {
         country: input.country,
         style_tag: input.styleTag,
         lat: input.lat ?? null,
-        lng: input.lng ?? null
+        lng: input.lng ?? null,
+        images: uploaded.slice(1),
+        clothing_tags: (input.clothingTags || []).map(t => ({ ...t, image: t.image && /^https?:/.test(t.image) ? t.image : undefined }))
       })
       .select("id")
       .single()
@@ -835,4 +845,27 @@ export function subscribeMyAlerts(onAlert: (title: string, body: string, kind: "
     stopped = true;
     if (ch) client.removeChannel(ch);
   };
+}
+
+// ---------------------------------------------------------------------
+// Looks montados
+// ---------------------------------------------------------------------
+export async function fetchOutfits(): Promise<Outfit[]> {
+  const uid = await me();
+  const rows = check(
+    await db().from("outfits").select("*").eq("user_id", uid).order("created_at", { ascending: false })
+  ) as any[];
+  return (rows || []).map(r => ({ id: r.id, name: r.name, itemIds: r.item_ids || [], createdAt: r.created_at }));
+}
+
+export async function saveOutfit(name: string, itemIds: string[]): Promise<Outfit> {
+  const uid = await me();
+  const r = check(
+    await db().from("outfits").insert({ user_id: uid, name, item_ids: itemIds }).select("*").single()
+  ) as any;
+  return { id: r.id, name: r.name, itemIds: r.item_ids || [], createdAt: r.created_at };
+}
+
+export async function deleteOutfit(id: string) {
+  check(await db().from("outfits").delete().eq("id", id));
 }

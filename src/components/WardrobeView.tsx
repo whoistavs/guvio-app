@@ -1,21 +1,60 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { Camera, ImagePlus, Plus, Sparkles, Tag, Trash2, X } from "lucide-react-native";
+import { Camera, Check, ImagePlus, Layers, Plus, Send, Sparkles, Tag, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
-import { OutfitStyle, STYLES, WardrobeItem } from "../data/mockData";
+import { ClothingTag, Outfit, OutfitStyle, STYLES, WardrobeItem } from "../data/mockData";
 import { StyleCard } from "./OutfitCard";
 import { useAppTheme } from "../context/AppTheme";
 import { generateSmartOutfit, getWeatherRecommendationTip, AIOutfitRecommendation } from "../services/aiStyling";
-import { loadSavedWardrobe, addWardrobeItem, removeWardrobeItem } from "../services/storage";
+import {
+  loadSavedWardrobe,
+  addWardrobeItem,
+  removeWardrobeItem,
+  loadOutfits,
+  saveOutfit,
+  deleteOutfit
+} from "../services/storage";
+import { successFeedback, tapFeedback } from "../utils/haptics";
 import { WeatherData } from "../services/weather";
 import { getSavedAuthSession } from "../services/auth";
 import { ImagePlaceholder, FastImage, preloadImages } from "./FastImage";
 
 const DEFAULT_CLOTH = ""; // sem foto escolhida ainda
 
-export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; currentWeather?: WeatherData | null }) {
+const ALL = "Todas";
+
+/** transforma as peças de um look em fotos + marcações para o post */
+function outfitToPost(pieces: WardrobeItem[]): { images: string[]; tags: ClothingTag[] } {
+  const images = pieces.map(p => p.image).filter(Boolean);
+  const tags: ClothingTag[] = pieces.map((p, i) => ({
+    id: `tag-${p.id}`,
+    name: p.name,
+    brand: p.category,
+    image: p.image,
+    x: i % 2 === 0 ? 24 : 70,
+    y: Math.min(85, 22 + Math.floor(i / 2) * 18)
+  }));
+  return { images, tags };
+}
+
+export function WardrobeView({
+  onAdd,
+  currentWeather,
+  onPublishOutfit
+}: {
+  onAdd?: () => void;
+  currentWeather?: WeatherData | null;
+  /** abre "Nova publicação" já com as fotos e peças marcadas */
+  onPublishOutfit?: (images: string[], tags: ClothingTag[], name: string) => void;
+}) {
   const { colors } = useAppTheme();
   const [items, setItems] = useState<WardrobeItem[]>([]);
+  const [catFilter, setCatFilter] = useState(ALL);
+  const [colorFilter, setColorFilter] = useState(ALL);
+  const [building, setBuilding] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [outfitName, setOutfitName] = useState("");
+  const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
   const [selectedStyle, setSelectedStyle] = useState<OutfitStyle | null>(null);
   const [aiResult, setAiResult] = useState<AIOutfitRecommendation | null>(null);
@@ -38,7 +77,95 @@ export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; cu
         preloadImages(loadedItems.map(i => i.image));
       });
     });
+    loadOutfits().then(setOutfits).catch(() => {});
   }, []);
+
+  const uniq = (vals: string[]) => {
+    const seen = new Map<string, string>();
+    vals.forEach(v => {
+      const k = v.trim().toLowerCase();
+      if (k && !seen.has(k)) seen.set(k, v.trim());
+    });
+    return [ALL, ...Array.from(seen.values())];
+  };
+  const categories = useMemo(() => uniq(items.map(i => i.category)), [items]);
+  const colorsList = useMemo(() => uniq(items.map(i => i.colorTag)), [items]);
+  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+  const visible = items.filter(
+    i => (catFilter === ALL || same(i.category, catFilter)) && (colorFilter === ALL || same(i.colorTag, colorFilter))
+  );
+  const byId = (ids: string[]) => ids.map(id => items.find(i => i.id === id)).filter(Boolean) as WardrobeItem[];
+
+  const togglePick = (id: string) => {
+    tapFeedback();
+    setPicked(p => (p.includes(id) ? p.filter(x => x !== id) : [...p, id]));
+  };
+
+  const cancelBuild = () => {
+    setBuilding(false);
+    setPicked([]);
+    setOutfitName("");
+  };
+
+  const handleSaveOutfit = async () => {
+    if (picked.length < 2) {
+      Alert.alert("Monte o look", "Escolha pelo menos 2 peças.");
+      return;
+    }
+    try {
+      const o = await saveOutfit(outfitName.trim() || "Meu look", picked);
+      setOutfits(prev => [o, ...prev]);
+      successFeedback();
+      cancelBuild();
+    } catch (e: any) {
+      Alert.alert("Não foi possível salvar", e?.message || "Tente novamente.");
+    }
+  };
+
+  const publishPieces = (pieces: WardrobeItem[], name: string) => {
+    if (!onPublishOutfit) return;
+    if (pieces.length === 0) {
+      Alert.alert("Look vazio", "As peças desse look não estão mais no guarda-roupa.");
+      return;
+    }
+    const { images, tags } = outfitToPost(pieces);
+    onPublishOutfit(images, tags, name);
+  };
+
+  const handleDeleteOutfit = (o: Outfit) => {
+    Alert.alert("Apagar look", `Apagar "${o.name}"? As peças continuam no guarda-roupa.`, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Apagar",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deleteOutfit(o.id);
+            setOutfits(prev => prev.filter(x => x.id !== o.id));
+          } catch (e: any) {
+            Alert.alert("Erro", e?.message || "Não foi possível apagar.");
+          }
+        }
+      }
+    ]);
+  };
+
+  const renderChips = (list: string[], value: string, set: (v: string) => void) => (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
+      {list.map(v => {
+        const on = v === value;
+        return (
+          <Pressable
+            key={v}
+            onPress={() => set(v)}
+            style={[s.chip, { backgroundColor: on ? colors.text : colors.surface, borderColor: colors.border }]}
+          >
+            <Text style={{ color: on ? colors.bg : colors.text, fontSize: 11, fontWeight: "800" }}>{v}</Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
 
   const handleSelectStyle = (st: OutfitStyle) => {
     setSelectedStyle(st);
@@ -160,37 +287,154 @@ export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; cu
           </Pressable>
         ) : null}
 
+        {outfits.length > 0 ? (
+          <View style={[s.section, { borderTopColor: colors.border }]}>
+            <Text style={[s.badge, { color: colors.muted }]}>LOOKS SALVOS ({outfits.length})</Text>
+            <Text style={[s.sh, { color: colors.text, marginBottom: 12 }]}>Meus looks</Text>
+            {outfits.map(o => {
+              const pieces = byId(o.itemIds);
+              return (
+                <View key={o.id} style={[s.outfit, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <View style={s.outfitHead}>
+                    <Text style={{ color: colors.text, fontWeight: "900", flex: 1 }} numberOfLines={1}>
+                      {o.name}
+                    </Text>
+                    <Pressable onPress={() => handleDeleteOutfit(o)} hitSlop={10}>
+                      <Trash2 size={16} color={colors.muted} />
+                    </Pressable>
+                  </View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                    {pieces.map(p => (
+                      <FastImage key={p.id} source={p.image} style={s.outfitImg} contentFit="cover" />
+                    ))}
+                  </ScrollView>
+                  {onPublishOutfit ? (
+                    <Pressable onPress={() => publishPieces(pieces, o.name)} style={[s.outfitBtn, { backgroundColor: colors.text }]}>
+                      <Send size={14} color={colors.bg} />
+                      <Text style={{ color: colors.bg, fontWeight: "900", fontSize: 12 }}>Publicar look</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+
         <View style={[s.section, { borderTopColor: colors.border }]}>
           <View style={s.row}>
-            <View>
+            <View style={{ flexGrow: 1, minWidth: 170 }}>
               <Text style={[s.badge, { color: colors.muted }]}>PEÇAS CADASTRADAS ({items.length})</Text>
-              <Text style={[s.sh, { color: colors.text }]}>Meu guarda-roupa</Text>
+              <Text style={[s.sh, { color: colors.text }]}>{building ? "Escolha as peças" : "Meu guarda-roupa"}</Text>
             </View>
-            <Pressable onPress={() => setAddModalVisible(true)} style={[s.add, { backgroundColor: colors.text }]}>
-              <Plus size={16} color={colors.bg} />
-              <Text style={{ color: colors.bg, fontWeight: "800", fontSize: 11 }}>Adicionar</Text>
-            </Pressable>
+            {building ? (
+              <Pressable onPress={cancelBuild} style={[s.add, { backgroundColor: colors.surface }]}>
+                <X size={16} color={colors.text} />
+                <Text style={{ color: colors.text, fontWeight: "800", fontSize: 11 }}>Cancelar</Text>
+              </Pressable>
+            ) : (
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {items.length >= 2 ? (
+                  <Pressable onPress={() => setBuilding(true)} style={[s.add, { backgroundColor: colors.surface }]}>
+                    <Layers size={16} color={colors.text} />
+                    <Text style={{ color: colors.text, fontWeight: "800", fontSize: 11 }}>Montar look</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable onPress={() => setAddModalVisible(true)} style={[s.add, { backgroundColor: colors.text }]}>
+                  <Plus size={16} color={colors.bg} />
+                  <Text style={{ color: colors.bg, fontWeight: "800", fontSize: 11 }}>Adicionar</Text>
+                </Pressable>
+              </View>
+            )}
           </View>
 
-          <View style={s.items}>
-            {items.map(it => (
-              <View key={it.id} style={[s.item, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <FastImage source={it.image} style={s.img} contentFit="cover" transition={100} />
-                <Pressable onPress={() => handleDeleteItem(it.id, it.name)} style={s.trashBtn}>
-                  <Trash2 size={14} color="#FFF" />
+          {building ? (
+            <View style={[s.builder, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <TextInput
+                value={outfitName}
+                onChangeText={setOutfitName}
+                placeholder="Nome do look (ex: Sexta casual)"
+                placeholderTextColor={colors.muted}
+                style={[s.input, { backgroundColor: colors.bg, color: colors.text, borderColor: colors.border }]}
+              />
+              <Text style={{ color: colors.muted, fontSize: 12, marginVertical: 6 }}>
+                {picked.length === 0 ? "Toque nas peças abaixo para montar o look." : `${picked.length} peça(s) escolhida(s)`}
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <Pressable onPress={handleSaveOutfit} style={[s.outfitBtn, { flex: 1, backgroundColor: colors.text }]}>
+                  <Check size={14} color={colors.bg} />
+                  <Text style={{ color: colors.bg, fontWeight: "900", fontSize: 12 }}>Salvar look</Text>
                 </Pressable>
-                <View style={{ padding: 10 }}>
-                  <View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
-                    <Tag size={10} color={colors.muted} />
-                    <Text style={{ fontSize: 9, color: colors.muted, fontWeight: "800" }}>{it.category.toUpperCase()}</Text>
-                  </View>
-                  <Text numberOfLines={1} style={{ color: colors.text, fontWeight: "800", fontSize: 12, marginTop: 3 }}>
-                    {it.name}
-                  </Text>
-                  <Text style={{ color: colors.muted, fontSize: 10 }}>{it.colorTag}</Text>
-                </View>
+                {onPublishOutfit ? (
+                  <Pressable
+                    onPress={() => {
+                      if (picked.length === 0) {
+                        Alert.alert("Monte o look", "Escolha pelo menos 1 peça.");
+                        return;
+                      }
+                      publishPieces(byId(picked), outfitName.trim() || "Meu look");
+                      cancelBuild();
+                    }}
+                    style={[s.outfitBtn, { flex: 1, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border }]}
+                  >
+                    <Send size={14} color={colors.text} />
+                    <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12 }}>Publicar</Text>
+                  </Pressable>
+                ) : null}
               </View>
-            ))}
+            </View>
+          ) : null}
+
+          {items.length > 0 ? (
+            <>
+              {categories.length > 2 ? renderChips(categories, catFilter, setCatFilter) : null}
+              {colorsList.length > 2 ? renderChips(colorsList, colorFilter, setColorFilter) : null}
+            </>
+          ) : (
+            <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 12 }}>
+              Nenhuma peça ainda. Toque em "Adicionar" para começar seu guarda-roupa digital.
+            </Text>
+          )}
+
+          {items.length > 0 && visible.length === 0 ? (
+            <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 12 }}>Nenhuma peça com esses filtros.</Text>
+          ) : null}
+
+          <View style={s.items}>
+            {visible.map(it => {
+              const on = picked.includes(it.id);
+              return (
+                <Pressable
+                  key={it.id}
+                  onPress={building ? () => togglePick(it.id) : undefined}
+                  style={[
+                    s.item,
+                    { backgroundColor: colors.surface, borderColor: on ? colors.text : colors.border },
+                    on && { borderWidth: 2 }
+                  ]}
+                >
+                  <FastImage source={it.image} style={s.img} contentFit="cover" transition={100} />
+                  {building ? (
+                    <View style={[s.pickDot, { backgroundColor: on ? colors.text : "rgba(0,0,0,0.45)" }]}>
+                      {on ? <Text style={{ color: colors.bg, fontWeight: "900", fontSize: 12 }}>{picked.indexOf(it.id) + 1}</Text> : null}
+                    </View>
+                  ) : (
+                    <Pressable onPress={() => handleDeleteItem(it.id, it.name)} style={s.trashBtn}>
+                      <Trash2 size={14} color="#FFF" />
+                    </Pressable>
+                  )}
+                  <View style={{ padding: 10 }}>
+                    <View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
+                      <Tag size={10} color={colors.muted} />
+                      <Text style={{ fontSize: 9, color: colors.muted, fontWeight: "800" }}>{it.category.toUpperCase()}</Text>
+                    </View>
+                    <Text numberOfLines={1} style={{ color: colors.text, fontWeight: "800", fontSize: 12, marginTop: 3 }}>
+                      {it.name}
+                    </Text>
+                    <Text style={{ color: colors.muted, fontSize: 10 }}>{it.colorTag}</Text>
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
       </ScrollView>
@@ -233,6 +477,21 @@ export function WardrobeView({ onAdd, currentWeather }: { onAdd?: () => void; cu
               </>
             ) : null}
 
+            {aiResult && aiResult.matchedItems.length > 0 ? (
+              <Pressable
+                onPress={async () => {
+                  try {
+                    const o = await saveOutfit(`Look ${selectedStyle?.title || ""}`.trim(), aiResult.matchedItems.map(i => i.id));
+                    setOutfits(prev => [o, ...prev]);
+                    successFeedback();
+                  } catch {}
+                  setSelectedStyle(null);
+                }}
+                style={[s.done, { backgroundColor: colors.surface }]}
+              >
+                <Text style={{ color: colors.text, fontWeight: "900" }}>Salvar nos meus looks</Text>
+              </Pressable>
+            ) : null}
             <Pressable onPress={() => setSelectedStyle(null)} style={[s.done, { backgroundColor: colors.text }]}>
               <Text style={{ color: colors.bg, fontWeight: "900" }}>Usar este look hoje</Text>
             </Pressable>
@@ -323,7 +582,7 @@ const s = StyleSheet.create({
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
   ai: { height: 48, borderRadius: 24, flexDirection: "row", gap: 7, alignItems: "center", justifyContent: "center", marginVertical: 8 },
   section: { borderTopWidth: 1, paddingTop: 22, marginTop: 12 },
-  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
+  row: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14 },
   sh: { fontSize: 20, fontWeight: "900" },
   add: { flexDirection: "row", gap: 4, alignItems: "center", paddingHorizontal: 13, paddingVertical: 8, borderRadius: 16 },
   items: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
@@ -340,5 +599,13 @@ const s = StyleSheet.create({
   previewImg: { width: 100, height: 100, borderRadius: 16, marginVertical: 6 },
   pickers: { flexDirection: "row", gap: 10, marginBottom: 8, width: "100%" },
   pickerBtn: { flex: 1, height: 40, borderWidth: 1, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  chips: { gap: 6, paddingBottom: 10 },
+  chip: { borderWidth: 1, borderRadius: 16, paddingHorizontal: 12, height: 30, alignItems: "center", justifyContent: "center" },
+  builder: { borderWidth: 1, borderRadius: 18, padding: 12, marginBottom: 12 },
+  pickDot: { position: "absolute", top: 8, right: 8, width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: "#FFF", alignItems: "center", justifyContent: "center" },
+  outfit: { borderWidth: 1, borderRadius: 18, padding: 12, marginBottom: 12, gap: 10 },
+  outfitHead: { flexDirection: "row", alignItems: "center", gap: 8 },
+  outfitImg: { width: 70, height: 86, borderRadius: 12 },
+  outfitBtn: { height: 38, borderRadius: 19, flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center" },
   input: { width: "100%", height: 44, borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, fontSize: 13, marginBottom: 4 }
 });

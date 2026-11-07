@@ -4,6 +4,7 @@ import {
   Bookmark,
   Camera,
   Clock3,
+  FileText,
   Globe,
   Grid3X3,
   Heart,
@@ -15,6 +16,8 @@ import {
   MoreHorizontal,
   Moon,
   Settings,
+  Share2,
+  Shield,
   Tag,
   Trash2,
   UserCheck,
@@ -43,6 +46,8 @@ import {
 } from "../services/storage";
 import { getSavedAuthSession } from "../services/auth";
 import { FastImage, preloadImages } from "./FastImage";
+import { ShareProfileModal } from "./ShareProfileModal";
+import { LEGAL_TEXTS } from "../data/legal";
 
 function Grid({
   posts,
@@ -147,6 +152,7 @@ export function PublicProfileView({
     await saveFollowedUsers(updated);
   };
 
+  const [sharing, setSharing] = useState(false);
   const followersCount = Math.max(0, (profile.followers || 0) - (initiallyFollowed ? 1 : 0) + (isFollowed ? 1 : 0));
 
   return (
@@ -156,9 +162,14 @@ export function PublicProfileView({
           title={`@${profile.username}`}
           onBack={onBack}
           right={
-            <Pressable onPress={handleBlock} hitSlop={10}>
-              <UserX size={22} color={colors.icon} />
-            </Pressable>
+            <View style={{ flexDirection: "row", gap: 18, alignItems: "center" }}>
+              <Pressable onPress={() => setSharing(true)} hitSlop={10}>
+                <Share2 size={21} color={colors.icon} />
+              </Pressable>
+              <Pressable onPress={handleBlock} hitSlop={10}>
+                <UserX size={22} color={colors.icon} />
+              </Pressable>
+            </View>
           }
         />
         <View style={s.top}>
@@ -281,6 +292,13 @@ export function PublicProfileView({
           </View>
         </View>
       </Modal>
+      <ShareProfileModal
+        visible={sharing}
+        onClose={() => setSharing(false)}
+        username={profile.username}
+        displayName={profile.displayName}
+        avatar={profile.avatar}
+      />
     </>
   );
 }
@@ -312,6 +330,7 @@ export function MyProfileView({
   const [savedPosts, setSavedPosts] = useState<FeedPost[]>([]);
   const [selectedPost, setSelectedPost] = useState<FeedPost | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
+  const [sharing, setSharing] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<"posts" | "saved" | "tagged">("posts");
   const [followingCount, setFollowingCount] = useState(0);
@@ -464,9 +483,14 @@ export function MyProfileView({
           ) : null}
         </View>
 
-        <Pressable onPress={() => setEditModalVisible(true)} style={[s.edit, { backgroundColor: colors.surface }]}>
-          <Text style={{ color: colors.text, fontWeight: "800" }}>Editar perfil</Text>
-        </Pressable>
+        <View style={s.editRow}>
+          <Pressable onPress={() => setEditModalVisible(true)} style={[s.edit, s.editHalf, { backgroundColor: colors.surface }]}>
+            <Text style={{ color: colors.text, fontWeight: "800" }}>Editar perfil</Text>
+          </Pressable>
+          <Pressable onPress={() => setSharing(true)} style={[s.edit, s.editHalf, { backgroundColor: colors.surface }]}>
+            <Text style={{ color: colors.text, fontWeight: "800" }}>Compartilhar perfil</Text>
+          </Pressable>
+        </View>
 
         {/* Instagram Profile Tabs: Posts | Saved | Tagged */}
         <View style={[s.profileTabsBar, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
@@ -650,6 +674,13 @@ export function MyProfileView({
           </View>
         </View>
       </Modal>
+      <ShareProfileModal
+        visible={sharing}
+        onClose={() => setSharing(false)}
+        username={profile.username}
+        displayName={profile.displayName}
+        avatar={profile.avatar}
+      />
     </>
   );
 }
@@ -669,7 +700,9 @@ export function SettingsView({
   const rows = [
     { id: "saved", l: "Salvos", i: Bookmark },
     { id: "activity", l: "Sua atividade", i: Clock3 },
-    { id: "blocked", l: "Bloqueados", i: UserX }
+    { id: "blocked", l: "Bloqueados", i: UserX },
+    { id: "privacy", l: "Política de Privacidade", i: Shield },
+    { id: "terms", l: "Termos de Uso", i: FileText }
   ];
 
   const handleConfirmSignOut = () => {
@@ -780,7 +813,35 @@ export function SimpleSettingsPage({
     }
   };
 
-  const title = kind === "saved" ? "Salvos" : kind === "activity" ? "Sua atividade" : "Bloqueados";
+  const legal = LEGAL_TEXTS[kind];
+  const title = legal
+    ? legal.title
+    : kind === "saved"
+      ? "Salvos"
+      : kind === "activity"
+        ? "Sua atividade"
+        : "Bloqueados";
+
+  if (legal) {
+    return (
+      <ScrollView style={{ flex: 1, backgroundColor: colors.bg }}>
+        <ScreenHeader title={title} onBack={onBack} />
+        <View style={s.legal}>
+          <Text style={{ color: colors.muted, fontSize: 12 }}>Última atualização: {legal.updated}</Text>
+          {legal.sections.map(sec => (
+            <View key={sec.h}>
+              <Text style={[s.legalH, { color: colors.text }]}>{sec.h}</Text>
+              {sec.p.map((para, i) => (
+                <Text key={i} style={[s.legalP, { color: colors.text, marginBottom: 8 }]}>
+                  {para}
+                </Text>
+              ))}
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -835,6 +896,11 @@ const s = StyleSheet.create({
     flexDirection: "row",
     gap: 6
   },
+  editRow: { flexDirection: "row", gap: 8, marginHorizontal: 22, marginTop: 14 },
+  editHalf: { flex: 1, marginHorizontal: 0, marginTop: 0 },
+  legal: { padding: 22, paddingBottom: 60 },
+  legalH: { fontSize: 15, fontWeight: "900", marginTop: 18, marginBottom: 6 },
+  legalP: { fontSize: 13, lineHeight: 20 },
   edit: {
     marginHorizontal: 22,
     marginTop: 14,

@@ -1,5 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Dimensions, Linking, SafeAreaView, ScrollView, StatusBar, StyleSheet, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Linking,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View
+} from "react-native";
 import { AppThemeProvider, useAppTheme } from "./src/context/AppTheme";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import { Header } from "./src/components/Header";
@@ -9,7 +21,7 @@ import { HomeFeed } from "./src/components/HomeFeed";
 import { WardrobeView } from "./src/components/WardrobeView";
 import { SearchProfilesView } from "./src/components/SearchProfilesView";
 import { BottomNavLiquid } from "./src/components/BottomNavLiquid";
-import { FeedPost, UserProfile, DirectThread } from "./src/data/mockData";
+import { FeedPost, UserProfile, DirectThread, ClothingTag } from "./src/data/mockData";
 import { MyProfileView, PublicProfileView, SettingsView, SimpleSettingsPage } from "./src/components/ProfileViews";
 import { DirectView } from "./src/components/DirectView";
 import { ActivityView } from "./src/components/ActivityView";
@@ -22,14 +34,17 @@ import {
   findProfile,
   hasUnreadActivity,
   threadForProfile,
-  unreadMessages
+  unreadMessages,
+  loadMorePosts
 } from "./src/services/storage";
+import { successFeedback } from "./src/utils/haptics";
 import { getCurrentPlace, CurrentPlace } from "./src/services/location";
 import { PostDetailView } from "./src/components/PostDetailView";
 import { FollowListView } from "./src/components/FollowListView";
 import { fetchCityWeather, WeatherData } from "./src/services/weather";
 import { requestNotificationPermissions, sendLocalNotification } from "./src/services/notifications";
 import { getSavedAuthSession, signOut, handleAuthRedirect, deleteAccount } from "./src/services/auth";
+import { parseProfileLink } from "./src/utils/profileLink";
 import { FastStorage } from "./src/services/FastStorage";
 import { supabase, isCloud } from "./src/services/supabase";
 import { subscribeFeed, fetchPostCounts, subscribeMyAlerts } from "./src/services/cloud";
@@ -49,6 +64,9 @@ function Guvio() {
 
   const [authenticated, setAuthenticated] = useState(false);
   const [booting, setBooting] = useState(true);
+  // perfil aberto por link/QR (guvio://u/<username>), abre depois do login
+  const [pendingProfile, setPendingProfile] = useState<string | null>(null);
+  const openNameRef = useRef<((name: string) => void) | null>(null);
   const [tab, setTab] = useState("home");
   // pilha de telas abertas por cima das abas (voltar = tirar a de cima)
   const [stack, setStack] = useState<Screen[]>([]);
@@ -66,6 +84,14 @@ function Guvio() {
   const [publishing, setPublishing] = useState(false);
   const [globeTouching, setGlobeTouching] = useState(false);
   const [searchMarkerId, setSearchMarkerId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  // pedido de busca vindo de uma #hashtag
+  const [searchRequest, setSearchRequest] = useState<{ text: string; id: number } | null>(null);
+  // rascunho de post vindo do montador de looks
+  const [draft, setDraft] = useState<{ images: string[]; tags: ClothingTag[]; caption: string; id: number } | null>(null);
 
   // pontos do globo: cidades onde há looks com localização
   const globeMarkers = useMemo<GlobeMarker[]>(() => {
@@ -109,6 +135,8 @@ function Guvio() {
     FastStorage.init().then(async () => {
       const initialUrl = await Linking.getInitialURL().catch(() => null);
       await handleAuthRedirect(initialUrl).catch(() => false);
+      const linkedUser = parseProfileLink(initialUrl);
+      if (linkedUser) setPendingProfile(linkedUser);
       const session = await getSavedAuthSession();
       setAuthenticated(Boolean(session));
       setBooting(false);
@@ -118,6 +146,11 @@ function Guvio() {
     fetchCityWeather(41.5388, -8.6151).then(setWeather);
 
     const linkSub = Linking.addEventListener("url", ({ url }) => {
+      const linkedUser = parseProfileLink(url);
+      if (linkedUser) {
+        setPendingProfile(linkedUser);
+        return;
+      }
       handleAuthRedirect(url).then(ok => ok && setAuthenticated(true));
     });
     const authSub = supabase?.auth.onAuthStateChange((event, session) => {
@@ -194,12 +227,53 @@ function Guvio() {
     setTab("home");
   };
 
-  const handlePublish = async (x: { image: string; caption: string }): Promise<boolean> => {
+  const refreshFeed = async () => {
+    setRefreshing(true);
+    try {
+      const fresh = await loadSavedPosts();
+      setPosts(fresh);
+      setHasMore(true);
+      setRefreshKey(k => k + 1);
+      hasUnreadActivity().then(setUnread);
+      unreadMessages().then(setUnreadDm);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore || posts.length === 0) return;
+    const oldest = posts[posts.length - 1]?.createdAt;
+    if (!oldest) return;
+    setLoadingMore(true);
+    try {
+      const more = await loadMorePosts(oldest);
+      if (more.length === 0) setHasMore(false);
+      else setPosts(prev => [...prev, ...more.filter(m => !prev.some(p => p.id === m.id))]);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const openTag = (tag: string) => {
+    setSearchRequest({ text: `#${tag}`, id: Date.now() });
+    setStack([]);
+    setTab("search");
+  };
+
+  const handlePublish = async (x: {
+    image: string;
+    images?: string[];
+    clothingTags?: ClothingTag[];
+    caption: string;
+  }): Promise<boolean> => {
     if (publishing) return false;
     setPublishing(true);
     try {
       const p = await publishPost({
         image: x.image,
+        images: x.images,
+        clothingTags: x.clothingTags,
         caption: x.caption,
         city: place?.city || location.split(",")[0] || "",
         country: place?.country || filterCountry || "",
@@ -212,6 +286,8 @@ function Guvio() {
         savePosts(updated);
         return updated;
       });
+      successFeedback();
+      setDraft(null);
       sendLocalNotification(
         "Novo look publicado! ✨",
         `Seu look em ${p.city} já está visível para a comunidade Guvio.`
@@ -225,6 +301,17 @@ function Guvio() {
       setPublishing(false);
     }
   };
+
+  useEffect(() => {
+    if (!pendingProfile || booting || !authenticated) return;
+    const name = pendingProfile;
+    // espera as telas montarem antes de abrir o perfil
+    const t = setTimeout(() => {
+      setPendingProfile(null);
+      openNameRef.current?.(name);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [pendingProfile, booting, authenticated]);
 
   if (booting) return <View style={[s.safe, { backgroundColor: colors.bg }]} />;
 
@@ -265,6 +352,8 @@ function Guvio() {
     push({ name: "publicProfile", profile: p });
   };
 
+  openNameRef.current = openName;
+
   const openProfileObj = (p: UserProfile) => push({ name: "publicProfile", profile: p });
   const openPost = (postId: string) => push({ name: "post", postId });
   const openFollows = (p: UserProfile, kind: "followers" | "following") => push({ name: "follows", profile: p, kind });
@@ -304,6 +393,7 @@ function Guvio() {
             postId={top.postId}
             onBack={back}
             onOpenProfile={openName}
+            onOpenTag={openTag}
             onDeleted={id => {
               setPosts(prev => prev.filter(p => p.id !== id));
               back();
@@ -352,6 +442,12 @@ function Guvio() {
           contentContainerStyle={{ flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshFeed} tintColor={colors.muted} />}
+          scrollEventThrottle={200}
+          onScroll={e => {
+            const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+            if (layoutMeasurement.height + contentOffset.y > contentSize.height - 900) loadMore();
+          }}
         >
           <View style={{ backgroundColor: colors.bg }}>
             <Header
@@ -375,15 +471,32 @@ function Guvio() {
             onClearFilter={clearGlobeSelection}
             onAssembleWithWardrobe={() => setTab("wardrobe")}
             onOpenProfile={openName}
+            onOpenTag={openTag}
+            refreshKey={refreshKey}
           />
+          {loadingMore ? <ActivityIndicator color={colors.muted} style={{ marginVertical: 24 }} /> : null}
+          {!hasMore && posts.length > 0 ? (
+            <Text style={{ color: colors.muted, textAlign: "center", fontSize: 12, marginVertical: 24 }}>
+              Você viu todos os looks ✨
+            </Text>
+          ) : null}
+          <View style={{ height: 110 }} />
         </ScrollView>
       ) : tab === "wardrobe" ? (
-        <WardrobeView onAdd={() => setTab("add")} currentWeather={weather} />
+        <WardrobeView
+          onAdd={() => setTab("add")}
+          currentWeather={weather}
+          onPublishOutfit={(images, tags, name) => {
+            setDraft({ images, tags, caption: name, id: Date.now() });
+            setTab("add");
+          }}
+        />
       ) : tab === "search" ? (
         <SearchProfilesView
           onOpenProfile={openProfileObj}
           onOpenPost={openPost}
           scrollEnabled={!globeTouching}
+          searchRequest={searchRequest}
           globe={
             <Globe3D
               markers={globeMarkers}
@@ -418,6 +531,7 @@ function Guvio() {
           onWardrobe={() => setTab("wardrobe")}
           publishing={publishing}
           onPublish={handlePublish}
+          draft={draft}
         />
       )}
       <BottomNavLiquid activeTab={tab} onTabChange={setTab} />

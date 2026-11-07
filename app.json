@@ -15,11 +15,11 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.guvio.ios",
-      "buildNumber": "2"
+      "buildNumber": "3"
     },
     "android": {
       "package": "app.guvio.android",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#050608"
@@ -51,7 +51,17 @@
           "photosPermission": "O Guvio acessa suas fotos para você publicar looks, stories e peças do guarda-roupa.",
           "cameraPermission": "O Guvio usa a câmera para você fotografar seus looks."
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#050608"
+        }
       ]
-    ]
+    ],
+    "backgroundColor": "#050608"
   }
 }

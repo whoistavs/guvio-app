@@ -30,6 +30,8 @@ export interface ClothingTag {
   id: string;
   name: string;
   brand: string;
+  /** foto da peça (quando marcada do guarda-roupa) */
+  image?: string;
   price?: string;
   x: number; // percentage 0-100
   y: number; // percentage 0-100
@@ -48,6 +50,8 @@ export interface FeedPost {
   country: string;
   styleTag: string;
   image: string;
+  /** todas as fotos do post (a primeira é a mesma de "image") */
+  images?: string[];
   caption: string;
   likes: number;
   commentsCount: number;
@@ -490,3 +494,11 @@ export const MOCK_DIRECTS: DirectThread[] = [
     unread: 0
   }
 ];
+
+/** Look montado no guarda-roupa */
+export interface Outfit {
+  id: string;
+  name: string;
+  itemIds: string[];
+  createdAt?: string;
+}

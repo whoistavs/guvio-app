@@ -29,7 +29,8 @@ export function SearchProfilesView({
   globe,
   cityFocus,
   onClearCityFocus,
-  scrollEnabled = true
+  scrollEnabled = true,
+  searchRequest
 }: {
   onOpenProfile: (p: UserProfile) => void;
   onOpenPost?: (postId: string) => void;
@@ -39,6 +40,8 @@ export function SearchProfilesView({
   cityFocus?: { title: string; posts: FeedPost[] } | null;
   onClearCityFocus?: () => void;
   scrollEnabled?: boolean;
+  /** texto para pesquisar ao abrir (ex.: uma #hashtag tocada no feed) */
+  searchRequest?: { text: string; id: number } | null;
 }) {
   const { colors } = useAppTheme();
   const [q, setQ] = useState("");
@@ -50,6 +53,13 @@ export function SearchProfilesView({
   const [loadingExplore, setLoadingExplore] = useState(true);
   const [searching, setSearching] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (searchRequest?.text) {
+      setQ(searchRequest.text);
+      setMode("looks");
+    }
+  }, [searchRequest?.id]);
 
   useEffect(() => {
     loadAllRegisteredProfiles().then(setProfiles);
