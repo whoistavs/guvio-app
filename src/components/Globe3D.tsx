@@ -1,551 +1,659 @@
-import React, { useMemo, useRef, useState } from "react";
-import {
-  Dimensions,
-  PanResponder,
-  Platform,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Dimensions, PanResponder, PixelRatio, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import * as THREE from "three";
 import type {} from "@react-three/fiber";
-import { COUNTRIES, Country, latLonToVector3 } from "../data/mockData";
+import { latLonToVector3 } from "../data/mockData";
+import { GLOBE_DOTS_B64, GLOBE_DOTS_COUNT } from "../data/globeDots";
+import { useAppTheme } from "../context/AppTheme";
+import { rotationToFace as rotationToFaceBase } from "../utils/globeMath";
 
-const Fiber = Platform.OS === "web"
-  ? require("@react-three/fiber")
-  : require("@react-three/fiber/native");
+const Fiber = Platform.OS === "web" ? require("@react-three/fiber") : require("@react-three/fiber/native");
 const Canvas = Fiber.Canvas as React.ComponentType<any>;
 const useFrame = Fiber.useFrame as (callback: (state: any, delta: number) => void) => void;
 
-type LonLat = [number, number];
-type Rotation = { x: number; y: number; z: number };
-
-type GestureState = {
-  startX: number;
-  startY: number;
-  lastX: number;
-  lastY: number;
-  moved: number;
-  pinchStartDistance: number;
-  pinchStartCameraZ: number;
-};
-
-// Polígonos de continentes do Planeta Terra
-const LAND_POLYGONS: LonLat[][] = [
-  // América do Norte & Alasca
-  [[-168, 65], [-160, 71], [-140, 70], [-130, 70], [-120, 76], [-95, 76], [-80, 74], [-73, 62], [-60, 60], [-55, 52], [-65, 44], [-70, 42], [-76, 35], [-81, 25], [-97, 26], [-105, 23], [-117, 32], [-124, 48], [-130, 55], [-145, 60], [-168, 65]],
-  // México e América Central
-  [[-117, 32], [-105, 23], [-97, 19], [-91, 15], [-83, 8], [-77, 8], [-80, 15], [-87, 21], [-97, 26], [-105, 23]],
-  // Groenlândia
-  [[-73, 60], [-55, 60], [-20, 76], [-30, 83], [-50, 83], [-70, 76], [-73, 60]],
-  // América do Sul
-  [[-77, 8], [-72, 11], [-60, 10], [-50, 6], [-44, -2], [-35, -5], [-35, -9], [-38, -13], [-41, -20], [-48, -28], [-53, -33], [-65, -42], [-66, -55], [-75, -53], [-73, -42], [-71, -30], [-76, -18], [-81, -5], [-80, 2], [-77, 8]],
-  // Península Ibérica
-  [[-9, 36], [-9, 43], [-3, 43], [-2, 36], [-9, 36]],
-  // França, Alemanha e Europa Ocidental
-  [[-3, 43], [-4, 48], [3, 51], [8, 54], [14, 54], [16, 48], [13, 45], [7, 43], [-3, 43]],
-  // Itália
-  [[9, 45], [13, 45], [18, 40], [15, 38], [12, 42], [9, 45]],
-  // Escandinávia
-  [[5, 58], [10, 63], [18, 70], [28, 70], [30, 60], [22, 56], [12, 56], [5, 58]],
-  // Reino Unido e Irlanda
-  [[-10, 50], [-5, 50], [1, 53], [0, 58], [-6, 58], [-10, 50]],
-  // África
-  [[-17, 33], [-5, 36], [10, 37], [25, 32], [33, 31], [43, 12], [51, 11], [46, 7], [40, -3], [35, -12], [32, -26], [28, -33], [20, -35], [16, -34], [12, -18], [9, -1], [2, 5], [-5, 5], [-15, 12], [-17, 21], [-17, 33]],
-  // Madagascar
-  [[43, -25], [50, -12], [47, -15], [43, -25]],
-  // Eurásia & Rússia
-  [[30, 60], [40, 66], [60, 73], [90, 77], [130, 72], [170, 67], [180, 65], [160, 55], [140, 48], [130, 42], [120, 32], [100, 22], [80, 26], [60, 25], [45, 35], [30, 50], [30, 60]],
-  // Índia
-  [[68, 24], [77, 31], [88, 27], [90, 22], [80, 13], [77, 8], [73, 15], [68, 24]],
-  // Sudeste Asiático
-  [[96, 22], [108, 21], [109, 11], [104, 1], [100, 6], [96, 22]],
-  // Japão
-  [[129, 31], [136, 34], [142, 40], [146, 45], [140, 46], [133, 40], [129, 31]],
-  // Indonésia & Filipinas
-  [[95, -5], [115, -7], [125, -8], [140, -3], [130, 5], [100, 5], [95, -5]],
-  // Austrália
-  [[113, -22], [120, -14], [135, -12], [142, -10], [153, -28], [150, -37], [138, -35], [115, -34], [113, -22]],
-  // Nova Zelândia
-  [[166, -46], [178, -37], [174, -42], [166, -46]],
-  // Antártida
-  [[-180, -88], [180, -88], [180, -64], [-180, -64]]
-];
-
-function pointInPolygon(lon: number, lat: number, polygon: LonLat[]) {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, yi] = polygon[i];
-    const [xj, yj] = polygon[j];
-    const intersects =
-      yi > lat !== yj > lat &&
-      lon < ((xj - xi) * (lat - yi)) / (yj - yi || 1e-9) + xi;
-    if (intersects) inside = !inside;
-  }
-  return inside;
-}
-
-function isLand(lat: number, lon: number) {
-  return LAND_POLYGONS.some((polygon) => pointInPolygon(lon, lat, polygon));
-}
-
-// Textura circular em memória para eliminar cantos quadrados de partículas
-function createCircularParticleTexture(): THREE.Texture {
-  if (Platform.OS !== "web" || typeof document === "undefined") {
-    return new THREE.Texture();
-  }
-  const canvas = document.createElement("canvas");
-  canvas.width = 64;
-  canvas.height = 64;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    ctx.beginPath();
-    ctx.arc(32, 32, 28, 0, Math.PI * 2);
-    ctx.fillStyle = "#FFFFFF";
-    ctx.fill();
-  }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
-}
-
-// Resolução de alta definição com latitudeStep = 1.35
-function buildLandParticleGeometry(radius = 2.006) {
-  const positions: number[] = [];
-  const latitudeStep = 1.35;
-
-  for (let lat = -88; lat <= 88; lat += latitudeStep) {
-    const cosLat = Math.max(0.18, Math.cos((lat * Math.PI) / 180));
-    const longitudeStep = latitudeStep / cosLat;
-
-    for (let lon = -180; lon < 180; lon += longitudeStep) {
-      if (!isLand(lat, lon)) continue;
-      const [x, y, z] = latLonToVector3(lat, lon, radius);
-      positions.push(x, y, z);
-    }
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geometry.computeBoundingSphere();
-  return geometry;
-}
-
-function targetRotationFor(lat: number, lon: number): Rotation {
-  const phi = (90 - lat) * (Math.PI / 180);
-  const theta = (lon + 180) * (Math.PI / 180);
-  return {
-    x: phi - Math.PI / 2,
-    y: -theta - Math.PI / 2,
-    z: 0,
-  };
-}
-
-function distanceBetweenTouches(touches: readonly any[]) {
-  if (touches.length < 2) return 0;
-  const dx = touches[0].pageX - touches[1].pageX;
-  const dy = touches[0].pageY - touches[1].pageY;
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-function vector3ToLatLon(v: THREE.Vector3) {
-  const n = v.clone().normalize();
-  const lat = THREE.MathUtils.radToDeg(Math.asin(n.y));
-  const lon = THREE.MathUtils.radToDeg(Math.atan2(n.z, -n.x)) - 180;
-  const wrappedLon = ((lon + 540) % 360) - 180;
-  return { lat, lon: wrappedLon };
-}
-
-function angularDistanceDeg(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const p1 = latLonToVector3(lat1, lon1, 1);
-  const p2 = latLonToVector3(lat2, lon2, 1);
-  const a = new THREE.Vector3(...p1).normalize();
-  const b = new THREE.Vector3(...p2).normalize();
-  return THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(a.dot(b), -1, 1)));
-}
-
-// Marcadores de países via InstancedMesh batched com iluminação dinâmica
-function InstancedCountryMarkers({ selectedCountry }: { selectedCountry: Country | null }) {
-  const meshRef = useRef<THREE.InstancedMesh>(null!);
-  const tempObject = useMemo(() => new THREE.Object3D(), []);
-  const tempColor = useMemo(() => new THREE.Color(), []);
-
-  const markerPositions = useMemo(() => {
-    return COUNTRIES.map((c) => latLonToVector3(c.lat, c.lon, 2.038));
-  }, []);
-
-  useFrame(({ clock }) => {
-    if (!meshRef.current) return;
-    const time = clock.elapsedTime;
-
-    COUNTRIES.forEach((c, idx) => {
-      const [x, y, z] = markerPositions[idx];
-      tempObject.position.set(x, y, z);
-
-      const isSelected = selectedCountry?.id === c.id;
-      const scale = isSelected ? 1.5 + Math.sin(time * 6) * 0.35 : 0.85;
-      tempObject.scale.setScalar(scale);
-      tempObject.updateMatrix();
-
-      meshRef.current.setMatrixAt(idx, tempObject.matrix);
-
-      if (isSelected) {
-        tempColor.set("#FF2D55");
-      } else {
-        tempColor.set("#007AFF");
-      }
-      meshRef.current.setColorAt(idx, tempColor);
-    });
-
-    meshRef.current.instanceMatrix.needsUpdate = true;
-    if (meshRef.current.instanceColor) {
-      meshRef.current.instanceColor.needsUpdate = true;
-    }
-  });
-
-  return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, COUNTRIES.length]}>
-      <sphereGeometry args={[0.038, 12, 12]} />
-      <meshBasicMaterial transparent opacity={0.95} />
-    </instancedMesh>
-  );
-}
-
-function ConnectionArc({ target }: { target: Country | null }) {
-  const line = useMemo(() => {
-    if (!target) return null;
-    const originLat = -22.9056;
-    const originLon = -47.0608;
-    const start = new THREE.Vector3(...latLonToVector3(originLat, originLon, 2.04));
-    const end = new THREE.Vector3(...latLonToVector3(target.lat, target.lon, 2.04));
-
-    const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
-    const distance = start.distanceTo(end);
-    mid.normalize().multiplyScalar(2.04 + Math.min(1.2, distance * 0.45));
-
-    const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
-    const points = curve.getPoints(50);
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineDashedMaterial({
-      color: "#007AFF",
-      dashSize: 0.12,
-      gapSize: 0.06,
-      linewidth: 2,
-      transparent: true,
-      opacity: 0.9,
-    });
-    return new THREE.Line(geometry, material);
-  }, [target?.id, target?.lat, target?.lon]);
-
-  useFrame(({ clock }) => {
-    if (line && line.material) {
-      (line.material as any).dashOffset = -clock.elapsedTime * 2.5;
-    }
-  });
-
-  if (!target || !line) return null;
-
-  return <primitive object={line} />;
-}
-
-interface EarthSceneProps {
-  selectedCountry: Country | null;
-  rotationRef: React.MutableRefObject<Rotation>;
-  targetRef: React.MutableRefObject<Rotation | null>;
-  interactingRef: React.MutableRefObject<boolean>;
-  cameraZRef: React.MutableRefObject<number>;
-}
-
-function EarthScene({
-  selectedCountry,
-  rotationRef,
-  targetRef,
-  interactingRef,
-  cameraZRef,
-}: EarthSceneProps) {
-  const globeRef = useRef<THREE.Group>(null!);
-  const landGeometry = useMemo(() => buildLandParticleGeometry(2.006), []);
-  const particleMap = useMemo(() => createCircularParticleTexture(), []);
-
-  useFrame((state, delta) => {
-    if (!globeRef.current) return;
-
-    const target = targetRef.current;
-    if (target) {
-      rotationRef.current.x = THREE.MathUtils.damp(rotationRef.current.x, target.x, 5.4, delta);
-      rotationRef.current.y = THREE.MathUtils.damp(rotationRef.current.y, target.y, 5.4, delta);
-      rotationRef.current.z = THREE.MathUtils.damp(rotationRef.current.z, target.z, 5.4, delta);
-
-      const error =
-        Math.abs(rotationRef.current.x - target.x) +
-        Math.abs(rotationRef.current.y - target.y);
-      if (error < 0.004) targetRef.current = null;
-    } else if (!interactingRef.current) {
-      rotationRef.current.y += delta * 0.055;
-    }
-
-    globeRef.current.rotation.set(
-      rotationRef.current.x,
-      rotationRef.current.y,
-      rotationRef.current.z
-    );
-
-    state.camera.position.z = THREE.MathUtils.damp(
-      state.camera.position.z,
-      cameraZRef.current,
-      10,
-      delta
-    );
-    state.camera.updateProjectionMatrix();
-  });
-
-  return (
-    <group ref={globeRef}>
-      <ambientLight intensity={1.1} />
-      <directionalLight position={[5, 3, 5]} intensity={1.8} />
-
-      {/* Esfera do Oceano */}
-      <mesh>
-        <sphereGeometry args={[1.988, 32, 32]} />
-        <meshBasicMaterial color="#06080C" transparent opacity={0.94} />
-      </mesh>
-
-      {/* Halo Atmosférico de Brilho Fresnel em 3D */}
-      <mesh>
-        <sphereGeometry args={[2.025, 32, 32]} />
-        <meshBasicMaterial color="#007AFF" transparent opacity={0.12} side={THREE.BackSide} />
-      </mesh>
-
-      {/* Partículas Círculares de Continentes (Alta Densidade) */}
-      <points geometry={landGeometry} frustumCulled={false}>
-        <pointsMaterial
-          color="#FFFFFF"
-          size={0.044}
-          map={particleMap.image ? particleMap : undefined}
-          sizeAttenuation
-          transparent
-          alphaTest={0.1}
-          opacity={0.98}
-        />
-      </points>
-
-      {/* Marcadores Batched Instanciados na GPU */}
-      <InstancedCountryMarkers selectedCountry={selectedCountry} />
-
-      {/* Arco de Rota de Estilo em 3D */}
-      <ConnectionArc target={selectedCountry} />
-    </group>
-  );
-}
-
+// ---------------------------------------------------------------------
+// Tipos públicos
+// ---------------------------------------------------------------------
 export interface GlobeFocusTarget {
   id: string;
   lat: number;
   lon: number;
 }
 
+/** Um ponto no globo onde há looks publicados */
+export interface GlobeMarker {
+  id: string;
+  lat: number;
+  lon: number;
+  city: string;
+  country: string;
+  count: number;
+}
+
 interface Globe3DProps {
-  selectedCountry: Country | null;
-  onSelectCountry: (country: Country) => void;
+  markers?: GlobeMarker[];
+  origin?: { lat: number; lon: number } | null;
+  selectedId?: string | null;
+  onSelectMarker?: (m: GlobeMarker) => void;
+  onClearSelection?: () => void;
   focusTarget?: GlobeFocusTarget | null;
 }
 
-export const Globe3D: React.FC<Globe3DProps> = React.memo(({
-  selectedCountry,
-  onSelectCountry,
-  focusTarget,
-}) => {
-  const screenWidth = Dimensions.get("window").width;
-  const globeSize = Math.min(screenWidth * 0.86, 360);
-  const rotationRef = useRef<Rotation>({ x: 0.08, y: -0.25, z: 0 });
-  const targetRef = useRef<Rotation | null>(null);
-  const interactingRef = useRef(false);
-  const cameraZRef = useRef(5.15);
-  const gestureRef = useRef<GestureState>({
-    startX: 0,
-    startY: 0,
-    lastX: 0,
-    lastY: 0,
-    moved: 0,
-    pinchStartDistance: 0,
-    pinchStartCameraZ: 5.15,
-  });
-  const [layoutSize, setLayoutSize] = useState({ width: globeSize, height: globeSize });
+type Rotation = { x: number; y: number };
 
-  React.useEffect(() => {
-    if (!focusTarget) return;
-    targetRef.current = targetRotationFor(focusTarget.lat, focusTarget.lon);
-  }, [focusTarget?.id, focusTarget?.lat, focusTarget?.lon]);
+const R = 2;
+const CAMERA_Z = 6.7;
+const MIN_Z = 4.6;
+const MAX_Z = 8.4;
+const MAX_TILT = 1.15; // ~66°: não deixa virar de cabeça para baixo
+const IDLE_SPIN = 0.06; // rad/s
+const RESUME_SPIN_AFTER = 2.5; // s parado antes de voltar a girar sozinho
 
-  const selectCountryFromTap = (x: number, y: number) => {
-    const width = layoutSize.width || globeSize;
-    const height = layoutSize.height || globeSize;
-    const ndc = new THREE.Vector2((x / width) * 2 - 1, -(y / height) * 2 + 1);
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.set(0, 0, cameraZRef.current);
-    camera.lookAt(0, 0, 0);
-    camera.updateProjectionMatrix();
-    camera.updateMatrixWorld();
+// ---------------------------------------------------------------------
+// Pontos dos continentes (Natural Earth, gerados por scripts/build-globe-dots.mjs)
+// ---------------------------------------------------------------------
+const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(ndc, camera);
-    const hit = new THREE.Vector3();
-    if (!raycaster.ray.intersectSphere(new THREE.Sphere(new THREE.Vector3(0, 0, 0), 2.08), hit)) {
-      return;
+function decodeBase64(b64: string): Uint8Array {
+  const clean = b64.replace(/=+$/, "");
+  const out = new Uint8Array(Math.floor((clean.length * 3) / 4));
+  let buffer = 0;
+  let bits = 0;
+  let j = 0;
+  for (let i = 0; i < clean.length; i++) {
+    buffer = (buffer << 6) | B64.indexOf(clean[i]);
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      out[j++] = (buffer >> bits) & 0xff;
     }
+  }
+  return out;
+}
 
-    const euler = new THREE.Euler(
-      rotationRef.current.x,
-      rotationRef.current.y,
-      rotationRef.current.z,
-      "XYZ"
-    );
-    const inverse = new THREE.Quaternion().setFromEuler(euler).invert();
-    const localPoint = hit.clone().applyQuaternion(inverse);
-    const geo = vector3ToLatLon(localPoint);
+let cachedDots: Float32Array | null = null;
+function landDotPositions(): Float32Array {
+  if (cachedDots) return cachedDots;
+  const bytes = decodeBase64(GLOBE_DOTS_B64);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const pos = new Float32Array(GLOBE_DOTS_COUNT * 3);
+  for (let i = 0; i < GLOBE_DOTS_COUNT; i++) {
+    const lat = view.getInt16(i * 4, true) / 100;
+    const lon = view.getInt16(i * 4 + 2, true) / 100;
+    const [x, y, z] = latLonToVector3(lat, lon, R * 1.003);
+    pos[i * 3] = x;
+    pos[i * 3 + 1] = y;
+    pos[i * 3 + 2] = z;
+  }
+  cachedDots = pos;
+  return pos;
+}
 
-    let nearest: Country | null = null;
-    let nearestDistance = Infinity;
-    for (const country of COUNTRIES) {
-      const d = angularDistanceDeg(geo.lat, geo.lon, country.lat, country.lon);
-      if (d < nearestDistance) {
-        nearest = country;
-        nearestDistance = d;
+// ---------------------------------------------------------------------
+// Matemática de rotação
+// ---------------------------------------------------------------------
+function rotationToFace(lat: number, lon: number): Rotation {
+  // inclina só parte da latitude: o polo não "cai" para a frente e o ponto fica um pouco acima do centro
+  return rotationToFaceBase(lat, lon, MAX_TILT, 0.62);
+}
+
+/** menor caminho angular (evita o globo dar uma volta inteira) */
+function nearestAngle(from: number, to: number) {
+  const twoPi = Math.PI * 2;
+  let d = (to - from) % twoPi;
+  if (d > Math.PI) d -= twoPi;
+  if (d < -Math.PI) d += twoPi;
+  return from + d;
+}
+
+function vector3ToLatLon(v: THREE.Vector3) {
+  const n = v.clone().normalize();
+  const lat = THREE.MathUtils.radToDeg(Math.asin(n.y));
+  const lon = THREE.MathUtils.radToDeg(Math.atan2(n.z, -n.x)) - 180;
+  return { lat, lon: ((lon + 540) % 360) - 180 };
+}
+
+function angularDistanceDeg(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const a = new THREE.Vector3(...latLonToVector3(lat1, lon1, 1));
+  const b = new THREE.Vector3(...latLonToVector3(lat2, lon2, 1));
+  return THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(a.dot(b), -1, 1)));
+}
+
+function touchDistance(touches: readonly any[]) {
+  if (touches.length < 2) return 0;
+  const dx = touches[0].pageX - touches[1].pageX;
+  const dy = touches[0].pageY - touches[1].pageY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+// ---------------------------------------------------------------------
+// Paletas
+// ---------------------------------------------------------------------
+function palette(dark: boolean) {
+  return dark
+    ? { ocean: "#0A0E16", dots: "#E9EDF5", glow: "#3D7BFF", marker: "#FF3B5C", me: "#34C759", arc: "#5B9BFF" }
+    : { ocean: "#F3F5F8", dots: "#2A2F38", glow: "#8DB0FF", marker: "#FF2D55", me: "#1FAD4B", arc: "#2F6BFF" };
+}
+
+// ---------------------------------------------------------------------
+// Camadas da cena
+// ---------------------------------------------------------------------
+function LandDots({ color, pixelRatio }: { color: string; pixelRatio: number }) {
+  const geometry = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(landDotPositions(), 3));
+    g.computeBoundingSphere();
+    return g;
+  }, []);
+
+  const material = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        uniforms: {
+          uColor: { value: new THREE.Color(color) },
+          uSize: { value: 2.3 * pixelRatio }
+        },
+        vertexShader: `
+          uniform float uSize;
+          varying float vFacing;
+          void main() {
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            vec3 n = normalize(mat3(modelViewMatrix) * position);
+            vFacing = n.z;
+            // perto da borda os pontos encolhem, para não formar um contorno pesado
+            gl_PointSize = uSize * (6.7 / -mv.z) * mix(0.35, 1.0, smoothstep(0.0, 0.55, n.z));
+            gl_Position = projectionMatrix * mv;
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 uColor;
+          varying float vFacing;
+          void main() {
+            vec2 c = gl_PointCoord - vec2(0.5);
+            float d = length(c);
+            if (d > 0.5) discard;
+            float edge = 1.0 - smoothstep(0.38, 0.5, d);
+            // pontos na borda do globo ficam mais suaves (efeito de profundidade)
+            float depth = smoothstep(0.06, 0.6, vFacing);
+            gl_FragColor = vec4(uColor, edge * mix(0.05, 0.92, depth));
+          }
+        `
+      }),
+    []
+  );
+
+  useEffect(() => {
+    material.uniforms.uColor.value.set(color);
+    material.uniforms.uSize.value = 2.3 * pixelRatio;
+  }, [color, pixelRatio]);
+
+  return <points geometry={geometry} material={material} frustumCulled={false} />;
+}
+
+function Atmosphere({ color }: { color: string }) {
+  const material = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        side: THREE.BackSide,
+        uniforms: { uColor: { value: new THREE.Color(color) } },
+        vertexShader: `
+          varying vec3 vNormal;
+          void main() {
+            vNormal = normalize(normalMatrix * normal);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 uColor;
+          varying vec3 vNormal;
+          void main() {
+            float intensity = pow(0.62 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 3.0);
+            gl_FragColor = vec4(uColor, clamp(intensity, 0.0, 1.0) * 0.9);
+          }
+        `
+      }),
+    []
+  );
+  useEffect(() => {
+    material.uniforms.uColor.value.set(color);
+  }, [color]);
+  return (
+    <mesh material={material} scale={1.16}>
+      <sphereGeometry args={[R, 48, 48]} />
+    </mesh>
+  );
+}
+
+/** Pontos onde há looks: um disco que pulsa + halo; o selecionado fica maior */
+function Markers({
+  markers,
+  selectedId,
+  color
+}: {
+  markers: GlobeMarker[];
+  selectedId?: string | null;
+  color: string;
+}) {
+  const coreRef = useRef<THREE.InstancedMesh>(null!);
+  const haloRef = useRef<THREE.InstancedMesh>(null!);
+  const tmp = useMemo(() => new THREE.Object3D(), []);
+  const max = Math.max(1, markers.length);
+
+  const placements = useMemo(
+    () =>
+      markers.map(m => {
+        const p = new THREE.Vector3(...latLonToVector3(m.lat, m.lon, R * 1.012));
+        const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), p.clone().normalize());
+        const weight = Math.min(1.6, 0.85 + Math.log10(1 + m.count) * 0.6);
+        return { p, q, weight, id: m.id };
+      }),
+    [markers]
+  );
+
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime;
+    placements.forEach((pl, i) => {
+      const selected = pl.id === selectedId;
+      tmp.position.copy(pl.p);
+      tmp.quaternion.copy(pl.q);
+      tmp.scale.setScalar(pl.weight * (selected ? 1.5 : 1));
+      tmp.updateMatrix();
+      coreRef.current?.setMatrixAt(i, tmp.matrix);
+
+      const phase = (t * 0.9 + i * 0.37) % 1;
+      tmp.scale.setScalar(pl.weight * (selected ? 1.6 : 1) * (1 + phase * 1.8));
+      tmp.updateMatrix();
+      haloRef.current?.setMatrixAt(i, tmp.matrix);
+    });
+    if (coreRef.current) coreRef.current.instanceMatrix.needsUpdate = true;
+    if (haloRef.current) {
+      haloRef.current.instanceMatrix.needsUpdate = true;
+      (haloRef.current.material as THREE.MeshBasicMaterial).opacity = 0.35 * (1 - ((t * 0.9) % 1));
+    }
+  });
+
+  if (markers.length === 0) return null;
+  return (
+    <>
+      <instancedMesh ref={haloRef} args={[undefined, undefined, max]} frustumCulled={false}>
+        <circleGeometry args={[0.045, 24]} />
+        <meshBasicMaterial color={color} transparent opacity={0.3} depthWrite={false} side={THREE.DoubleSide} />
+      </instancedMesh>
+      <instancedMesh ref={coreRef} args={[undefined, undefined, max]} frustumCulled={false}>
+        <circleGeometry args={[0.04, 24]} />
+        <meshBasicMaterial color={color} side={THREE.DoubleSide} />
+      </instancedMesh>
+    </>
+  );
+}
+
+function MyLocation({ origin, color }: { origin: { lat: number; lon: number }; color: string }) {
+  const ringRef = useRef<THREE.Mesh>(null!);
+  const { p, q } = useMemo(() => {
+    const p = new THREE.Vector3(...latLonToVector3(origin.lat, origin.lon, R * 1.013));
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), p.clone().normalize());
+    return { p, q };
+  }, [origin.lat, origin.lon]);
+
+  useFrame(({ clock }) => {
+    if (!ringRef.current) return;
+    const phase = (clock.elapsedTime * 0.7) % 1;
+    ringRef.current.scale.setScalar(1 + phase * 3);
+    (ringRef.current.material as THREE.MeshBasicMaterial).opacity = 0.5 * (1 - phase);
+  });
+
+  return (
+    <group position={p} quaternion={q}>
+      <mesh>
+        <circleGeometry args={[0.042, 24]} />
+        <meshBasicMaterial color="#FFFFFF" side={THREE.DoubleSide} />
+      </mesh>
+      <mesh position={[0, 0, 0.001]}>
+        <circleGeometry args={[0.03, 24]} />
+        <meshBasicMaterial color={color} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh ref={ringRef}>
+        <ringGeometry args={[0.04, 0.05, 32]} />
+        <meshBasicMaterial color={color} transparent opacity={0.5} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+}
+
+function Arc({ from, to, color }: { from: { lat: number; lon: number }; to: { lat: number; lon: number }; color: string }) {
+  const { line, length } = useMemo(() => {
+    const start = new THREE.Vector3(...latLonToVector3(from.lat, from.lon, R * 1.01));
+    const end = new THREE.Vector3(...latLonToVector3(to.lat, to.lon, R * 1.01));
+    const dist = start.distanceTo(end);
+    const mid = start.clone().add(end).multiplyScalar(0.5);
+    if (mid.length() < 0.01) mid.set(0, R, 0); // pontos opostos
+    mid.normalize().multiplyScalar(R * 1.01 + Math.min(1.1, dist * 0.42));
+    const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+    const geometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(80));
+    const material = new THREE.LineDashedMaterial({ color, dashSize: 0.1, gapSize: 0.06, transparent: true, opacity: 0.95 });
+    const l = new THREE.Line(geometry, material);
+    l.computeLineDistances();
+    return { line: l, length: curve.getLength() };
+  }, [from.lat, from.lon, to.lat, to.lon, color]);
+
+  useFrame(({ clock }) => {
+    (line.material as any).dashOffset = -clock.elapsedTime * 0.9;
+  });
+
+  if (length < 0.02) return null;
+  return <primitive object={line} />;
+}
+
+interface SceneProps {
+  dark: boolean;
+  pixelRatio: number;
+  markers: GlobeMarker[];
+  selected: GlobeMarker | null;
+  origin?: { lat: number; lon: number } | null;
+  rotationRef: React.MutableRefObject<Rotation>;
+  velocityRef: React.MutableRefObject<Rotation>;
+  targetRef: React.MutableRefObject<Rotation | null>;
+  interactingRef: React.MutableRefObject<boolean>;
+  idleRef: React.MutableRefObject<number>;
+  cameraZRef: React.MutableRefObject<number>;
+}
+
+function Scene({
+  dark,
+  pixelRatio,
+  markers,
+  selected,
+  origin,
+  rotationRef,
+  velocityRef,
+  targetRef,
+  interactingRef,
+  idleRef,
+  cameraZRef
+}: SceneProps) {
+  const groupRef = useRef<THREE.Group>(null!);
+  const colors = palette(dark);
+
+  useFrame((state, delta) => {
+    const dt = Math.min(delta, 0.05);
+    const rot = rotationRef.current;
+    const target = targetRef.current;
+
+    if (target) {
+      // viagem suave até o ponto escolhido
+      rot.x = THREE.MathUtils.damp(rot.x, target.x, 4.5, dt);
+      rot.y = THREE.MathUtils.damp(rot.y, target.y, 4.5, dt);
+      if (Math.abs(rot.x - target.x) + Math.abs(rot.y - target.y) < 0.002) targetRef.current = null;
+      velocityRef.current = { x: 0, y: 0 };
+    } else if (!interactingRef.current) {
+      // embalo depois de soltar o dedo
+      const v = velocityRef.current;
+      rot.x += v.x * dt;
+      rot.y += v.y * dt;
+      const friction = Math.exp(-4.2 * dt);
+      v.x *= friction;
+      v.y *= friction;
+      idleRef.current += dt;
+      // volta a girar sozinho quando ficar parado
+      if (idleRef.current > RESUME_SPIN_AFTER && !selected) {
+        const ramp = Math.min(1, (idleRef.current - RESUME_SPIN_AFTER) / 1.5);
+        rot.y += IDLE_SPIN * ramp * dt;
       }
     }
 
-    if (nearest && nearestDistance < 24) {
-      onSelectCountry(nearest);
-      targetRef.current = targetRotationFor(nearest.lat, nearest.lon);
-    }
-  };
+    rot.x = THREE.MathUtils.clamp(rot.x, -MAX_TILT, MAX_TILT);
+    groupRef.current?.rotation.set(rot.x, rot.y, 0);
 
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: (evt) => {
-          const touches = evt.nativeEvent.touches;
-          interactingRef.current = true;
-          targetRef.current = null;
-          gestureRef.current.startX = evt.nativeEvent.locationX;
-          gestureRef.current.startY = evt.nativeEvent.locationY;
-          gestureRef.current.lastX = evt.nativeEvent.pageX;
-          gestureRef.current.lastY = evt.nativeEvent.pageY;
-          gestureRef.current.moved = 0;
-
-          if (touches.length >= 2) {
-            gestureRef.current.pinchStartDistance = distanceBetweenTouches(touches);
-            gestureRef.current.pinchStartCameraZ = cameraZRef.current;
-          }
-        },
-        onPanResponderMove: (evt) => {
-          const touches = evt.nativeEvent.touches;
-
-          if (touches.length >= 2) {
-            const currentDistance = distanceBetweenTouches(touches);
-            const startDistance = gestureRef.current.pinchStartDistance || currentDistance;
-            if (startDistance > 0 && currentDistance > 0) {
-              const nextZ =
-                gestureRef.current.pinchStartCameraZ * (startDistance / currentDistance);
-              cameraZRef.current = THREE.MathUtils.clamp(nextZ, 4.25, 6.05);
-            }
-            gestureRef.current.moved += 4;
-            return;
-          }
-
-          const x = evt.nativeEvent.pageX;
-          const y = evt.nativeEvent.pageY;
-          const dx = x - gestureRef.current.lastX;
-          const dy = y - gestureRef.current.lastY;
-          gestureRef.current.lastX = x;
-          gestureRef.current.lastY = y;
-          gestureRef.current.moved += Math.abs(dx) + Math.abs(dy);
-
-          rotationRef.current.y += dx * 0.0072;
-          rotationRef.current.x += dy * 0.0058;
-        },
-        onPanResponderRelease: (evt) => {
-          interactingRef.current = false;
-          if (gestureRef.current.moved < 12) {
-            selectCountryFromTap(evt.nativeEvent.locationX, evt.nativeEvent.locationY);
-          }
-        },
-        onPanResponderTerminate: () => {
-          interactingRef.current = false;
-        },
-      }),
-    [layoutSize.width, layoutSize.height, onSelectCountry]
-  );
+    state.camera.position.z = THREE.MathUtils.damp(state.camera.position.z, cameraZRef.current, 8, dt);
+    state.camera.updateProjectionMatrix();
+  });
 
   return (
-    <View style={styles.container}>
-      <View
-        style={[styles.canvasContainer, { width: globeSize, height: globeSize }]}
-        onLayout={(e) => setLayoutSize(e.nativeEvent.layout)}
-        {...panResponder.panHandlers}
-      >
-        <Canvas
-          camera={{ position: [0, 0, 5.15], fov: 45, near: 0.1, far: 100 }}
-          style={{ width: "100%", height: "100%", backgroundColor: "transparent" }}
-          gl={{ alpha: true, antialias: false, powerPreference: "high-performance" }}
-          dpr={1}
-        >
-          <EarthScene
-            selectedCountry={selectedCountry}
-            rotationRef={rotationRef}
-            targetRef={targetRef}
-            interactingRef={interactingRef}
-            cameraZRef={cameraZRef}
-          />
-        </Canvas>
-      </View>
-
-      {selectedCountry && (
-        <View style={styles.countryBadgeContainer} pointerEvents="none">
-          <Text style={styles.countryBadgeTitle}>{selectedCountry.name}</Text>
-          <Text style={styles.countryBadgeSubtitle}>Explorar estilo →</Text>
-        </View>
-      )}
-    </View>
+    <>
+      <Atmosphere color={colors.glow} />
+      <group ref={groupRef}>
+        <mesh>
+          <sphereGeometry args={[R * 0.995, 64, 64]} />
+          <meshBasicMaterial color={colors.ocean} />
+        </mesh>
+        <LandDots color={colors.dots} pixelRatio={pixelRatio} />
+        <Markers markers={markers} selectedId={selected?.id} color={colors.marker} />
+        {origin ? <MyLocation origin={origin} color={colors.me} /> : null}
+        {origin && selected ? <Arc from={origin} to={selected} color={colors.arc} /> : null}
+      </group>
+    </>
   );
-});
+}
+
+// ---------------------------------------------------------------------
+// Componente
+// ---------------------------------------------------------------------
+export const Globe3D: React.FC<Globe3DProps> = React.memo(
+  ({ markers = [], origin, selectedId, onSelectMarker, onClearSelection, focusTarget }) => {
+    const { dark } = useAppTheme();
+    const screenWidth = Dimensions.get("window").width;
+    const size = Math.min(screenWidth * 0.9, 380);
+    const pixelRatio = Math.min(PixelRatio.get(), 2.5);
+
+    const startRot = origin ? rotationToFace(origin.lat, origin.lon) : { x: 0.35, y: -0.6 };
+    const rotationRef = useRef<Rotation>(startRot);
+    const velocityRef = useRef<Rotation>({ x: 0, y: 0 });
+    const targetRef = useRef<Rotation | null>(null);
+    const interactingRef = useRef(false);
+    const idleRef = useRef(0);
+    const cameraZRef = useRef(CAMERA_Z);
+    const gesture = useRef({ lastX: 0, lastY: 0, lastT: 0, moved: 0, pinchStart: 0, pinchZ: CAMERA_Z, startX: 0, startY: 0 });
+    const [layout, setLayout] = useState({ width: size, height: size });
+
+    const selected = useMemo(() => markers.find(m => m.id === selectedId) || null, [markers, selectedId]);
+
+    const flyTo = (lat: number, lon: number) => {
+      const t = rotationToFace(lat, lon);
+      targetRef.current = { x: t.x, y: nearestAngle(rotationRef.current.y, t.y) };
+      idleRef.current = 0;
+    };
+
+    // primeira localização conhecida: vira o globo para a cidade do usuário
+    const centeredOnOrigin = useRef(false);
+    useEffect(() => {
+      if (origin && !centeredOnOrigin.current && !focusTarget) {
+        centeredOnOrigin.current = true;
+        flyTo(origin.lat, origin.lon);
+      }
+    }, [origin?.lat, origin?.lon]);
+
+    useEffect(() => {
+      if (focusTarget) flyTo(focusTarget.lat, focusTarget.lon);
+    }, [focusTarget?.id]);
+
+    const pickAt = (x: number, y: number) => {
+      const w = layout.width || size;
+      const h = layout.height || size;
+      const camera = new THREE.PerspectiveCamera(42, w / h, 0.1, 100);
+      camera.position.set(0, 0, cameraZRef.current);
+      camera.lookAt(0, 0, 0);
+      camera.updateMatrixWorld();
+      camera.updateProjectionMatrix();
+      const ray = new THREE.Raycaster();
+      ray.setFromCamera(new THREE.Vector2((x / w) * 2 - 1, -(y / h) * 2 + 1), camera);
+      const hit = new THREE.Vector3();
+      if (!ray.ray.intersectSphere(new THREE.Sphere(new THREE.Vector3(), R), hit)) {
+        if (selected) onClearSelection?.();
+        return;
+      }
+      const inv = new THREE.Quaternion()
+        .setFromEuler(new THREE.Euler(rotationRef.current.x, rotationRef.current.y, 0, "XYZ"))
+        .invert();
+      const geo = vector3ToLatLon(hit.applyQuaternion(inv));
+
+      // tolerância cresce quando o globo está mais longe (zoom out)
+      const tolerance = 4 + (cameraZRef.current - MIN_Z) * 1.4;
+      let best: GlobeMarker | null = null;
+      let bestD = Infinity;
+      for (const m of markers) {
+        const d = angularDistanceDeg(geo.lat, geo.lon, m.lat, m.lon);
+        if (d < bestD) {
+          bestD = d;
+          best = m;
+        }
+      }
+      if (best && bestD < tolerance) {
+        onSelectMarker?.(best);
+        flyTo(best.lat, best.lon);
+      } else if (selected) {
+        onClearSelection?.();
+      }
+    };
+
+    const pan = useMemo(
+      () =>
+        PanResponder.create({
+          onStartShouldSetPanResponder: () => true,
+          onMoveShouldSetPanResponder: () => true,
+          onPanResponderTerminationRequest: () => false,
+          onPanResponderGrant: e => {
+            const g = gesture.current;
+            interactingRef.current = true;
+            targetRef.current = null;
+            velocityRef.current = { x: 0, y: 0 };
+            idleRef.current = 0;
+            g.lastX = e.nativeEvent.pageX;
+            g.lastY = e.nativeEvent.pageY;
+            g.startX = e.nativeEvent.locationX;
+            g.startY = e.nativeEvent.locationY;
+            g.lastT = Date.now();
+            g.moved = 0;
+            g.pinchStart = 0;
+          },
+          onPanResponderMove: e => {
+            const g = gesture.current;
+            const touches = e.nativeEvent.touches;
+            if (touches.length >= 2) {
+              const d = touchDistance(touches);
+              if (!g.pinchStart) {
+                g.pinchStart = d;
+                g.pinchZ = cameraZRef.current;
+              }
+              if (d > 0) cameraZRef.current = THREE.MathUtils.clamp(g.pinchZ * (g.pinchStart / d), MIN_Z, MAX_Z);
+              g.moved += 10;
+              return;
+            }
+            const now = Date.now();
+            const x = e.nativeEvent.pageX;
+            const y = e.nativeEvent.pageY;
+            const dx = x - g.lastX;
+            const dy = y - g.lastY;
+            const dt = Math.max(1, now - g.lastT) / 1000;
+            g.lastX = x;
+            g.lastY = y;
+            g.lastT = now;
+            g.moved += Math.abs(dx) + Math.abs(dy);
+
+            // girar mais devagar quando está com zoom
+            const k = 0.0062 * (cameraZRef.current / CAMERA_Z);
+            rotationRef.current.y += dx * k;
+            rotationRef.current.x = THREE.MathUtils.clamp(rotationRef.current.x + dy * k, -MAX_TILT, MAX_TILT);
+            // velocidade suavizada para o embalo
+            const v = velocityRef.current;
+            v.y = v.y * 0.6 + ((dx * k) / dt) * 0.4;
+            v.x = v.x * 0.6 + ((dy * k) / dt) * 0.4;
+          },
+          onPanResponderRelease: () => {
+            const g = gesture.current;
+            interactingRef.current = false;
+            idleRef.current = 0;
+            if (Date.now() - g.lastT > 80) velocityRef.current = { x: 0, y: 0 }; // parou antes de soltar
+            const v = velocityRef.current;
+            v.x = THREE.MathUtils.clamp(v.x, -2, 2);
+            v.y = THREE.MathUtils.clamp(v.y, -3.5, 3.5);
+            if (g.moved < 10) pickAt(g.startX, g.startY);
+          },
+          onPanResponderTerminate: () => {
+            interactingRef.current = false;
+          }
+        }),
+      [layout.width, layout.height, markers, selected, onSelectMarker, onClearSelection]
+    );
+
+    const colors = palette(dark);
+
+    return (
+      <View style={styles.container}>
+        <View
+          style={{ width: size, height: size }}
+          onLayout={e => setLayout(e.nativeEvent.layout)}
+          {...pan.panHandlers}
+        >
+          <Canvas
+            camera={{ position: [0, 0, CAMERA_Z], fov: 42, near: 0.1, far: 100 }}
+            style={{ width: "100%", height: "100%", backgroundColor: "transparent" }}
+            gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
+            dpr={pixelRatio}
+          >
+            <Scene
+              dark={dark}
+              pixelRatio={pixelRatio}
+              markers={markers}
+              selected={selected}
+              origin={origin}
+              rotationRef={rotationRef}
+              velocityRef={velocityRef}
+              targetRef={targetRef}
+              interactingRef={interactingRef}
+              idleRef={idleRef}
+              cameraZRef={cameraZRef}
+            />
+          </Canvas>
+        </View>
+
+        {selected ? (
+          <Pressable
+            onPress={onClearSelection}
+            style={[
+              styles.badge,
+              { backgroundColor: dark ? "rgba(28,28,32,0.92)" : "rgba(255,255,255,0.94)", borderColor: dark ? "#2C2C30" : "#E5E5EA" }
+            ]}
+          >
+            <View style={[styles.badgeDot, { backgroundColor: colors.marker }]} />
+            <View>
+              <Text style={[styles.badgeTitle, { color: dark ? "#FFF" : "#111" }]}>
+                {selected.city}
+                {selected.country ? `, ${selected.country}` : ""}
+              </Text>
+              <Text style={[styles.badgeSub, { color: dark ? "#9A9AA0" : "#6B6B70" }]}>
+                {selected.count} {selected.count === 1 ? "look" : "looks"} · toque para limpar
+              </Text>
+            </View>
+          </Pressable>
+        ) : markers.length > 0 ? (
+          <Text style={[styles.hint, { color: dark ? "#8E8E93" : "#8A8A8E" }]}>
+            Toque num ponto para ver os looks da cidade
+          </Text>
+        ) : null}
+      </View>
+    );
+  }
+);
 
 const styles = StyleSheet.create({
-  container: {
-    width: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-    marginVertical: 6,
-  },
-  canvasContainer: {
-    overflow: "hidden",
-    borderRadius: 999,
-    backgroundColor: "transparent",
-    alignSelf: "center",
-  },
-  countryBadgeContainer: {
+  container: { width: "100%", alignItems: "center", justifyContent: "center", marginVertical: 6 },
+  badge: {
     position: "absolute",
-    bottom: 4,
+    bottom: 6,
+    flexDirection: "row",
     alignItems: "center",
+    gap: 10,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.88)",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(0,0,0,0.08)",
+    paddingVertical: 9,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth
   },
-  countryBadgeTitle: {
-    color: "#111111",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  countryBadgeSubtitle: {
-    marginTop: 1,
-    color: "#777777",
-    fontSize: 10,
-    fontWeight: "500",
-  },
+  badgeDot: { width: 8, height: 8, borderRadius: 4 },
+  badgeTitle: { fontSize: 14, fontWeight: "800" },
+  badgeSub: { fontSize: 10, fontWeight: "600", marginTop: 1 },
+  hint: { position: "absolute", bottom: 4, fontSize: 11, fontWeight: "600" }
 });

@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Dimensions, Linking, SafeAreaView, ScrollView, StatusBar, StyleSheet, View } from "react-native";
 import { AppThemeProvider, useAppTheme } from "./src/context/AppTheme";
 import { Header } from "./src/components/Header";
-import { Globe3D, GlobeFocusTarget } from "./src/components/Globe3D";
+import { Globe3D, GlobeFocusTarget, GlobeMarker } from "./src/components/Globe3D";
 import { GlobeLocationSearch, GlobeSearchSelection } from "./src/components/GlobeLocationSearch";
 import { ScrollIndicator } from "./src/components/ScrollIndicator";
 import { HomeFeed } from "./src/components/HomeFeed";
@@ -66,6 +66,50 @@ function Guvio() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [unread, setUnread] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+
+  // pontos do globo: cidades onde há looks com localização
+  const globeMarkers = useMemo<GlobeMarker[]>(() => {
+    const byCity = new Map<string, GlobeMarker & { sumLat: number; sumLon: number }>();
+    for (const p of posts) {
+      if (typeof p.lat !== "number" || typeof p.lng !== "number" || !p.city) continue;
+      const key = `${p.city.toLowerCase()}|${(p.country || "").toLowerCase()}`;
+      const cur = byCity.get(key);
+      if (cur) {
+        cur.count += 1;
+        cur.sumLat += p.lat;
+        cur.sumLon += p.lng;
+      } else {
+        byCity.set(key, { id: key, city: p.city, country: p.country || "", lat: p.lat, lon: p.lng, count: 1, sumLat: p.lat, sumLon: p.lng });
+      }
+    }
+    return Array.from(byCity.values()).map(m => ({
+      id: m.id,
+      city: m.city,
+      country: m.country,
+      count: m.count,
+      lat: m.sumLat / m.count,
+      lon: m.sumLon / m.count
+    }));
+  }, [posts]);
+
+  const selectGlobeMarker = (m: GlobeMarker) => {
+    setSelectedMarkerId(m.id);
+    setFilterCity(m.city);
+    setFilterCountry(m.country || null);
+    setLocation([m.city, m.country].filter(Boolean).join(", "));
+    fetchCityWeather(m.lat, m.lon).then(setWeather);
+  };
+
+  const clearGlobeSelection = () => {
+    setSelectedMarkerId(null);
+    setFilterCity(null);
+    setFilterCountry(null);
+    if (place) {
+      if (place.city) setLocation([place.city, place.region || place.country].filter(Boolean).join(", "));
+      fetchCityWeather(place.lat, place.lng).then(setWeather);
+    }
+  };
 
   // Inicialização: cache local, clima, sessão salva e retorno de login (Google/Apple/e-mail)
   useEffect(() => {
@@ -194,6 +238,7 @@ function Guvio() {
   if (!authenticated) return <AuthScreen onAuthenticated={() => setAuthenticated(true)} />;
 
   const search = (x: GlobeSearchSelection) => {
+    setSelectedMarkerId(null);
     setLocation(`${x.label}${x.subtitle ? `, ${x.subtitle}` : ""}`);
     setFocus({ id: `${x.label}-${Date.now()}`, lat: x.lat, lon: x.lon });
 
@@ -332,10 +377,11 @@ function Guvio() {
             <GlobeLocationSearch onSelect={search} />
             <View style={s.globeContainer}>
               <Globe3D
-                selectedCountry={null}
-                onSelectCountry={c =>
-                  search({ type: "country", label: c.name, lat: c.lat, lon: c.lon })
-                }
+                markers={globeMarkers}
+                origin={place ? { lat: place.lat, lon: place.lng } : null}
+                selectedId={selectedMarkerId}
+                onSelectMarker={selectGlobeMarker}
+                onClearSelection={clearGlobeSelection}
                 focusTarget={focus}
               />
             </View>
