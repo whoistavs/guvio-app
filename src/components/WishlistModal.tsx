@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardSafeView } from "./KeyboardSafeView";
 import { Check, ExternalLink, ImagePlus, Plus, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { WishlistItem } from "../data/mockData";
@@ -148,7 +149,7 @@ export function WishlistModal({
       </View>
 
       <Modal visible={!!form} transparent animationType="fade" onRequestClose={() => setForm(null)}>
-        <KeyboardAvoidingView style={s.back} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <KeyboardSafeView style={s.back} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <View style={[s.card, { backgroundColor: colors.bg }]}>
             <Text style={{ color: colors.text, fontWeight: "700", fontSize: 16 }}>{form?.id?.startsWith("tmp-") ? "Novo desejo" : "Editar desejo"}</Text>
             <Pressable onPress={pick} style={[s.pickImg, { backgroundColor: colors.surface }]}>
@@ -175,7 +176,7 @@ export function WishlistModal({
               </Pressable>
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardSafeView>
       </Modal>
     </Modal>
   );

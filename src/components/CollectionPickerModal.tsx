@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -12,6 +11,7 @@ import {
   TextInput,
   View
 } from "react-native";
+import { KeyboardSafeView } from "./KeyboardSafeView";
 import { Bookmark, Check, FolderPlus, X } from "lucide-react-native";
 import { FeedPost, SavedCollection } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
@@ -90,7 +90,7 @@ export function CollectionPickerModal({
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardSafeView style={s.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <Pressable style={{ flex: 1 }} onPress={onClose} />
         <View style={[s.sheet, { backgroundColor: colors.bg, borderTopColor: colors.border }]}>
           <View style={s.titleRow}>
@@ -158,7 +158,7 @@ export function CollectionPickerModal({
             </Pressable>
           )}
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardSafeView>
     </Modal>
   );
 }

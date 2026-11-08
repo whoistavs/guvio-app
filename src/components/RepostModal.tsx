@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardSafeView } from "./KeyboardSafeView";
 import { Repeat2 } from "lucide-react-native";
 import { FeedPost } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
@@ -34,7 +35,7 @@ export function RepostModal({ post, onClose, onDone }: { post: FeedPost | null; 
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={s.back} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardSafeView style={s.back} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <Pressable style={{ flex: 1 }} onPress={onClose} />
         <View style={[s.sheet, { backgroundColor: colors.bg, borderColor: colors.border }]}>
           <View style={s.row}>
@@ -64,7 +65,7 @@ export function RepostModal({ post, onClose, onDone }: { post: FeedPost | null; 
             )}
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardSafeView>
     </Modal>
   );
 }

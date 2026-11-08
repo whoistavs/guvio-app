@@ -44,7 +44,8 @@ import {
   unreadMessages,
   loadMorePosts,
   getCachedFeed,
-  subscribeOffline
+  subscribeOffline,
+  loadSavedProfile
 } from "./src/services/storage";
 import { successFeedback, tapFeedback } from "./src/utils/haptics";
 import { FadeIn, SlideInScreen, ToastHost, toast } from "./src/components/motion";
@@ -85,6 +86,10 @@ function Guvio() {
   const [pendingPost, setPendingPost] = useState<string | null>(null);
   const openNameRef = useRef<((name: string) => void) | null>(null);
   const openPostRef = useRef<((id: string) => void) | null>(null);
+  const myProfileRef = useRef<UserProfile | null>(null);
+  useEffect(() => {
+    myProfileRef.current = null;
+  }, [authenticated]);
   const [tab, setTab] = useState("home");
   // pilha de telas abertas por cima das abas (voltar = tirar a de cima)
   const [stack, setStack] = useState<Screen[]>([]);
@@ -451,12 +456,28 @@ function Guvio() {
         following: 0,
         bio: ""
       };
-    push({ name: "publicProfile", profile: p });
+    openProfileObj(p);
   };
 
   openNameRef.current = openName;
 
-  const openProfileObj = (p: UserProfile) => push({ name: "publicProfile", profile: p });
+  // o meu próprio perfil abre na aba Perfil (com editar, configurações...), não como perfil de outra pessoa
+  const openProfileObj = async (p: UserProfile) => {
+    let mine = myProfileRef.current;
+    if (!mine) {
+      mine = await loadSavedProfile().catch(() => null);
+      myProfileRef.current = mine;
+    }
+    const same =
+      !!mine &&
+      ((!!p.id && p.id === mine.id) || (!!p.username && !!mine.username && p.username.toLowerCase() === mine.username.toLowerCase()));
+    if (same) {
+      setStack([]);
+      setTab("profile");
+      return;
+    }
+    push({ name: "publicProfile", profile: p });
+  };
   const openPost = (postId: string) => push({ name: "post", postId });
   openPostRef.current = openPost;
 

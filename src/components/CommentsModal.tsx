@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -13,6 +12,7 @@ import {
   TextInput,
   View
 } from "react-native";
+import { KeyboardSafeView } from "./KeyboardSafeView";
 import { Heart, Send, Trash2, X } from "lucide-react-native";
 import { CommentItem, FeedPost } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
@@ -213,7 +213,7 @@ export function CommentsModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView style={s.back} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardSafeView style={s.back} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <Pressable style={s.dismiss} onPress={onClose} />
         <View style={[s.sheet, { backgroundColor: colors.bg }]}>
           <View style={s.head}>
@@ -292,7 +292,7 @@ export function CommentsModal({
             </View>
           </View>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardSafeView>
     </Modal>
   );
 }

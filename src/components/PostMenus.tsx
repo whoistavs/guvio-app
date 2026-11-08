@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -12,6 +11,7 @@ import {
   TextInput,
   View
 } from "react-native";
+import { KeyboardSafeView } from "./KeyboardSafeView";
 import { ClothingTag, FeedPost, WardrobeItem } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
 import { toast } from "./motion";
@@ -179,7 +179,7 @@ export function EditPostModal({
 
   return (
     <Modal visible={!!post} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={s.back} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardSafeView style={s.back} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={[s.card, { backgroundColor: colors.bg }]}>
           <Text style={[s.title, { color: colors.text }]}>Editar post</Text>
           <ScrollView style={{ maxHeight: 460 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 10 }}>
@@ -228,7 +228,7 @@ export function EditPostModal({
             </Pressable>
           </View>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardSafeView>
     </Modal>
   );
 }

@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -12,6 +11,7 @@ import {
   TextInput,
   View
 } from "react-native";
+import { KeyboardSafeView } from "./KeyboardSafeView";
 import { ArrowLeft, Camera, CornerUpLeft, Image as ImageIcon, Search, Send, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { DirectThread, FeedPost } from "../data/mockData";
@@ -249,7 +249,7 @@ export function ChatView({
   const status = typing ? "digitando..." : online ? "online agora" : "";
 
   return (
-    <KeyboardAvoidingView style={[s.full, { backgroundColor: colors.bg }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardSafeView style={[s.full, { backgroundColor: colors.bg }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={[s.header, { borderBottomColor: colors.border }]}>
         <Pressable onPress={onBack} hitSlop={10}>
           <ArrowLeft size={24} color={colors.icon} />
@@ -314,6 +314,8 @@ export function ChatView({
           const fg = isMe ? colors.bg : colors.text;
           return (
             <View key={m.id} style={[isMe ? s.meWrap : s.otherWrap, m.reaction ? { marginBottom: 10 } : null]}>
+              {/* a reação fica presa ao balão (não à linha do "Visto") */}
+              <View style={{ position: "relative", maxWidth: "100%", alignItems: isMe ? "flex-end" : "flex-start" }}>
               <Pressable
                 onPress={() => onBubblePress(m)}
                 onLongPress={() => {
@@ -359,8 +361,9 @@ export function ChatView({
                   <Text style={{ fontSize: 12 }}>{m.reaction}</Text>
                 </View>
               ) : null}
+              </View>
               {lastMine && m.id === lastMine.id && m.readAt ? (
-                <Text style={[s.seen, { color: colors.muted }]}>Visto</Text>
+                <Text style={[s.seen, { color: colors.muted }, m.reaction ? { marginTop: 14 } : null]}>Visto</Text>
               ) : null}
             </View>
           );
@@ -451,7 +454,7 @@ export function ChatView({
       </Modal>
 
       <ImageZoomModal images={zoom ? [zoom] : null} index={0} onClose={() => setZoom(null)} />
-    </KeyboardAvoidingView>
+    </KeyboardSafeView>
   );
 }
 
