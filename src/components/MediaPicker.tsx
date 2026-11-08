@@ -354,6 +354,26 @@ export function MediaPicker({
     const uri = info.localUri || it.uri;
     return uri.split("#")[0];
   };
+  const copyVideo = async (it: Item): Promise<string | null> => {
+    if (Platform.OS === "web" || !it.asset || !ML) return it.uri;
+    try {
+      const { File, Paths } = require("expo-file-system") as typeof import("expo-file-system");
+      const info = await ML.getAssetInfoAsync(it.asset, { shouldDownloadFromNetwork: true });
+      const raw = info.localUri || "";
+      const candidates = Array.from(new Set([raw, raw.split("#")[0]])).filter(Boolean);
+      for (const c of candidates) {
+        try {
+          const src = new File(c);
+          if (!src.exists) continue;
+          const ext = (c.split("#")[0].split(".").pop() || "mov").toLowerCase();
+          const dest = new File(Paths.cache, `guvio-video-${Date.now()}.${ext}`);
+          src.copy(dest);
+          if (dest.exists) return dest.uri;
+        } catch {}
+      }
+    } catch {}
+    return null;
+  };
   const realSize = (uri: string) =>
     new Promise<{ width: number; height: number } | null>(res => Image.getSize(uri, (width, height) => res({ width, height }), () => res(null)));
 
@@ -371,7 +391,15 @@ export function MediaPicker({
           ]);
           return;
         }
-        const file = await localFile(v);
+        // copia o vídeo para dentro do app (o caminho da galeria nem sempre pode ser lido direto)
+        const file = await copyVideo(v);
+        if (!file) {
+          Alert.alert("Não deu para abrir este vídeo", "Vamos abrir o seletor do iPhone para escolher o vídeo de lá.", [
+            { text: "Cancelar", style: "cancel" },
+            { text: "Abrir", onPress: () => openSystemLibrary(true) }
+          ]);
+          return;
+        }
         if (Platform.OS !== "web") {
           try {
             const { File } = require("expo-file-system") as typeof import("expo-file-system");
@@ -385,13 +413,26 @@ export function MediaPicker({
             }
           } catch {}
         }
-        const cover = await videoThumbnail(file).catch(() => "");
+        // capa: um quadro do vídeo; se falhar, a miniatura que a própria galeria guarda
+        let cover = await videoThumbnail(file).catch(() => "");
+        if (!cover && v.asset) {
+          cover = await manipulateAsync(v.uri, [{ resize: { width: 1080 } }], { compress: 0.85, format: SaveFormat.JPEG })
+            .then(r => r.uri)
+            .catch(() => "");
+        }
+        if (!cover) {
+          Alert.alert("Sem capa", "Não conseguimos montar a capa deste vídeo. Tente escolher pelo seletor do iPhone.", [
+            { text: "Cancelar", style: "cancel" },
+            { text: "Abrir", onPress: () => openSystemLibrary(true) }
+          ]);
+          return;
+        }
         onDone({ kind: "video", video: file, cover, aspect: v.width / v.height });
         return;
       }
       const out: string[] = [];
       for (const it of selected) {
-        const file = await localFile(it);
+        const file = await localFile(it).catch(() => it.uri);
         const real = (await realSize(file)) || { width: it.width, height: it.height };
         // a conta é feita no tamanho mostrado; converte para os pixels reais
         const k = real.width / it.width;
@@ -411,7 +452,10 @@ export function MediaPicker({
         if (!whole) actions.push({ crop: { originX: cx, originY: cy, width: cw, height: ch } });
         const longSide = Math.max(whole ? real.width : cw, whole ? real.height : ch);
         if (longSide > 1600) actions.push({ resize: (whole ? real.width : cw) >= (whole ? real.height : ch) ? { width: 1600 } : { height: 1600 } });
-        const r = await manipulateAsync(file, actions, { compress: 0.9, format: SaveFormat.JPEG });
+        const r = await manipulateAsync(file, actions, { compress: 0.9, format: SaveFormat.JPEG }).catch(() =>
+          // se o arquivo não abrir, pede a foto direto para a galeria
+          manipulateAsync(it.uri, actions, { compress: 0.9, format: SaveFormat.JPEG })
+        );
         out.push(r.uri);
       }
       onDone({ kind: "photos", images: out, aspect: fw / fh });

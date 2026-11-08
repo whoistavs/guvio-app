@@ -70,6 +70,7 @@ export function CreateHubView({
     const mode0 = picker;
     setPicker(null);
     if (r.kind === "video") {
+      if (!r.cover) return;
       setVideo(r.video);
       setImages(r.cover ? [r.cover] : []);
       setAspect(r.aspect);
