@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { topPad } from "../utils/insets";
 import { useVideoPlayer, VideoView } from "expo-video";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Bookmark,
   ChevronLeft,
@@ -44,6 +45,11 @@ import { likeFeedback, tapFeedback } from "../utils/haptics";
 import { markNotInterested } from "../services/storage";
 
 const SPEEDS = [0.5, 1, 1.5, 2];
+// a linha do tempo fica acima da barrinha de gestos do celular (senão o sistema "rouba" o arrasto)
+const useBottomSafe = () => {
+  const ins = useSafeAreaInsets();
+  return Math.max(ins.bottom, Platform.OS === "web" ? 20 : 12) + 14;
+};
 const fmt = (s: number) => {
   if (!isFinite(s) || s < 0) s = 0;
   const m = Math.floor(s / 60);
@@ -241,6 +247,7 @@ function Reel({
 }) {
   const [expanded, setExpanded] = useState(false);
   const who = post.creatorUsername || post.creatorName;
+  const safeB = useBottomSafe();
   const mine = actions.isMine(post);
   const following = actions.isFollowing(post);
   const heart = useRef(new Animated.Value(0)).current;
@@ -276,7 +283,7 @@ function Reel({
       <View style={s.fade} pointerEvents="none" />
 
       {/* ações na lateral */}
-      <View style={s.side}>
+      <View style={[s.side, { bottom: 112 + safeB }]}>
         <SideBtn
           onPress={() => actions.onToggle(post.id, "isLiked")}
           label={count(post.likes || 0)}
@@ -297,7 +304,7 @@ function Reel({
       </View>
 
       {/* autor, legenda e áudio */}
-      <View style={s.info}>
+      <View style={[s.info, { bottom: 34 + safeB }]}>
         <View style={s.authorRow}>
           <Pressable onPress={() => onOpenProfile(who)} style={s.author} hitSlop={6}>
             <FastImage source={post.creatorAvatar} style={s.avatar} contentFit="cover" />
@@ -368,6 +375,7 @@ function ActivePlayer({
     p.play();
   });
   const [paused, setPaused] = useState(false);
+  const safeB = useBottomSafe();
   const userPaused = useRef(false);
   const [time, setTime] = useState({ cur: 0, dur: 0 });
   const [scrub, setScrub] = useState<number | null>(null);
@@ -487,13 +495,13 @@ function ActivePlayer({
       ) : null}
 
       {scrub !== null ? (
-        <View style={s.scrubTime} pointerEvents="none">
+        <View style={[s.scrubTime, { bottom: 56 + safeB }]} pointerEvents="none">
           <Text style={s.scrubText}>
             {fmt(scrub * time.dur)} <Text style={{ color: "rgba(255,255,255,.6)" }}>/ {fmt(time.dur)}</Text>
           </Text>
         </View>
       ) : null}
-      <View style={s.barHit} onLayout={e => setBarW(e.nativeEvent.layout.width || 1)} {...pan.panHandlers}>
+      <View style={[s.barHit, { bottom: safeB - 8 }]} onLayout={e => setBarW(e.nativeEvent.layout.width || 1)} {...pan.panHandlers}>
         <View style={[s.barTrack, scrub !== null && s.barTrackBig]}>
           <View style={[s.barFill, { width: `${progress * 100}%` }]} />
         </View>
