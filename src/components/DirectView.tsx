@@ -183,11 +183,11 @@ export function DirectView({
               <View style={{ flex: 1 }}>
                 <Text style={[s.user, { color: colors.text }]}>
                   @{d.username}
-                  {d.pinned ? <Text style={{ fontSize: 11 }}>  📌</Text> : null}
+                  {d.pinned ? <Text style={{ fontSize: 11, color: colors.muted }}>  · Fixada</Text> : null}
                 </Text>
                 <Text
                   numberOfLines={1}
-                  style={{ color: d.unread ? colors.text : colors.muted, fontSize: 12, fontWeight: d.unread ? "800" : "400" }}
+                  style={{ color: d.unread ? colors.text : colors.muted, fontSize: 12, fontWeight: d.unread ? "600" : "400" }}
                 >
                   {d.lastMessage}
                 </Text>
@@ -214,9 +214,9 @@ const s = StyleSheet.create({
   thread: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 11 },
   avatar: { width: 56, height: 56, borderRadius: 28 },
   onlineDot: { position: "absolute", right: 1, bottom: 1, width: 15, height: 15, borderRadius: 8, backgroundColor: "#22C55E", borderWidth: 3 },
-  user: { fontSize: 14, fontWeight: "800", marginBottom: 4 },
+  user: { fontSize: 14, fontWeight: "600", marginBottom: 4 },
   unread: { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: "#168CFF", alignItems: "center", justifyContent: "center" },
-  unreadText: { fontSize: 10, color: "white", fontWeight: "800" },
+  unreadText: { fontSize: 10, color: "white", fontWeight: "600" },
   chat: { padding: 16, gap: 14, paddingBottom: 20 },
   headAvatar: { width: 28, height: 28, borderRadius: 14 },
   pickHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 18, paddingVertical: 12 },
@@ -233,6 +233,6 @@ const s = StyleSheet.create({
   iconBtn: { padding: 4 },
   input: { height: 42, borderRadius: 22, flex: 1, paddingHorizontal: 15, fontSize: 13 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 36, gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: "800", marginTop: 6 }
+  emptyTitle: { fontSize: 16, fontWeight: "600", marginTop: 6 }
 });
 

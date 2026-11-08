@@ -4,23 +4,23 @@
 export interface Challenge {
   tag: string;
   title: string;
-  emoji: string;
+  icon: string;
   description: string;
 }
 
 export const CHALLENGES: Challenge[] = [
-  { tag: "monocromatico", title: "Look monocromático", emoji: "⚫", description: "Uma cor só, da cabeça aos pés. Brinque com texturas e tons da mesma cor." },
-  { tag: "pecacoringa", title: "Peça coringa", emoji: "🃏", description: "Mostre a peça que você mais usa e como ela combina com tudo." },
-  { tag: "brecho", title: "Achado de brechó", emoji: "♻️", description: "Monte um look com pelo menos uma peça de brechó ou de segunda mão." },
-  { tag: "camadas", title: "Camadas", emoji: "🧥", description: "Sobreposições criativas: camisa sobre camiseta, colete, jaqueta, cachecol..." },
-  { tag: "corforte", title: "Cor forte", emoji: "🌈", description: "Saia do básico: uma peça de cor vibrante como protagonista do look." },
-  { tag: "lookdetrabalho", title: "Look de trabalho", emoji: "💼", description: "O que você veste para trabalhar ou estudar, com personalidade." },
-  { tag: "estampas", title: "Mistura de estampas", emoji: "🌀", description: "Listras com xadrez, floral com poá... combine estampas sem medo." },
-  { tag: "estilodacidade", title: "Estilo da sua cidade", emoji: "🏙️", description: "Um look que tenha a cara da cidade onde você mora (e marque a cidade!)." },
-  { tag: "anos90", title: "Anos 90", emoji: "📼", description: "Jeans largo, moletom, tênis chunky: reinvente um clássico dos anos 90." },
-  { tag: "minimalista", title: "Minimalista", emoji: "◻️", description: "Poucas peças, cortes limpos e cores neutras. Menos é mais." },
-  { tag: "acessorios", title: "Foco nos acessórios", emoji: "💍", description: "Bonés, bolsas, joias, óculos: deixe os acessórios roubarem a cena." },
-  { tag: "fimdesemana", title: "Fim de semana", emoji: "☀️", description: "Seu look preferido para sábado e domingo, confortável e com estilo." }
+  { tag: "monocromatico", title: "Look monocromático", icon: "contrast", description: "Uma cor só, da cabeça aos pés. Brinque com texturas e tons da mesma cor." },
+  { tag: "pecacoringa", title: "Peça coringa", icon: "shirt", description: "Mostre a peça que você mais usa e como ela combina com tudo." },
+  { tag: "brecho", title: "Achado de brechó", icon: "recycle", description: "Monte um look com pelo menos uma peça de brechó ou de segunda mão." },
+  { tag: "camadas", title: "Camadas", icon: "layers", description: "Sobreposições criativas: camisa sobre camiseta, colete, jaqueta, cachecol..." },
+  { tag: "corforte", title: "Cor forte", icon: "palette", description: "Saia do básico: uma peça de cor vibrante como protagonista do look." },
+  { tag: "lookdetrabalho", title: "Look de trabalho", icon: "briefcase", description: "O que você veste para trabalhar ou estudar, com personalidade." },
+  { tag: "estampas", title: "Mistura de estampas", icon: "pattern", description: "Listras com xadrez, floral com poá... combine estampas sem medo." },
+  { tag: "estilodacidade", title: "Estilo da sua cidade", icon: "city", description: "Um look que tenha a cara da cidade onde você mora (e marque a cidade!)." },
+  { tag: "anos90", title: "Anos 90", icon: "retro", description: "Jeans largo, moletom, tênis chunky: reinvente um clássico dos anos 90." },
+  { tag: "minimalista", title: "Minimalista", icon: "contrast", description: "Poucas peças, cortes limpos e cores neutras. Menos é mais." },
+  { tag: "acessorios", title: "Foco nos acessórios", icon: "gem", description: "Bonés, bolsas, joias, óculos: deixe os acessórios roubarem a cena." },
+  { tag: "fimdesemana", title: "Fim de semana", icon: "sun", description: "Seu look preferido para sábado e domingo, confortável e com estilo." }
 ];
 
 const DAY = 24 * 60 * 60 * 1000;

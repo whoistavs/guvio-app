@@ -13,7 +13,7 @@ import {
   Animated,
   ScrollView
 } from "react-native";
-import { Camera, ChevronLeft, Eye, Heart, ImagePlus, Plus, Send, Trash2, X } from "lucide-react-native";
+import { BarChart2, Camera, ChevronLeft, Eye, Heart, HelpCircle, ImagePlus, MoveVertical, Plus, Send, Square, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { StoryOverlay, StorySticker } from "../data/mockData";
 import { StoryStickerView } from "./StoryStickerView";
@@ -224,7 +224,7 @@ export function StoryViewerModal({
         {reactionHeart && (
           <View pointerEvents="none" style={s.reactionOverlay}>
             <Text style={{ fontSize: 96 }}>{reactionEmoji}</Text>
-            <Text style={{ color: "#FFF", fontWeight: "800", marginTop: 6 }}>{reactionLabel}</Text>
+            <Text style={{ color: "#FFF", fontWeight: "600", marginTop: 6 }}>{reactionLabel}</Text>
           </View>
         )}
 
@@ -260,12 +260,12 @@ export function StoryViewerModal({
               <View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Text style={s.authorName}>
-                    {currentGroup.displayName} {currentGroup.flag || ""}
+                    {currentGroup.displayName}
                   </Text>
                   <Text style={s.timeAgo}>· {currentStory.timestamp}</Text>
                   {currentStory.closeFriends ? (
                     <View style={s.cfBadge}>
-                      <Text style={{ color: "#FFF", fontSize: 10, fontWeight: "900" }}>★ Melhores amigos</Text>
+                      <Text style={{ color: "#FFF", fontSize: 10, fontWeight: "700" }}>Melhores amigos</Text>
                     </View>
                   ) : null}
                 </View>
@@ -362,13 +362,13 @@ export function StoryViewerModal({
                 {responses.length > 0 && currentStory?.sticker ? (
                   <View style={{ marginBottom: 14 }}>
                     <Text style={s.respTitle}>
-                      {currentStory.sticker.type === "poll" ? "VOTOS" : "RESPOSTAS"} ({responses.length})
+                      {currentStory.sticker.type === "poll" ? "Votos" : "Respostas"} ({responses.length})
                     </Text>
                     {responses.map((r, i) => (
                       <View key={i} style={s.viewerRow}>
                         <FastImage source={r.avatar} style={s.viewerAvatar} />
                         <View style={{ flex: 1 }}>
-                          <Text style={{ color: "#FFF", fontWeight: "800" }}>@{r.username}</Text>
+                          <Text style={{ color: "#FFF", fontWeight: "600" }}>@{r.username}</Text>
                           <Text style={{ color: "rgba(255,255,255,.8)", fontSize: 13 }}>
                             {r.kind === "vote" && currentStory.sticker?.type === "poll"
                               ? `votou em "${currentStory.sticker.options[Number(r.value)] ?? r.value}"`
@@ -387,7 +387,7 @@ export function StoryViewerModal({
                   viewers.map(v => (
                     <View key={v.username} style={s.viewerRow}>
                       <FastImage source={v.avatar} style={s.viewerAvatar} />
-                      <Text style={{ color: "#FFF", fontWeight: "800", flex: 1 }}>@{v.username}</Text>
+                      <Text style={{ color: "#FFF", fontWeight: "600", flex: 1 }}>@{v.username}</Text>
                       <Text style={{ color: "rgba(255,255,255,.6)", fontSize: 11 }}>{v.time}</Text>
                     </View>
                   ))
@@ -510,7 +510,7 @@ export function CreateStoryModal({
             ) : null}
             {stickerForm ? (
               <View style={s.textEditor}>
-                <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 18, textAlign: "center", marginBottom: 14 }}>
+                <Text style={{ color: "#FFF", fontWeight: "700", fontSize: 18, textAlign: "center", marginBottom: 14 }}>
                   {stickerForm === "poll" ? "Enquete" : "Caixinha de pergunta"}
                 </Text>
                 <TextInput
@@ -539,13 +539,13 @@ export function CreateStoryModal({
                   }}
                   style={s.doneText}
                 >
-                  <Text style={{ color: "#000", fontWeight: "900" }}>Adicionar</Text>
+                  <Text style={{ color: "#000", fontWeight: "700" }}>Adicionar</Text>
                 </Pressable>
               </View>
             ) : null}
             <View style={s.textTools}>
               <Pressable onPress={() => setEditingText(v => !v)} style={s.toolBtn}>
-                <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 18 }}>Aa</Text>
+                <Text style={{ color: "#FFF", fontWeight: "700", fontSize: 18 }}>Aa</Text>
               </Pressable>
               <Pressable
                 onPress={() => {
@@ -554,7 +554,7 @@ export function CreateStoryModal({
                 }}
                 style={s.toolBtn}
               >
-                <Text style={{ fontSize: 18 }}>🗳️</Text>
+                <BarChart2 size={20} color="#FFF" />
               </Pressable>
               <Pressable
                 onPress={() => {
@@ -563,15 +563,15 @@ export function CreateStoryModal({
                 }}
                 style={s.toolBtn}
               >
-                <Text style={{ fontSize: 18 }}>❓</Text>
+                <HelpCircle size={20} color="#FFF" />
               </Pressable>
               {ovText ? (
                 <>
                   <Pressable onPress={() => setOvBoxed(b => !b)} style={[s.toolBtn, ovBoxed && { backgroundColor: "rgba(255,255,255,.35)" }]}>
-                    <Text style={{ color: "#FFF", fontWeight: "900" }}>▣</Text>
+                    <Square size={18} color="#FFF" />
                   </Pressable>
                   <Pressable onPress={() => setOvY(y => (y <= 0.2 ? 0.42 : y <= 0.5 ? 0.7 : 0.15))} style={s.toolBtn}>
-                    <Text style={{ color: "#FFF", fontWeight: "900" }}>↕</Text>
+                    <MoveVertical size={18} color="#FFF" />
                   </Pressable>
                 </>
               ) : null}
@@ -594,12 +594,12 @@ export function CreateStoryModal({
                   ))}
                 </View>
                 <Pressable onPress={() => setEditingText(false)} style={s.doneText}>
-                  <Text style={{ color: "#000", fontWeight: "900" }}>Pronto</Text>
+                  <Text style={{ color: "#000", fontWeight: "700" }}>Pronto</Text>
                 </Pressable>
               </View>
             ) : null}
             <Pressable onPress={() => setCloseOnly(v => !v)} style={[s.cfToggle, closeOnly && { backgroundColor: "#22C55E", borderColor: "#22C55E" }]}>
-              <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 12 }}>★ {closeOnly ? "Só melhores amigos" : "Melhores amigos"}</Text>
+              <Text style={{ color: "#FFF", fontWeight: "700", fontSize: 12 }}>{closeOnly ? "Só melhores amigos" : "Melhores amigos"}</Text>
             </Pressable>
             <View style={s.captionInputBox}>
               <TextInput
@@ -636,17 +636,17 @@ const s = StyleSheet.create({
   stickerInput: { color: "#FFF", fontSize: 16, fontWeight: "700", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,.4)", paddingVertical: 8, textAlign: "center" },
   cfBadge: { backgroundColor: "#22C55E", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1 },
   cfToggle: { position: "absolute", left: 14, top: 14, zIndex: 6, borderWidth: 1.5, borderColor: "rgba(255,255,255,.7)", borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "rgba(0,0,0,.4)" },
-  respTitle: { color: "rgba(255,255,255,.6)", fontSize: 10, fontWeight: "800", letterSpacing: 1.2, marginBottom: 6 },
+  respTitle: { color: "rgba(255,255,255,.6)", fontSize: 13, fontWeight: "600", marginBottom: 6 },
   textTools: { position: "absolute", top: 14, right: 14, gap: 10, zIndex: 6 },
   toolBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: "rgba(0,0,0,.5)", alignItems: "center", justifyContent: "center" },
   textEditor: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,.55)", justifyContent: "center", padding: 24, zIndex: 7 },
-  textEditorInput: { fontSize: 28, fontWeight: "900", textAlign: "center", minHeight: 60 },
+  textEditorInput: { fontSize: 28, fontWeight: "700", textAlign: "center", minHeight: 60 },
   colorRow: { flexDirection: "row", justifyContent: "center", gap: 10, marginTop: 24 },
   colorDot: { width: 30, height: 30, borderRadius: 15, borderColor: "#FFF" },
   doneText: { alignSelf: "center", marginTop: 24, backgroundColor: "#FFF", paddingHorizontal: 22, paddingVertical: 10, borderRadius: 20 },
   ownerBar: { flexDirection: "row", justifyContent: "center", gap: 40, paddingBottom: 30, zIndex: 10 },
   ownerBtn: { alignItems: "center", gap: 4 },
-  ownerText: { color: "#FFF", fontSize: 11, fontWeight: "800" },
+  ownerText: { color: "#FFF", fontSize: 11, fontWeight: "600" },
   viewersSheet: {
     position: "absolute",
     left: 0,
@@ -659,7 +659,7 @@ const s = StyleSheet.create({
     padding: 18
   },
   viewersHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  viewersTitle: { color: "#FFF", fontWeight: "900", fontSize: 15 },
+  viewersTitle: { color: "#FFF", fontWeight: "700", fontSize: 15 },
   viewerRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 },
   viewerAvatar: { width: 36, height: 36, borderRadius: 18 },
   container: { flex: 1, backgroundColor: "#000" },
@@ -709,7 +709,7 @@ const s = StyleSheet.create({
   },
   authorInfo: { flexDirection: "row", alignItems: "center", gap: 10 },
   authorAvatar: { width: 38, height: 38, borderRadius: 19, borderWidth: 1.5, borderColor: "#FFF" },
-  authorName: { color: "#FFF", fontSize: 13, fontWeight: "800" },
+  authorName: { color: "#FFF", fontSize: 13, fontWeight: "600" },
   timeAgo: { color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: "500" },
   authorHandle: { color: "rgba(255,255,255,0.8)", fontSize: 11 },
   closeButton: { padding: 4 },
@@ -775,9 +775,9 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#222"
   },
-  createTitle: { color: "#FFF", fontSize: 16, fontWeight: "800" },
+  createTitle: { color: "#FFF", fontSize: 16, fontWeight: "600" },
   publishBtn: { backgroundColor: "#0095F6", paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16 },
-  publishBtnText: { color: "#FFF", fontSize: 12, fontWeight: "800" },
+  publishBtnText: { color: "#FFF", fontSize: 12, fontWeight: "600" },
   previewContainer: { flex: 1, margin: 16, borderRadius: 20, overflow: "hidden", backgroundColor: "#000" },
   previewImage: { width: "100%", height: "100%" },
   captionInputBox: {

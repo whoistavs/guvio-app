@@ -70,6 +70,8 @@ export interface FeedPost {
   hideLikes?: boolean;
   kind?: "photo" | "video" | "poll" | "repost";
   videoUrl?: string;
+  /** largura/altura da foto (1 = quadrada, 0.8 = 4:5, 1.78 = 16:9) */
+  aspect?: number;
   /** enquete "Qual look?": uma opção por foto */
   poll?: { options: string[]; votes: number[]; myVote: number | null };
   /** repost: id do post original e quem publicou */
@@ -410,7 +412,7 @@ export const INITIAL_STORIES: UserStoryGroup[] = [
         id: "st-fr-1",
         image: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?q=80&w=800",
         timestamp: "Há 2h",
-        caption: "Manhã de desfile em Le Marais 🥐✨"
+        caption: "Manhã de desfile em Le Marais"
       },
       {
         id: "st-fr-2",
@@ -432,7 +434,7 @@ export const INITIAL_STORIES: UserStoryGroup[] = [
         id: "st-jp-1",
         image: "https://images.unsplash.com/photo-1509631179647-0177331693ae?q=80&w=800",
         timestamp: "Há 3h",
-        caption: "Harajuku drop da semana! 🎌"
+        caption: "Harajuku drop da semana"
       }
     ]
   },
@@ -448,7 +450,7 @@ export const INITIAL_STORIES: UserStoryGroup[] = [
         id: "st-it-1",
         image: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=800",
         timestamp: "Há 4h",
-        caption: "Corte artesanal milanês na Galleria ☕"
+        caption: "Corte artesanal milanês na Galleria"
       }
     ]
   },
@@ -464,7 +466,7 @@ export const INITIAL_STORIES: UserStoryGroup[] = [
         id: "st-br-1",
         image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=800",
         timestamp: "Há 5h",
-        caption: "Encontro de criadores nos Jardins 🌴"
+        caption: "Encontro de criadores nos Jardins"
       }
     ]
   }

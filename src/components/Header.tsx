@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
   c: { width: "100%", flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 28, paddingBottom: 12, zIndex: 10 },
   left: { flexDirection: "row", alignItems: "center", gap: 10 },
   logoBadge: { width: 34, height: 34, borderRadius: 10 },
-  title: { fontSize: 24, fontWeight: "900", letterSpacing: 2 },
+  title: { fontSize: 24, fontWeight: "700", letterSpacing: 2 },
   right: { flexDirection: "row", alignItems: "center", gap: 14, flexShrink: 1, marginLeft: 12 },
   loc: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 },
   lt: { fontSize: 11, fontWeight: "600", flexShrink: 1 },
@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center"
   },
-  dmBadgeText: { color: "#FFF", fontSize: 10, fontWeight: "900" },
+  dmBadgeText: { color: "#FFF", fontSize: 10, fontWeight: "700" },
   activityBadgeDot: {
     position: "absolute",
     top: 0,

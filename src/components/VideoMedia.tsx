@@ -1,72 +1,63 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { useVideoPlayer, VideoView } from "expo-video";
-import { Pause, Play, Volume2, VolumeX } from "lucide-react-native";
+import { Play, Video } from "lucide-react-native";
 import { FastImage } from "./FastImage";
 
-/** Vídeo do post: mostra a capa; só carrega o vídeo quando a pessoa toca (feed continua leve) */
-export function VideoMedia({ uri, poster, style }: { uri: string; poster: string; style: any }) {
-  const [started, setStarted] = useState(false);
-  return (
-    <View style={style}>
-      <FastImage source={poster} style={StyleSheet.absoluteFill as any} contentFit="cover" />
-      {started ? (
-        <Player uri={uri} />
-      ) : (
-        <Pressable onPress={() => setStarted(true)} style={s.center} hitSlop={20}>
-          <View style={s.play}>
-            <Play size={30} color="#FFF" fill="#FFF" />
-          </View>
-        </Pressable>
-      )}
-    </View>
-  );
-}
+/**
+ * Vídeo no feed: mostra a capa (o feed continua leve).
+ * Um toque abre em tela cheia; dois toques curtem.
+ */
+export function VideoMedia({
+  poster,
+  style,
+  onOpen,
+  onDoubleTap
+}: {
+  uri?: string;
+  poster: string;
+  style: any;
+  onOpen?: () => void;
+  onDoubleTap?: () => void;
+}) {
+  const last = useRef(0);
+  const single = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (single.current) clearTimeout(single.current);
+  }, []);
 
-function Player({ uri }: { uri: string }) {
-  const [muted, setMuted] = useState(false);
-  const [playing, setPlaying] = useState(true);
-  const player = useVideoPlayer(uri, p => {
-    p.loop = true;
-    p.muted = false;
-    p.play();
-  });
-
-  useEffect(() => {
-    player.muted = muted;
-  }, [muted]);
-
-  const toggle = () => {
-    if (player.playing) {
-      player.pause();
-      setPlaying(false);
-    } else {
-      player.play();
-      setPlaying(true);
+  const onPress = () => {
+    const now = Date.now();
+    if (now - last.current < 280) {
+      last.current = 0;
+      if (single.current) clearTimeout(single.current);
+      single.current = null;
+      onDoubleTap?.();
+      return;
     }
+    last.current = now;
+    single.current = setTimeout(() => {
+      single.current = null;
+      onOpen?.();
+    }, 280);
   };
 
   return (
-    <>
-      <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
-      <Pressable onPress={toggle} style={StyleSheet.absoluteFill}>
-        {!playing ? (
-          <View style={s.center} pointerEvents="none">
-            <View style={s.play}>
-              <Pause size={28} color="#FFF" fill="#FFF" />
-            </View>
-          </View>
-        ) : null}
-      </Pressable>
-      <Pressable onPress={() => setMuted(m => !m)} style={s.mute} hitSlop={10}>
-        {muted ? <VolumeX size={16} color="#FFF" /> : <Volume2 size={16} color="#FFF" />}
-      </Pressable>
-    </>
+    <Pressable onPress={onPress} style={style}>
+      <FastImage source={poster} style={StyleSheet.absoluteFill as any} contentFit="cover" />
+      <View style={s.center} pointerEvents="none">
+        <View style={s.play}>
+          <Play size={28} color="#FFF" fill="#FFF" />
+        </View>
+      </View>
+      <View style={s.badge} pointerEvents="none">
+        <Video size={16} color="#FFF" />
+      </View>
+    </Pressable>
   );
 }
 
 const s = StyleSheet.create({
   center: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
-  play: { width: 64, height: 64, borderRadius: 32, backgroundColor: "rgba(0,0,0,.55)", alignItems: "center", justifyContent: "center", paddingLeft: 3 },
-  mute: { position: "absolute", right: 12, bottom: 12, width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(0,0,0,.6)", alignItems: "center", justifyContent: "center" }
+  play: { width: 62, height: 62, borderRadius: 31, backgroundColor: "rgba(0,0,0,.45)", alignItems: "center", justifyContent: "center", paddingLeft: 3 },
+  badge: { position: "absolute", top: 12, right: 12 }
 });

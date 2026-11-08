@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text } from "react-native";
 import { FeedPost, UserProfile } from "../data/mockData";
+import { AppIcon } from "./AppIcon";
 import { useAppTheme } from "../context/AppTheme";
 import { computeAchievements } from "../utils/achievements";
 import { CHALLENGES, weekIndex, weekStart } from "../data/challenges";
@@ -53,11 +54,11 @@ export function AchievementsRow({ profile, posts }: { profile: UserProfile; post
       {list.map(a => (
         <Pressable
           key={a.id}
-          onPress={() => Alert.alert(`${a.emoji} ${a.title}`, a.description)}
+          onPress={() => Alert.alert(a.title, a.description)}
           style={[s.badge, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
-          <Text style={{ fontSize: 13 }}>{a.emoji}</Text>
-          <Text style={{ color: colors.text, fontSize: 11, fontWeight: "800" }}>{a.title}</Text>
+          <AppIcon name={a.icon} size={13} color={colors.text} />
+          <Text style={{ color: colors.text, fontSize: 11, fontWeight: "600" }}>{a.title}</Text>
         </Pressable>
       ))}
     </ScrollView>

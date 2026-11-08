@@ -147,6 +147,7 @@ export async function publishPost(input: {
   clothingTags?: ClothingTag[];
   video?: string;
   pollOptions?: string[];
+  aspect?: number;
 }): Promise<FeedPost> {
   if (await isCloud()) {
     const post = await cloud.createPost(input);
@@ -169,6 +170,7 @@ export async function publishPost(input: {
     caption: input.caption,
     kind: input.video ? "video" : input.pollOptions && (input.images || []).length >= 2 ? "poll" : "photo",
     videoUrl: input.video,
+    aspect: input.aspect || 1,
     poll:
       input.pollOptions && (input.images || []).length >= 2
         ? { options: input.pollOptions.map((o, i) => o.trim() || `Look ${i + 1}`), votes: input.pollOptions.map(() => 0), myVote: null }

@@ -25,7 +25,7 @@ export function ShareProfileModal({
   const share = async () => {
     try {
       await Share.share({
-        message: `Veja os looks de @${username} no Guvio 👗 ${link}`,
+        message: `Veja os looks de @${username} no Guvio: ${link}`,
         url: link
       });
     } catch {}
@@ -49,7 +49,7 @@ export function ShareProfileModal({
           </Text>
           <Pressable onPress={share} style={[s.btn, { backgroundColor: colors.text }]}>
             <Share2 size={16} color={colors.bg} />
-            <Text style={{ color: colors.bg, fontWeight: "900" }}>Compartilhar link</Text>
+            <Text style={{ color: colors.bg, fontWeight: "700" }}>Compartilhar link</Text>
           </Pressable>
         </View>
       </View>
@@ -62,7 +62,7 @@ const s = StyleSheet.create({
   card: { width: "100%", maxWidth: 360, borderRadius: 28, borderWidth: 1, padding: 22, alignItems: "center" },
   close: { alignSelf: "flex-end" },
   avatar: { width: 72, height: 72, borderRadius: 36, marginBottom: 8 },
-  user: { fontSize: 18, fontWeight: "900" },
+  user: { fontSize: 18, fontWeight: "700" },
   qr: { padding: 14, backgroundColor: "#FFFFFF", borderRadius: 22 },
   btn: { marginTop: 18, alignSelf: "stretch", height: 46, borderRadius: 23, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center" }
 });

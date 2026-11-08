@@ -80,6 +80,11 @@ function imageSize(uri: string): Promise<{ width: number; height: number } | nul
 // tamanho máximo (lado maior) por tipo de foto: avatar aparece pequeno, não precisa de 1440px
 const SIDE_BY_FOLDER: Record<string, number> = { avatar: 480, wardrobe: 1000, wishlist: 800, feedback: 1280 };
 
+/** proporção aceita pelo banco */
+function clampAspect(a?: number) {
+  return a && isFinite(a) ? Math.min(3.5, Math.max(0.3, Math.round(a * 1000) / 1000)) : 1;
+}
+
 async function compress(uri: string, folder = ""): Promise<string> {
   if (Platform.OS === "web") return uri;
   try {
@@ -249,6 +254,7 @@ function toPost(r: any, liked: Set<string>, saved: Set<string>): FeedPost {
     hideLikes: !!r.hide_likes,
     kind: r.kind || "photo",
     videoUrl: r.video_url || undefined,
+    aspect: typeof r.aspect === "number" && r.aspect > 0 ? r.aspect : 1,
     repostOf: r.repost_of || undefined,
     originalUsername: r.original_username || undefined,
     originalAvatar: r.original_avatar_url || undefined,
@@ -509,6 +515,7 @@ export async function createPost(input: {
   video?: string;
   /** enquete: uma legenda por foto */
   pollOptions?: string[];
+  aspect?: number;
 }): Promise<FeedPost> {
   const uid = await me();
   const video_url = input.video ? await uploadVideo(input.video) : null;
@@ -533,6 +540,7 @@ export async function createPost(input: {
         clothing_tags: (input.clothingTags || []).map(t => ({ ...t, image: t.image && /^https?:/.test(t.image) ? t.image : undefined })),
         kind: video_url ? "video" : input.pollOptions && uploaded.length >= 2 ? "poll" : "photo",
         video_url,
+        aspect: clampAspect(input.aspect),
         poll: input.pollOptions && uploaded.length >= 2 ? { options: input.pollOptions.slice(0, uploaded.length).map((o, i) => o.trim() || `Look ${i + 1}`) } : null
       })
       .select("id")
@@ -966,8 +974,8 @@ export interface CloudMessage {
 function previewOf(m: any): string {
   if (m.deleted_at) return "Mensagem apagada";
   if (m.text) return m.text;
-  if (m.post_id) return "👗 Enviou um look";
-  return "📷 Foto";
+  if (m.post_id) return "Enviou um look";
+  return "Foto";
 }
 
 export async function fetchThreads(): Promise<DirectThread[]> {
@@ -1401,15 +1409,15 @@ export function subscribeMyAlerts(
           const n: any = payload.new;
           const who = await usernameOf(n.actor_id);
           const emit = (t: string, b: string) => onAlert(t, b, "activity", n.type);
-          if (n.type === "like") emit("Nova curtida ❤️", `@${who} curtiu seu look.`);
-          else if (n.type === "comment") emit("Novo comentário 💬", `@${who}: ${n.text || ""}`);
-          else if (n.type === "follow") emit("Novo seguidor ✨", `@${who} começou a seguir você.`);
-          else if (n.type === "reply") emit("Nova resposta 💬", `@${who}: ${n.text || ""}`);
-          else if (n.type === "comment_like") emit("Curtiram seu comentário ❤️", `@${who} curtiu: ${n.text || ""}`);
-          else if (n.type === "follow_request") emit("Pedido para seguir 🔒", `@${who} quer seguir você.`);
-          else if (n.type === "story_mention") emit("Você foi marcado 📸", `@${who} marcou você num story.`);
-          else if (n.type === "repost") emit("Repost 🔁", `@${who} repostou seu look.`);
-          else if (n.type === "follow_accept") emit("Pedido aceito ✅", `@${who} aceitou seu pedido.`);
+          if (n.type === "like") emit("Nova curtida", `@${who} curtiu seu look.`);
+          else if (n.type === "comment") emit("Novo comentário", `@${who}: ${n.text || ""}`);
+          else if (n.type === "follow") emit("Novo seguidor", `@${who} começou a seguir você.`);
+          else if (n.type === "reply") emit("Nova resposta", `@${who}: ${n.text || ""}`);
+          else if (n.type === "comment_like") emit("Curtiram seu comentário", `@${who} curtiu: ${n.text || ""}`);
+          else if (n.type === "follow_request") emit("Pedido para seguir", `@${who} quer seguir você.`);
+          else if (n.type === "story_mention") emit("Você foi marcado", `@${who} marcou você num story.`);
+          else if (n.type === "repost") emit("Repost", `@${who} repostou seu look.`);
+          else if (n.type === "follow_accept") emit("Pedido aceito", `@${who} aceitou seu pedido.`);
         }
       )
       .on(
@@ -1418,7 +1426,7 @@ export function subscribeMyAlerts(
         async payload => {
           const m: any = payload.new;
           const who = await usernameOf(m.sender_id);
-          onAlert(`@${who}`, m.text || (m.post_id ? "👗 Enviou um look" : "📷 Enviou uma foto"), "message");
+          onAlert(`@${who}`, m.text || (m.post_id ? "Enviou um look" : "Enviou uma foto"), "message");
         }
       )
       .subscribe();
@@ -1620,7 +1628,8 @@ export async function repost(original: FeedPost, caption: string): Promise<FeedP
         clothing_tags: original.clothingTags || [],
         kind: "repost",
         repost_of: srcId,
-        video_url: original.videoUrl || null
+        video_url: original.videoUrl || null,
+        aspect: clampAspect(original.aspect)
       })
       .select("id")
       .single()

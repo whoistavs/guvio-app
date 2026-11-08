@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import {
   Shirt,
-  Sparkles,
+  Gem,
   Briefcase,
   Footprints,
   Circle,
@@ -32,7 +32,7 @@ export const StyleCard: React.FC<StyleCardProps> = ({
       case "shirt":
         return <Shirt size={size} color={color} strokeWidth={strokeWidth} />;
       case "cap":
-        return <Sparkles size={size} color={color} strokeWidth={strokeWidth} />;
+        return <Gem size={size} color={color} strokeWidth={strokeWidth} />;
       case "tshirt":
         return <Briefcase size={size} color={color} strokeWidth={strokeWidth} />;
       case "shoe":

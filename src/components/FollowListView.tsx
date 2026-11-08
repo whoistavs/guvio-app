@@ -56,7 +56,7 @@ export function FollowListView({
               <Pressable key={p.id} onPress={() => onOpenProfile(p)} style={[s.row, { borderBottomColor: colors.border }]}>
                 <FastImage source={p.avatar} style={s.avatar} />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.text, fontWeight: "800" }}>@{p.username}</Text>
+                  <Text style={{ color: colors.text, fontWeight: "600" }}>@{p.username}</Text>
                   <Text style={{ color: colors.muted, fontSize: 12 }}>{p.displayName}</Text>
                 </View>
                 {p.id !== myId ? (
@@ -64,7 +64,7 @@ export function FollowListView({
                     onPress={() => toggle(p.id)}
                     style={[s.btn, { backgroundColor: isFollowing ? colors.surface : "#0095F6" }]}
                   >
-                    <Text style={{ color: isFollowing ? colors.text : "#FFF", fontWeight: "800", fontSize: 12 }}>
+                    <Text style={{ color: isFollowing ? colors.text : "#FFF", fontWeight: "600", fontSize: 12 }}>
                       {isFollowing ? "Seguindo" : "Seguir"}
                     </Text>
                   </Pressable>

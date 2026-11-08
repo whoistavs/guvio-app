@@ -6,7 +6,7 @@ import { useAppTheme } from "../context/AppTheme";
 import { FastImage } from "./FastImage";
 
 const W = Math.min(Dimensions.get("window").width, 700);
-const MEDALS = ["🥇", "🥈", "🥉"];
+const MEDALS = ["#E2B33C", "#B8BCC4", "#C08552"];
 
 /** Pódio (3 primeiros) + grade com a posição de cada look */
 export function RankingGrid({
@@ -29,8 +29,10 @@ export function RankingGrid({
         {podium.map((p, i) => (
           <Pressable key={p.id} onPress={() => onOpenPost?.(p.id)} style={{ width: big }}>
             <FastImage source={p.image} style={{ width: big, height: big * 1.3, borderRadius: 14 }} contentFit="cover" />
-            <Text style={s.medal}>{MEDALS[i]}</Text>
-            <Text style={{ color: colors.text, fontWeight: "800", fontSize: 11, marginTop: 5 }} numberOfLines={1}>
+            <View style={[s.medal, { backgroundColor: MEDALS[i] }]}>
+              <Text style={{ color: "#FFF", fontWeight: "700", fontSize: 12 }}>{i + 1}</Text>
+            </View>
+            <Text style={{ color: colors.text, fontWeight: "600", fontSize: 11, marginTop: 5 }} numberOfLines={1}>
               @{p.creatorUsername || p.creatorName}
             </Text>
             <View style={s.likes}>
@@ -60,11 +62,11 @@ export function RankingGrid({
 
 const s = StyleSheet.create({
   podium: { flexDirection: "row", gap: 4, marginBottom: 14 },
-  medal: { position: "absolute", top: 6, left: 6, fontSize: 22 },
+  medal: { position: "absolute", top: 6, left: 6, width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#FFF" },
   likes: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 2 },
   rank: { position: "absolute", top: 5, backgroundColor: "rgba(0,0,0,.6)", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
   rankLeft: { left: 5 },
   rankRight: { right: 5, flexDirection: "row", gap: 3, alignItems: "center" },
-  rankText: { color: "#FFF", fontSize: 10, fontWeight: "900" }
+  rankText: { color: "#FFF", fontSize: 10, fontWeight: "700" }
 });

@@ -3,21 +3,21 @@ import { CHALLENGES } from "../data/challenges";
 
 export interface Achievement {
   id: string;
-  emoji: string;
+  icon: string;
   title: string;
   description: string;
 }
 
 export const ALL_ACHIEVEMENTS: Achievement[] = [
-  { id: "first", emoji: "🌱", title: "Primeiro look", description: "Publicou o primeiro look no Guvio." },
-  { id: "ten", emoji: "🔟", title: "10 looks", description: "Já publicou 10 looks." },
-  { id: "fifty", emoji: "🏅", title: "50 looks", description: "Já publicou 50 looks. Que guarda-roupa!" },
-  { id: "traveler", emoji: "🧳", title: "Viajante", description: "Publicou looks em 3 cidades diferentes." },
-  { id: "world", emoji: "🌍", title: "Cidadão do mundo", description: "Publicou looks em 3 países diferentes." },
-  { id: "loved", emoji: "💖", title: "Look do momento", description: "Um look passou de 50 curtidas." },
-  { id: "popular", emoji: "⭐", title: "Popular", description: "Chegou a 100 seguidores." },
-  { id: "challenger", emoji: "🎯", title: "Desafiante", description: "Participou de um desafio da semana." },
-  { id: "champion", emoji: "🏆", title: "Campeão do desafio", description: "Ficou em 1º lugar num desafio da semana." }
+  { id: "first", icon: "sprout", title: "Primeiro look", description: "Publicou o primeiro look no Guvio." },
+  { id: "ten", icon: "ten", title: "10 looks", description: "Já publicou 10 looks." },
+  { id: "fifty", icon: "medal", title: "50 looks", description: "Já publicou 50 looks. Que guarda-roupa!" },
+  { id: "traveler", icon: "luggage", title: "Viajante", description: "Publicou looks em 3 cidades diferentes." },
+  { id: "world", icon: "globe", title: "Cidadão do mundo", description: "Publicou looks em 3 países diferentes." },
+  { id: "loved", icon: "heart", title: "Look do momento", description: "Um look passou de 50 curtidas." },
+  { id: "popular", icon: "star", title: "Popular", description: "Chegou a 100 seguidores." },
+  { id: "challenger", icon: "target", title: "Desafiante", description: "Participou de um desafio da semana." },
+  { id: "champion", icon: "trophy", title: "Campeão do desafio", description: "Ficou em 1º lugar num desafio da semana." }
 ];
 
 const norm = (v: string) => v.trim().toLowerCase();

@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { Dimensions, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Globe2, Images, Shirt, Sparkles, Trophy } from "lucide-react-native";
+import { Globe2, Images, Shirt, Trophy } from "lucide-react-native";
 import { useAppTheme } from "../context/AppTheme";
 import { FastStorage } from "../services/FastStorage";
 import { tapFeedback } from "../utils/haptics";
@@ -16,9 +16,9 @@ export function resetOnboarding() {
 }
 
 const SLIDES = [
-  { icon: Sparkles, title: "Bem-vindo ao Guvio", text: "A rede social de moda onde o seu guarda-roupa encontra o estilo do mundo inteiro." },
+  { icon: Shirt, title: "Bem-vindo ao Guvio", text: "A rede social de moda onde o seu guarda-roupa encontra o estilo do mundo inteiro." },
   { icon: Images, title: "Publique seus looks", text: "Até 10 fotos por post, marque as peças do seu guarda-roupa e use #hashtags e @menções." },
-  { icon: Shirt, title: "Guarda-roupa inteligente", text: "Cadastre suas peças, monte looks e receba todo dia uma sugestão pensada no clima da sua cidade." },
+  { icon: Shirt, title: "Seu guarda-roupa", text: "Cadastre suas peças, monte looks e receba todo dia uma sugestão pensada no clima da sua cidade." },
   { icon: Globe2, title: "Explore o mundo", text: "Gire o globo no Buscar e veja os looks mais curtidos de cada cidade." },
   { icon: Trophy, title: "Desafio da semana", text: "Toda segunda tem tema novo. Publique com a #hashtag e dispute o pódio. Bora começar?" }
 ];
@@ -51,7 +51,7 @@ export function OnboardingView({ onDone }: { onDone: () => void }) {
       <View style={s.top}>
         {!last ? (
           <Pressable onPress={finish} hitSlop={12}>
-            <Text style={{ color: colors.muted, fontWeight: "800" }}>Pular</Text>
+            <Text style={{ color: colors.muted, fontWeight: "600" }}>Pular</Text>
           </Pressable>
         ) : (
           <View />
@@ -84,7 +84,7 @@ export function OnboardingView({ onDone }: { onDone: () => void }) {
         ))}
       </View>
       <Pressable onPress={next} style={[s.btn, { backgroundColor: colors.text }]}>
-        <Text style={{ color: colors.bg, fontWeight: "900", fontSize: 15 }}>{last ? "Começar" : "Próximo"}</Text>
+        <Text style={{ color: colors.bg, fontWeight: "700", fontSize: 15 }}>{last ? "Começar" : "Próximo"}</Text>
       </Pressable>
     </View>
   );
@@ -95,7 +95,7 @@ const s = StyleSheet.create({
   top: { height: 56, paddingHorizontal: 24, alignItems: "flex-end", justifyContent: "center" },
   slide: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 36 },
   iconWrap: { width: 140, height: 140, borderRadius: 40, borderWidth: 1, alignItems: "center", justifyContent: "center", marginBottom: 34 },
-  title: { fontSize: 26, fontWeight: "900", textAlign: "center", letterSpacing: -0.5 },
+  title: { fontSize: 26, fontWeight: "700", textAlign: "center", letterSpacing: -0.5 },
   text: { fontSize: 15, lineHeight: 22, textAlign: "center", marginTop: 12 },
   dots: { flexDirection: "row", gap: 6, justifyContent: "center", marginBottom: 24 },
   dot: { height: 8, borderRadius: 4 },

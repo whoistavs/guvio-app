@@ -56,7 +56,7 @@ export function OutfitStoryModal({
         <View style={s.back}>
           <View style={s.card}>
             <View style={s.head}>
-              <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 16 }}>Look no story</Text>
+              <Text style={{ color: "#FFF", fontWeight: "700", fontSize: 16 }}>Look no story</Text>
               <Pressable onPress={onClose} hitSlop={10}>
                 <X size={22} color="#FFF" />
               </Pressable>
@@ -80,7 +80,7 @@ export function OutfitStoryModal({
               ))}
             </View>
             <Pressable onPress={next} disabled={capturing} style={s.btn}>
-              {capturing ? <ActivityIndicator color="#000" /> : <Text style={{ fontWeight: "900" }}>Continuar</Text>}
+              {capturing ? <ActivityIndicator color="#000" /> : <Text style={{ fontWeight: "700" }}>Continuar</Text>}
             </Pressable>
           </View>
         </View>
@@ -96,7 +96,7 @@ export function OutfitStoryModal({
           try {
             await publishMyStory(uri, caption, overlay, extra);
             successFeedback();
-            toast("Story publicado!", "✨");
+            toast("Story publicado");
             onPublished?.();
           } catch (e: any) {
             Alert.alert("Story não publicado", e?.message || "Tente novamente.");
@@ -112,9 +112,9 @@ const s = StyleSheet.create({
   card: { alignItems: "center", gap: 14 },
   head: { width: W, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   canvas: { width: W, height: H, borderRadius: 18, padding: 18, overflow: "hidden", justifyContent: "space-between" },
-  title: { fontSize: 22, fontWeight: "900", letterSpacing: -0.4 },
+  title: { fontSize: 22, fontWeight: "700", letterSpacing: -0.4 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center" },
-  brand: { fontSize: 12, fontWeight: "900", letterSpacing: 4, textAlign: "center", opacity: 0.8 },
+  brand: { fontSize: 12, fontWeight: "700", letterSpacing: 4, textAlign: "center", opacity: 0.8 },
   bgRow: { flexDirection: "row", gap: 10 },
   bgDot: { width: 28, height: 28, borderRadius: 14, borderColor: "#FFF" },
   btn: { width: W, height: 46, borderRadius: 23, backgroundColor: "#FFF", alignItems: "center", justifyContent: "center" }

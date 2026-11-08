@@ -59,7 +59,7 @@ export function CommentsModal({
     try {
       const updated = await setPinnedComment(post, next);
       onPostChange?.(updated);
-      if (next) toast("Comentário fixado no topo", "📌");
+      if (next) toast("Comentário fixado no topo");
     } catch {
       setPinnedId(pinnedId);
     }
@@ -168,7 +168,7 @@ export function CommentsModal({
       </Pressable>
       <View style={{ flex: 1 }}>
         {!isReply && pinnedId === c.id ? (
-          <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", marginBottom: 2 }}>📌 Fixado pelo autor</Text>
+          <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "600", marginBottom: 2 }}>Fixado pelo autor</Text>
         ) : null}
         <RichCaption
           text={c.text}
@@ -184,16 +184,16 @@ export function CommentsModal({
         <View style={s.metaRow}>
           <Text style={[s.meta, { color: colors.muted }]}>{c.createdAt}</Text>
           {c.likes > 0 ? (
-            <Text style={[s.meta, { color: colors.muted, fontWeight: "800" }]}>
+            <Text style={[s.meta, { color: colors.muted, fontWeight: "600" }]}>
               {c.likes} {c.likes === 1 ? "curtida" : "curtidas"}
             </Text>
           ) : null}
           <Pressable onPress={() => startReply(c)} hitSlop={8}>
-            <Text style={[s.meta, { color: colors.muted, fontWeight: "800" }]}>Responder</Text>
+            <Text style={[s.meta, { color: colors.muted, fontWeight: "600" }]}>Responder</Text>
           </Pressable>
           {isOwner && !isReply ? (
             <Pressable onPress={() => togglePin(c)} hitSlop={8}>
-              <Text style={[s.meta, { color: colors.muted, fontWeight: "800" }]}>{pinnedId === c.id ? "Desafixar" : "Fixar"}</Text>
+              <Text style={[s.meta, { color: colors.muted, fontWeight: "600" }]}>{pinnedId === c.id ? "Desafixar" : "Fixar"}</Text>
             </Pressable>
           ) : null}
           {c.canDelete ? (
@@ -248,7 +248,7 @@ export function CommentsModal({
                         style={s.moreReplies}
                       >
                         <View style={[s.line, { backgroundColor: colors.muted }]} />
-                        <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "800" }}>
+                        <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "600" }}>
                           {open ? "Ocultar respostas" : `Ver ${replies.length} ${replies.length === 1 ? "resposta" : "respostas"}`}
                         </Text>
                       </Pressable>
@@ -302,7 +302,7 @@ const s = StyleSheet.create({
   dismiss: { flex: 1 },
   sheet: { height: "72%", borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden" },
   head: { height: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18 },
-  title: { fontSize: 16, fontWeight: "800" },
+  title: { fontSize: 16, fontWeight: "600" },
   comment: { flexDirection: "row", gap: 10, marginBottom: 16, alignItems: "flex-start" },
   reply: { marginLeft: 46, marginBottom: 12 },
   avatar: { width: 36, height: 36, borderRadius: 18 },
@@ -312,7 +312,7 @@ const s = StyleSheet.create({
   line: { width: 22, height: StyleSheet.hairlineWidth, opacity: 0.8 },
   replyBar: { flexDirection: "row", alignItems: "center", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 7, marginBottom: 8 },
   composerRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  user: { fontSize: 12, fontWeight: "800" },
+  user: { fontSize: 12, fontWeight: "600" },
   body: { fontWeight: "400", lineHeight: 18 },
   meta: { fontSize: 10 },
   composer: {

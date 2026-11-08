@@ -72,6 +72,6 @@ const s = StyleSheet.create({
   back: { flex: 1, backgroundColor: "#000" },
   close: { position: "absolute", top: 56, right: 20, backgroundColor: "rgba(255,255,255,.12)", borderRadius: 20, padding: 7 },
   counter: { position: "absolute", top: 60, left: 20, backgroundColor: "rgba(255,255,255,.12)", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
-  counterText: { color: "#FFF", fontWeight: "800", fontSize: 12 },
+  counterText: { color: "#FFF", fontWeight: "600", fontSize: 12 },
   hint: { position: "absolute", bottom: 44, alignSelf: "center", color: "rgba(255,255,255,.5)", fontSize: 11 }
 });

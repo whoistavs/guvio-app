@@ -32,7 +32,7 @@ export function LikersModal({
         <Pressable style={{ flex: 1 }} onPress={onClose} />
         <View style={[s.sheet, { backgroundColor: colors.bg, borderColor: colors.border }]}>
           <View style={s.head}>
-            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>Curtidas</Text>
+            <Text style={{ color: colors.text, fontWeight: "700", fontSize: 16 }}>Curtidas</Text>
             <Pressable onPress={onClose} hitSlop={10}>
               <X size={22} color={colors.icon} />
             </Pressable>
@@ -47,7 +47,7 @@ export function LikersModal({
                 <Pressable key={p.id} onPress={() => onOpenProfile?.(p.username)} style={s.row}>
                   <FastImage source={p.avatar} style={s.avatar} />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.text, fontWeight: "800" }}>@{p.username}</Text>
+                    <Text style={{ color: colors.text, fontWeight: "600" }}>@{p.username}</Text>
                     <Text style={{ color: colors.muted, fontSize: 12 }} numberOfLines={1}>
                       {p.displayName}
                     </Text>

@@ -68,7 +68,7 @@ export function TripPackingModal({
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={[s.full, { backgroundColor: colors.bg }]}>
         <View style={s.head}>
-          <Text style={[s.h, { color: colors.text }]}>Mala de viagem 🧳</Text>
+          <Text style={[s.h, { color: colors.text }]}>Mala de viagem</Text>
           <Pressable onPress={onClose} hitSlop={10}>
             <X size={24} color={colors.icon} />
           </Pressable>
@@ -93,7 +93,7 @@ export function TripPackingModal({
                       style={{ flex: 1, color: colors.text, height: "100%" }}
                     />
                     <Pressable onPress={find} hitSlop={8}>
-                      <Text style={{ color: "#0095F6", fontWeight: "900" }}>Buscar</Text>
+                      <Text style={{ color: "#0095F6", fontWeight: "700" }}>Buscar</Text>
                     </Pressable>
                   </View>
                   {loading ? <ActivityIndicator color={colors.muted} style={{ marginTop: 16 }} /> : null}
@@ -111,39 +111,39 @@ export function TripPackingModal({
                 <>
                   <Pressable onPress={() => setPlace(null)} style={[s.placeSel, { backgroundColor: colors.surface }]}>
                     <MapPin size={16} color={colors.text} />
-                    <Text style={{ color: colors.text, fontWeight: "900", flex: 1 }}>
+                    <Text style={{ color: colors.text, fontWeight: "700", flex: 1 }}>
                       {place.name}, {place.country}
                     </Text>
-                    <Text style={{ color: "#0095F6", fontWeight: "800", fontSize: 12 }}>Trocar</Text>
+                    <Text style={{ color: "#0095F6", fontWeight: "600", fontSize: 12 }}>Trocar</Text>
                   </Pressable>
-                  <Text style={[s.label, { color: colors.muted }]}>QUANDO VOCÊ VAI?</Text>
+                  <Text style={[s.label, { color: colors.muted }]}>Quando você vai?</Text>
                   <View style={s.chips}>
                     {[0, 1, 3, 7, 10].map(n => (
                       <Pressable key={n} onPress={() => setStartIn(n)} style={[s.chip, { backgroundColor: startIn === n ? colors.text : colors.surface, borderColor: colors.border }]}>
-                        <Text style={{ color: startIn === n ? colors.bg : colors.text, fontWeight: "800", fontSize: 12 }}>
+                        <Text style={{ color: startIn === n ? colors.bg : colors.text, fontWeight: "600", fontSize: 12 }}>
                           {n === 0 ? "Hoje" : n === 1 ? "Amanhã" : `Em ${n} dias`}
                         </Text>
                       </Pressable>
                     ))}
                   </View>
-                  <Text style={[s.label, { color: colors.muted }]}>QUANTOS DIAS?</Text>
+                  <Text style={[s.label, { color: colors.muted }]}>Quantos dias?</Text>
                   <View style={s.chips}>
                     {[2, 3, 4, 5, 7, 10].map(n => (
                       <Pressable key={n} onPress={() => setDays(n)} style={[s.chip, { backgroundColor: days === n ? colors.text : colors.surface, borderColor: colors.border }]}>
-                        <Text style={{ color: days === n ? colors.bg : colors.text, fontWeight: "800", fontSize: 12 }}>{n} dias</Text>
+                        <Text style={{ color: days === n ? colors.bg : colors.text, fontWeight: "600", fontSize: 12 }}>{n} dias</Text>
                       </Pressable>
                     ))}
                   </View>
                   <Text style={{ color: colors.muted, fontSize: 11, marginTop: 8 }}>A previsão do tempo vai até 16 dias à frente.</Text>
                   <Pressable onPress={build} disabled={loading} style={[s.go, { backgroundColor: colors.text }]}>
-                    {loading ? <ActivityIndicator color={colors.bg} /> : <Text style={{ color: colors.bg, fontWeight: "900" }}>Montar minha mala</Text>}
+                    {loading ? <ActivityIndicator color={colors.bg} /> : <Text style={{ color: colors.bg, fontWeight: "700" }}>Montar minha mala</Text>}
                   </Pressable>
                 </>
               )}
             </>
           ) : (
             <>
-              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}>
+              <Text style={{ color: colors.text, fontWeight: "700", fontSize: 18 }}>
                 {place?.name}: {plan.days.length} dias
               </Text>
               <Text style={{ color: colors.muted, marginTop: 2 }}>
@@ -154,7 +154,7 @@ export function TripPackingModal({
                   {t}
                 </Text>
               ))}
-              <Text style={[s.label, { color: colors.muted }]}>O QUE LEVAR</Text>
+              <Text style={[s.label, { color: colors.muted }]}>O que levar</Text>
               <View style={s.pieces}>
                 {plan.pieces.map(p => (
                   <View key={p.item.id} style={{ width: 78 }}>
@@ -166,11 +166,11 @@ export function TripPackingModal({
                   </View>
                 ))}
               </View>
-              <Text style={[s.label, { color: colors.muted }]}>LOOK DE CADA DIA</Text>
+              <Text style={[s.label, { color: colors.muted }]}>Look de cada dia</Text>
               {plan.days.map(d => (
                 <View key={d.date} style={[s.dayRow, { borderColor: colors.border }]}>
                   <View style={{ width: 92 }}>
-                    <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12, textTransform: "capitalize" }}>{fmt(d.date)}</Text>
+                    <Text style={{ color: colors.text, fontWeight: "600", fontSize: 12, textTransform: "capitalize" }}>{fmt(d.date)}</Text>
                     <Text style={{ color: colors.muted, fontSize: 11 }}>
                       {d.forecast.min}°–{d.forecast.max}° · {d.forecast.rainChance}% chuva
                     </Text>
@@ -184,14 +184,14 @@ export function TripPackingModal({
               ))}
               <View style={{ flexDirection: "row", gap: 8, marginTop: 16 }}>
                 <Pressable onPress={reset} style={[s.go, { flex: 1, marginTop: 0, backgroundColor: colors.surface }]}>
-                  <Text style={{ color: colors.text, fontWeight: "900" }}>Nova viagem</Text>
+                  <Text style={{ color: colors.text, fontWeight: "700" }}>Nova viagem</Text>
                 </Pressable>
                 {onSaveAsLook ? (
                   <Pressable
                     onPress={() => onSaveAsLook(`Mala: ${place?.name || "viagem"}`, plan.pieces.map(p => p.item.id))}
                     style={[s.go, { flex: 1, marginTop: 0, backgroundColor: colors.text }]}
                   >
-                    <Text style={{ color: colors.bg, fontWeight: "900" }}>Salvar mala</Text>
+                    <Text style={{ color: colors.bg, fontWeight: "700" }}>Salvar mala</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -206,12 +206,12 @@ export function TripPackingModal({
 const s = StyleSheet.create({
   full: { flex: 1, paddingTop: 50 },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20 },
-  h: { fontSize: 24, fontWeight: "900" },
+  h: { fontSize: 24, fontWeight: "700" },
   c: { padding: 20, paddingBottom: 60 },
   search: { height: 48, borderRadius: 14, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12 },
   placeRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12 },
   placeSel: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 14, padding: 14 },
-  label: { fontSize: 10, fontWeight: "800", letterSpacing: 1.3, marginTop: 20, marginBottom: 8 },
+  label: { fontSize: 13, fontWeight: "600", marginTop: 20, marginBottom: 8 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   chip: { borderWidth: 1, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 7 },
   go: { height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", marginTop: 20 },

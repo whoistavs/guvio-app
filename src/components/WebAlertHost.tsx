@@ -61,7 +61,7 @@ export function WebAlertHost() {
                 <Text
                   style={{
                     color: b.style === "destructive" ? "#E5484D" : simple ? colors.bg : colors.text,
-                    fontWeight: "800",
+                    fontWeight: "600",
                     fontSize: 14
                   }}
                 >
@@ -71,7 +71,7 @@ export function WebAlertHost() {
             ))}
             {cancel ? (
               <Pressable onPress={() => press(cancel)} style={[s.btn, { borderWidth: 1, borderColor: colors.border }]}>
-                <Text style={{ color: colors.muted, fontWeight: "800", fontSize: 14 }}>{cancel.text || "Cancelar"}</Text>
+                <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 14 }}>{cancel.text || "Cancelar"}</Text>
               </Pressable>
             ) : null}
           </ScrollView>
@@ -84,7 +84,7 @@ export function WebAlertHost() {
 const s = StyleSheet.create({
   back: { flex: 1, backgroundColor: "rgba(0,0,0,.5)", alignItems: "center", justifyContent: "center", padding: 24 },
   card: { width: "100%", maxWidth: 360, borderRadius: 20, padding: 18, borderWidth: 1 },
-  title: { fontSize: 16, fontWeight: "900", textAlign: "center" },
+  title: { fontSize: 16, fontWeight: "700", textAlign: "center" },
   msg: { fontSize: 13, textAlign: "center", marginTop: 6, lineHeight: 18 },
   btn: { height: 46, borderRadius: 12, alignItems: "center", justifyContent: "center" }
 });

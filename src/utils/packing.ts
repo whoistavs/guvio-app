@@ -29,10 +29,10 @@ export function planPacking(wardrobe: WardrobeItem[], forecast: DayForecast[]): 
   const tips: string[] = [];
   const min = Math.min(...forecast.map(f => f.min));
   const max = Math.max(...forecast.map(f => f.max));
-  if (forecast.some(f => f.rainChance >= 50)) tips.push("☔ Leve guarda-chuva ou jaqueta impermeável: tem chuva na previsão.");
-  if (min <= 8) tips.push(`🧣 Mínima de ${min}°C: cachecol, luvas e uma segunda camada.`);
-  if (max >= 28) tips.push(`🕶️ Máxima de ${max}°C: óculos de sol, protetor e peças leves.`);
-  if (forecast.length >= 5) tips.push("🧺 Viagem longa: peças coringa que combinam entre si economizam espaço.");
-  if (!wardrobe.some(i => slotOf(i) === "calcado")) tips.push("👟 Cadastre seus calçados no guarda-roupa para eles entrarem na mala.");
+  if (forecast.some(f => f.rainChance >= 50)) tips.push("Leve guarda-chuva ou jaqueta impermeável: tem chuva na previsão.");
+  if (min <= 8) tips.push(`Mínima de ${min}°C: cachecol, luvas e uma segunda camada.`);
+  if (max >= 28) tips.push(`Máxima de ${max}°C: óculos de sol, protetor e peças leves.`);
+  if (forecast.length >= 5) tips.push("Viagem longa: peças coringa que combinam entre si economizam espaço.");
+  if (!wardrobe.some(i => slotOf(i) === "calcado")) tips.push("Cadastre seus calçados no guarda-roupa para eles entrarem na mala.");
   return { days, pieces, tips };
 }

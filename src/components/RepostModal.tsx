@@ -24,7 +24,7 @@ export function RepostModal({ post, onClose, onDone }: { post: FeedPost | null; 
       onDone?.(p);
       onClose();
       setCaption("");
-      setTimeout(() => toast(`Repostado! Crédito para @${author}`, "🔁"), 250);
+      setTimeout(() => toast(`Repostado! Crédito para @${author}`), 250);
     } catch (e: any) {
       Alert.alert("Não deu para repostar", e?.message || "Tente novamente.");
     } finally {
@@ -40,7 +40,7 @@ export function RepostModal({ post, onClose, onDone }: { post: FeedPost | null; 
           <View style={s.row}>
             <FastImage source={post.image} style={s.thumb} contentFit="cover" />
             <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.text, fontWeight: "900" }}>Repostar look</Text>
+              <Text style={{ color: colors.text, fontWeight: "700" }}>Repostar look</Text>
               <Text style={{ color: colors.muted, fontSize: 12 }}>O crédito vai para @{author}</Text>
             </View>
           </View>
@@ -59,7 +59,7 @@ export function RepostModal({ post, onClose, onDone }: { post: FeedPost | null; 
             ) : (
               <>
                 <Repeat2 size={18} color={colors.bg} />
-                <Text style={{ color: colors.bg, fontWeight: "900" }}>Repostar no meu perfil</Text>
+                <Text style={{ color: colors.bg, fontWeight: "700" }}>Repostar no meu perfil</Text>
               </>
             )}
           </Pressable>

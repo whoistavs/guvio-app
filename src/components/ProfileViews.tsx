@@ -34,8 +34,7 @@ import {
   UserCheck,
   UserPlus,
   UserX,
-  X
-} from "lucide-react-native";
+  X, BarChart2 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { FeedPost, UserProfile, MOCK_FEED_POSTS, SavedCollection } from "../data/mockData";
 import { ScreenHeader } from "./ScreenHeader";
@@ -100,7 +99,7 @@ function Grid({
     return (
       <View style={s.emptyGrid}>
         <Grid3X3 size={32} color={colors.muted} />
-        <Text style={{ color: colors.text, fontWeight: "800", marginTop: 8 }}>{emptyTitle}</Text>
+        <Text style={{ color: colors.text, fontWeight: "600", marginTop: 8 }}>{emptyTitle}</Text>
         <Text style={{ color: colors.muted, fontSize: 12, textAlign: "center", marginTop: 4 }}>
           {emptySubtitle}
         </Text>
@@ -122,7 +121,7 @@ function Grid({
             </View>
           ) : p.kind === "poll" ? (
             <View style={s.tileIcon}>
-              <Text style={{ fontSize: 11 }}>🗳️</Text>
+              <BarChart2 size={13} color="#FFF" />
             </View>
           ) : p.kind === "repost" ? (
             <View style={s.tileIcon}>
@@ -298,12 +297,12 @@ export function PublicProfileView({
           <Text style={[s.display, { color: colors.text }]}>
             {profile.displayName}
             {profile.pronouns ? <Text style={{ color: colors.muted, fontWeight: "500" }}>  {profile.pronouns}</Text> : null}
-            {profile.isPrivate ? "  🔒" : ""}
+            {profile.isPrivate ? "  · privado" : ""}
           </Text>
           <Text style={{ color: colors.muted }}>{profile.location}</Text>
           {profile.bio ? <Text style={[s.bioText, { color: colors.text }]}>{profile.bio}</Text> : null}
           <BioLink url={profile.website} />
-          {muted ? <Text style={{ color: colors.muted, fontSize: 11, marginTop: 4 }}>🔕 Silenciado no seu feed</Text> : null}
+          {muted ? <Text style={{ color: colors.muted, fontSize: 11, marginTop: 4 }}>Silenciado no seu feed</Text> : null}
         </View>
 
         <AchievementsRow profile={profile} posts={posts} />
@@ -317,23 +316,23 @@ export function PublicProfileView({
             ]}
           >
             {requested ? (
-              <Text style={{ color: colors.text, fontWeight: "800" }}>Solicitado</Text>
+              <Text style={{ color: colors.text, fontWeight: "600" }}>Solicitado</Text>
             ) : isFollowed ? (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <UserCheck size={16} color={colors.text} />
-                <Text style={{ color: colors.text, fontWeight: "800" }}>Seguindo</Text>
+                <Text style={{ color: colors.text, fontWeight: "600" }}>Seguindo</Text>
               </View>
             ) : (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <UserPlus size={16} color="#FFF" />
-                <Text style={{ color: "#FFF", fontWeight: "800" }}>{profile.isPrivate ? "Pedir para seguir" : "Seguir"}</Text>
+                <Text style={{ color: "#FFF", fontWeight: "600" }}>{profile.isPrivate ? "Pedir para seguir" : "Seguir"}</Text>
               </View>
             )}
           </Pressable>
 
           <Pressable onPress={onMessage} style={[s.btn, { backgroundColor: colors.surface }]}>
             <MessageCircle size={17} color={colors.icon} />
-            <Text style={{ color: colors.text, fontWeight: "800" }}>Mensagem</Text>
+            <Text style={{ color: colors.text, fontWeight: "600" }}>Mensagem</Text>
           </Pressable>
         </View>
 
@@ -342,7 +341,7 @@ export function PublicProfileView({
             <View style={[s.lockIcon, { borderColor: colors.text }]}>
               <Lock size={26} color={colors.text} />
             </View>
-            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 15 }}>Esta conta é privada</Text>
+            <Text style={{ color: colors.text, fontWeight: "700", fontSize: 15 }}>Esta conta é privada</Text>
             <Text style={{ color: colors.muted, textAlign: "center", fontSize: 12 }}>
               {requested ? "Pedido enviado. Quando aceitarem, os looks aparecem aqui." : "Peça para seguir e veja os looks de @" + profile.username + "."}
             </Text>
@@ -382,7 +381,7 @@ export function PublicProfileView({
             <View style={s.postHeader}>
               <FastImage source={profile.avatar} style={s.postAvatar} contentFit="cover" />
               <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.text, fontWeight: "900", fontSize: 13 }}>@{profile.username}</Text>
+                <Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>@{profile.username}</Text>
                 {selectedPost?.city ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
                     <MapPin size={11} color={colors.muted} />
@@ -405,20 +404,20 @@ export function PublicProfileView({
               <View style={{ flexDirection: "row", gap: 14, alignItems: "center", marginBottom: 8 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Heart size={20} color={colors.icon} />
-                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>
+                  <Text style={{ color: colors.text, fontWeight: "600", fontSize: 12 }}>
                     {selectedPost?.likes || 0}
                   </Text>
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <MessageCircle size={20} color={colors.icon} />
-                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>
+                  <Text style={{ color: colors.text, fontWeight: "600", fontSize: 12 }}>
                     {selectedPost?.commentsCount || 0}
                   </Text>
                 </View>
               </View>
               {selectedPost?.caption ? (
                 <Text style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}>
-                  <Text style={{ fontWeight: "900" }}>@{profile.username} </Text>
+                  <Text style={{ fontWeight: "700" }}>@{profile.username} </Text>
                   {selectedPost.caption}
                 </Text>
               ) : null}
@@ -440,7 +439,7 @@ export function PublicProfileView({
 function Stat({ v, l, colors, onPress }: { v: string; l: string; colors: any; onPress?: () => void }) {
   return (
     <Pressable onPress={onPress} disabled={!onPress} hitSlop={6} style={{ alignItems: "center" }}>
-      <Text style={{ color: colors.text, fontWeight: "900", fontSize: 15 }}>{v}</Text>
+      <Text style={{ color: colors.text, fontWeight: "700", fontSize: 15 }}>{v}</Text>
       <Text style={{ color: colors.muted, fontSize: 10 }}>{l}</Text>
     </Pressable>
   );
@@ -625,7 +624,7 @@ export function MyProfileView({
           <Text style={[s.display, { color: colors.text }]}>
             {profile.displayName}
             {profile.pronouns ? <Text style={{ color: colors.muted, fontWeight: "500" }}>  {profile.pronouns}</Text> : null}
-            {profile.isPrivate ? "  🔒" : ""}
+            {profile.isPrivate ? "  · privado" : ""}
           </Text>
           <Text style={{ color: colors.muted }}>{profile.location}</Text>
           {profile.bio ? <Text style={[s.bioText, { color: colors.text }]}>{profile.bio}</Text> : null}
@@ -636,13 +635,13 @@ export function MyProfileView({
 
         {requests.length > 0 ? (
           <View style={[s.requests, { backgroundColor: colors.surface }]}>
-            <Text style={{ color: colors.text, fontWeight: "900", marginBottom: 8 }}>
+            <Text style={{ color: colors.text, fontWeight: "700", marginBottom: 8 }}>
               Pedidos para seguir ({requests.length})
             </Text>
             {requests.map(r => (
               <View key={r.id} style={s.requestRow}>
                 <FastImage source={r.avatar} style={{ width: 36, height: 36, borderRadius: 18 }} />
-                <Text style={{ color: colors.text, fontWeight: "800", flex: 1 }} numberOfLines={1}>
+                <Text style={{ color: colors.text, fontWeight: "600", flex: 1 }} numberOfLines={1}>
                   @{r.username}
                 </Text>
                 <Pressable
@@ -653,7 +652,7 @@ export function MyProfileView({
                   }}
                   style={[s.reqBtn, { backgroundColor: "#0095F6" }]}
                 >
-                  <Text style={{ color: "#FFF", fontWeight: "800", fontSize: 12 }}>Aceitar</Text>
+                  <Text style={{ color: "#FFF", fontWeight: "600", fontSize: 12 }}>Aceitar</Text>
                 </Pressable>
                 <Pressable
                   onPress={async () => {
@@ -662,7 +661,7 @@ export function MyProfileView({
                   }}
                   style={[s.reqBtn, { backgroundColor: colors.bg }]}
                 >
-                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>Recusar</Text>
+                  <Text style={{ color: colors.text, fontWeight: "600", fontSize: 12 }}>Recusar</Text>
                 </Pressable>
               </View>
             ))}
@@ -671,10 +670,10 @@ export function MyProfileView({
 
         <View style={s.editRow}>
           <Pressable onPress={() => setEditModalVisible(true)} style={[s.edit, s.editHalf, { backgroundColor: colors.surface }]}>
-            <Text style={{ color: colors.text, fontWeight: "800" }}>Editar perfil</Text>
+            <Text style={{ color: colors.text, fontWeight: "600" }}>Editar perfil</Text>
           </Pressable>
           <Pressable onPress={() => setSharing(true)} style={[s.edit, s.editHalf, { backgroundColor: colors.surface }]}>
-            <Text style={{ color: colors.text, fontWeight: "800" }}>Compartilhar perfil</Text>
+            <Text style={{ color: colors.text, fontWeight: "600" }}>Compartilhar perfil</Text>
           </Pressable>
         </View>
 
@@ -747,7 +746,7 @@ export function MyProfileView({
             <View style={s.postHeader}>
               <FastImage source={profile.avatar} style={s.postAvatar} contentFit="cover" transition={100} />
               <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.text, fontWeight: "900", fontSize: 13 }}>@{profile.username}</Text>
+                <Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>@{profile.username}</Text>
                 {selectedPost?.city ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
                     <MapPin size={11} color={colors.muted} />
@@ -770,20 +769,20 @@ export function MyProfileView({
               <View style={{ flexDirection: "row", gap: 14, alignItems: "center", marginBottom: 8 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Heart size={20} color={colors.icon} />
-                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>
+                  <Text style={{ color: colors.text, fontWeight: "600", fontSize: 12 }}>
                     {selectedPost?.likes || 0}
                   </Text>
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <MessageCircle size={20} color={colors.icon} />
-                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>
+                  <Text style={{ color: colors.text, fontWeight: "600", fontSize: 12 }}>
                     {selectedPost?.commentsCount || 0}
                   </Text>
                 </View>
               </View>
               {selectedPost?.caption ? (
                 <Text style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}>
-                  <Text style={{ fontWeight: "900" }}>@{profile.username} </Text>
+                  <Text style={{ fontWeight: "700" }}>@{profile.username} </Text>
                   {selectedPost.caption}
                 </Text>
               ) : null}
@@ -874,14 +873,14 @@ export function MyProfileView({
             >
               <Lock size={18} color={colors.icon} />
               <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.text, fontWeight: "800" }}>Conta privada</Text>
+                <Text style={{ color: colors.text, fontWeight: "600" }}>Conta privada</Text>
                 <Text style={{ color: colors.muted, fontSize: 11 }}>Só quem você aprovar vê seus looks e stories</Text>
               </View>
               <Toggle value={editPrivate} onValueChange={() => setEditPrivate(v => !v)} />
             </Pressable>
 
             <Pressable onPress={handleSaveProfile} style={[s.saveBtn, { backgroundColor: colors.text }]}>
-              <Text style={{ color: colors.bg, fontWeight: "900" }}>Salvar alterações</Text>
+              <Text style={{ color: colors.bg, fontWeight: "700" }}>Salvar alterações</Text>
             </Pressable>
           </View>
         </View>
@@ -992,7 +991,7 @@ export function SettingsView({
               onPress={() => setPref(k)}
               style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: pref === k ? colors.text : "transparent" }}
             >
-              <Text style={{ color: pref === k ? colors.bg : colors.text, fontSize: 12, fontWeight: "800" }}>{l}</Text>
+              <Text style={{ color: pref === k ? colors.bg : colors.text, fontSize: 12, fontWeight: "600" }}>{l}</Text>
             </Pressable>
           ))}
         </View>
@@ -1008,7 +1007,7 @@ export function SettingsView({
       {onSignOut ? (
         <Pressable onPress={handleConfirmSignOut} style={[s.setting, { borderBottomColor: colors.border, marginTop: 12 }]}>
           <LogOut size={21} color="#FF3B30" />
-          <Text style={[s.settingText, { color: "#FF3B30", fontWeight: "800" }]}>Sair da conta</Text>
+          <Text style={[s.settingText, { color: "#FF3B30", fontWeight: "600" }]}>Sair da conta</Text>
         </Pressable>
       ) : null}
       {onDeleteAccount ? (
@@ -1161,7 +1160,7 @@ export function SimpleSettingsPage({
                       <Bookmark size={20} color={colors.muted} />
                     </View>
                   )}
-                  <Text style={{ color: colors.text, fontSize: 11, fontWeight: on ? "900" : "600" }} numberOfLines={1}>
+                  <Text style={{ color: colors.text, fontSize: 11, fontWeight: on ? "700" : "600" }} numberOfLines={1}>
                     {c.name}
                   </Text>
                   <Text style={{ color: colors.muted, fontSize: 10 }}>{c.count}</Text>
@@ -1189,7 +1188,7 @@ export function SimpleSettingsPage({
               <FastImage source={p.avatar} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
               <Text style={[s.settingText, { color: colors.text }]}>@{p.username}</Text>
               <Pressable onPress={() => unblock(p)} style={[s.unblockBtn, { backgroundColor: colors.surface }]}>
-                <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>Desbloquear</Text>
+                <Text style={{ color: colors.text, fontWeight: "600", fontSize: 12 }}>Desbloquear</Text>
               </Pressable>
             </View>
           ))}
@@ -1250,7 +1249,7 @@ const s = StyleSheet.create({
   stats: { flex: 1, flexDirection: "row", justifyContent: "space-around" },
   bio: { paddingHorizontal: 22, paddingTop: 14, gap: 4 },
   bioText: { fontSize: 13, lineHeight: 18, marginTop: 2 },
-  display: { fontSize: 14, fontWeight: "900" },
+  display: { fontSize: 14, fontWeight: "700" },
   actions: { flexDirection: "row", gap: 8, paddingHorizontal: 22, marginTop: 14 },
   btn: {
     flex: 1,
@@ -1274,7 +1273,7 @@ const s = StyleSheet.create({
   colRow: { paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
   colItem: { width: 76, alignItems: "center", gap: 3 },
   colCover: { width: 70, height: 70, borderRadius: 16 },
-  legalH: { fontSize: 15, fontWeight: "900", marginTop: 18, marginBottom: 6 },
+  legalH: { fontSize: 15, fontWeight: "700", marginTop: 18, marginBottom: 6 },
   legalP: { fontSize: 13, lineHeight: 20 },
   edit: {
     marginHorizontal: 22,
@@ -1300,7 +1299,7 @@ const s = StyleSheet.create({
   setting: { minHeight: 58, flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 10, gap: 14, borderBottomWidth: 1, flexShrink: 0 },
   settingText: { fontSize: 14, fontWeight: "700", flex: 1 },
   info: { alignItems: "center", padding: 40, gap: 12 },
-  infoBig: { fontSize: 22, fontWeight: "900" },
+  infoBig: { fontSize: 22, fontWeight: "700" },
   modalBack: { flex: 1, backgroundColor: "rgba(0,0,0,.65)", alignItems: "center", justifyContent: "center", padding: 18 },
   modal: { width: "100%", maxWidth: 380, borderRadius: 24, padding: 20, alignItems: "center", gap: 10 },
   postModal: { width: "100%", maxWidth: 420, borderRadius: 24, overflow: "hidden" },
@@ -1308,7 +1307,7 @@ const s = StyleSheet.create({
   postAvatar: { width: 36, height: 36, borderRadius: 18 },
   postImg: { width: "100%", aspectRatio: 1, backgroundColor: "#111" },
   postBody: { padding: 16 },
-  modalH: { fontSize: 20, fontWeight: "900" },
+  modalH: { fontSize: 20, fontWeight: "700" },
   avatarEditImg: { width: 90, height: 90, borderRadius: 45, marginVertical: 6 },
   pickers: { flexDirection: "row", gap: 10, marginBottom: 8, width: "100%" },
   pickerBtn: {

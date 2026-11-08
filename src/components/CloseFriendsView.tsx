@@ -48,14 +48,14 @@ export function CloseFriendsView({ onBack }: { onBack: () => void }) {
       <ScreenHeader title="Melhores amigos" onBack={onBack} />
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
         <Text style={{ color: colors.muted, lineHeight: 19, marginBottom: 12 }}>
-          Só as pessoas com ★ veem os stories que você marcar como "Melhores amigos". Ninguém é avisado quando entra ou sai da lista.
+          Só as pessoas marcadas veem os stories que você marcar como "Melhores amigos". Ninguém é avisado quando entra ou sai da lista.
         </Text>
         <View style={[s.search, { backgroundColor: colors.surface }]}>
           <Search size={16} color={colors.muted} />
           <TextInput value={q} onChangeText={setQ} placeholder="Pesquisar" placeholderTextColor={colors.muted} autoCapitalize="none" style={{ flex: 1, color: colors.text, height: "100%" }} />
         </View>
-        <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "800", letterSpacing: 1.2, marginVertical: 10 }}>
-          {friends.length} {friends.length === 1 ? "PESSOA" : "PESSOAS"} NA LISTA
+        <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600", marginVertical: 10 }}>
+          {friends.length} {friends.length === 1 ? "pessoa" : "pessoas"} na lista
         </Text>
         {people === null ? (
           <ListSkeleton rows={6} />
@@ -66,7 +66,7 @@ export function CloseFriendsView({ onBack }: { onBack: () => void }) {
               <Pressable key={p.id} onPress={() => toggle(p)} style={s.row}>
                 <FastImage source={p.avatar} style={[s.avatar, on && { borderColor: "#22C55E", borderWidth: 2 }]} />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.text, fontWeight: "800" }}>@{p.username}</Text>
+                  <Text style={{ color: colors.text, fontWeight: "600" }}>@{p.username}</Text>
                   <Text style={{ color: colors.muted, fontSize: 12 }} numberOfLines={1}>
                     {p.displayName}
                   </Text>

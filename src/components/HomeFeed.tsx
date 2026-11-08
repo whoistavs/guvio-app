@@ -30,6 +30,7 @@ import { SuggestionsRow } from "./SuggestionsRow";
 import { LikersModal } from "./LikersModal";
 import { PollBar, RatingBar, RepostLine } from "./PostExtras";
 import { RepostModal } from "./RepostModal";
+import { ReelsViewer } from "./ReelsViewer";
 import { FastStorage } from "../services/FastStorage";
 import { FadeIn, PopOnActive, toast } from "./motion";
 import { SharePostModal } from "./SharePostModal";
@@ -97,6 +98,7 @@ export function HomeFeed({
   const [collectionPost, setCollectionPost] = useState<FeedPost | null>(null);
   const [likersPost, setLikersPost] = useState<string | null>(null);
   const [repostPost, setRepostPost] = useState<FeedPost | null>(null);
+  const [reelId, setReelId] = useState<string | null>(null);
   const [ni, setNi] = useState<Awaited<ReturnType<typeof loadNotInterested>> | null>(null);
   const [nearbyPosts, setNearbyPosts] = useState<FeedPost[] | null>(null);
   // "você está em dia": o post mais novo que você já tinha visto na última vez
@@ -243,7 +245,7 @@ export function HomeFeed({
     try {
       await saveStories(updatedStories);
       if (await isCloud()) loadStories().then(setStories);
-      Alert.alert("Story Publicado! ✨", "Seu look agora está visível no carrossel de stories.");
+      Alert.alert("Story publicado", "Seu look agora está visível no carrossel de stories.");
     } catch (e: any) {
       setStories(stories);
       Alert.alert("Story não publicado", e?.message || "Tente novamente.");
@@ -269,7 +271,7 @@ export function HomeFeed({
           onPress: async () => {
             try {
               setNi(await markNotInterested(p));
-              toast("Ok! Vamos mostrar menos looks assim", "👋");
+              toast("Ok, vamos mostrar menos looks assim");
             } catch {}
           }
         },
@@ -280,7 +282,7 @@ export function HomeFeed({
             try {
               await setMuted(p.userId, true);
               setPosts(v => v.filter(x => x.userId !== p.userId));
-              toast(`@${p.creatorUsername || p.creatorName} silenciado no seu feed`, "🔕");
+              toast(`@${p.creatorUsername || p.creatorName} silenciado no seu feed`);
             } catch (e: any) {
               Alert.alert("Erro", e?.message || "Tente novamente.");
             }
@@ -363,7 +365,7 @@ export function HomeFeed({
                 )}
               </View>
               <Text numberOfLines={1} style={[s.storyName, { color: colors.text }]}>
-                {st.displayName} {st.flag || ""}
+                {st.displayName}
               </Text>
             </Pressable>
           );
@@ -425,7 +427,7 @@ export function HomeFeed({
         <View style={[s.heading, { flexDirection: "row", alignItems: "center" }]}>
           <View style={{ flex: 1 }}>
             <Text style={[s.badge, { color: colors.muted }]}>
-              {cityFilter ? `EXPLORAR ${cityFilter.toUpperCase()}` : `EXPLORAR ${countryFilter!.toUpperCase()}`}
+              {cityFilter ? `Explorando ${cityFilter}` : `Explorando ${countryFilter}`}
             </Text>
             <Text style={[s.h, { color: colors.text }]}>
               {cityFilter ? `Looks de ${cityFilter}` : `Looks de ${countryFilter}`}
@@ -438,7 +440,7 @@ export function HomeFeed({
               style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: colors.surface, flexDirection: "row", alignItems: "center", gap: 4 }}
             >
               <X size={14} color={colors.text} />
-              <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>Limpar</Text>
+              <Text style={{ color: colors.text, fontWeight: "600", fontSize: 12 }}>Limpar</Text>
             </Pressable>
           ) : null}
         </View>
@@ -452,7 +454,7 @@ export function HomeFeed({
         </View>
       ) : visiblePosts.length === 0 ? (
         <View style={[s.empty, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>
+          <Text style={{ color: colors.text, fontWeight: "700", fontSize: 16 }}>
             {feedTab === "following"
               ? "Nenhum look de quem você segue"
               : feedTab === "nearby"
@@ -485,9 +487,9 @@ export function HomeFeed({
               <View style={s.caughtUp}>
                 <View style={[s.caughtLine, { backgroundColor: colors.border }]} />
                 <View style={s.caughtIcon}>
-                  <Text style={{ color: "#FFF", fontWeight: "900" }}>✓</Text>
+                  <Check size={18} color="#FFF" strokeWidth={2.5} />
                 </View>
-                <Text style={{ color: colors.text, fontWeight: "900", marginTop: 8 }}>Você está em dia</Text>
+                <Text style={{ color: colors.text, fontWeight: "700", marginTop: 8 }}>Você está em dia</Text>
                 <Text style={{ color: colors.muted, fontSize: 12 }}>Você já viu os looks novos. Abaixo, os anteriores.</Text>
                 <View style={[s.caughtLine, { backgroundColor: colors.border, marginTop: 14 }]} />
               </View>
@@ -521,7 +523,7 @@ export function HomeFeed({
 
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <View style={[s.styleTag, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                      <Text style={{ color: colors.text, fontSize: 10, fontWeight: "800" }}>{p.styleTag}</Text>
+                      <Text style={{ color: colors.text, fontSize: 10, fontWeight: "600" }}>{p.styleTag}</Text>
                     </View>
                     <Pressable onPress={() => openPostMenu(p)} hitSlop={10}>
                       <MoreHorizontal size={18} color={colors.muted} />
@@ -534,8 +536,10 @@ export function HomeFeed({
                 <PostMedia
                   images={p.images && p.images.length ? p.images : [p.image]}
                   video={p.videoUrl}
+                  aspect={p.aspect}
                   labels={p.kind === "poll" ? p.poll?.options : undefined}
                   onDoubleTap={() => triggerDoubleTap(p, true)}
+                  onOpenVideo={() => setReelId(p.id)}
                   onOpenZoom={i => setZoom({ images: p.images && p.images.length ? p.images : [p.image], index: i })}
                 >
 
@@ -648,7 +652,7 @@ export function HomeFeed({
                   <RichCaption
                     text={p.caption}
                     style={[s.caption, { color: colors.text }]}
-                    prefix={<Text style={{ fontWeight: "900" }}>{p.creatorName} </Text>}
+                    prefix={<Text style={{ fontWeight: "700" }}>{p.creatorName} </Text>}
                     onTag={onOpenTag}
                     onMention={u => onOpenProfile?.(u)}
                   />
@@ -664,7 +668,7 @@ export function HomeFeed({
                     style={[s.cta, { backgroundColor: colors.text }]}
                   >
                     <Shirt size={17} color={colors.bg} />
-                    <Text style={{ color: colors.bg, fontWeight: "900", fontSize: 12 }}>
+                    <Text style={{ color: colors.bg, fontWeight: "700", fontSize: 12 }}>
                       Montar com meu guarda-roupa
                     </Text>
                   </Pressable>
@@ -687,6 +691,23 @@ export function HomeFeed({
 
       {/* Modals */}
       <ImageZoomModal images={zoom?.images || null} index={zoom?.index || 0} onClose={() => setZoom(null)} />
+      <ReelsViewer
+        posts={visiblePosts.filter(p => !!p.videoUrl)}
+        startId={reelId}
+        onClose={() => setReelId(null)}
+        actions={{
+          isMine,
+          isFollowing: p => followedUserIds.includes(p.userId || ""),
+          onToggle: toggleLikeOrSave,
+          onToggleFollow: p => p.userId && handleToggleFollow(p.userId),
+          onOpenProfile: u => onOpenProfile?.(u),
+          onPostChange: setPostsSilently,
+          onRemoved: id => setPosts(v => v.filter(x => x.id !== id)),
+          onNotInterested: (_p, n) => setNi(n),
+          onAssemble: onAssembleWithWardrobe ? p => onAssembleWithWardrobe(p) : undefined,
+          onReposted: np => setPosts(v => [np, ...v])
+        }}
+      />
       <RepostModal post={repostPost} onClose={() => setRepostPost(null)} onDone={np => setPosts(v => [np, ...v])} />
       <LikersModal
         postId={likersPost}
@@ -791,11 +812,11 @@ const s = StyleSheet.create({
   },
   feedTabBtn: { paddingVertical: 8, paddingHorizontal: 4 },
   feedTabBtnActive: { borderBottomWidth: 2 },
-  feedTabText: { fontSize: 13, fontWeight: "800", letterSpacing: -0.2 },
+  feedTabText: { fontSize: 13, fontWeight: "600", letterSpacing: -0.2 },
 
   heading: { paddingHorizontal: 20, marginVertical: 8 },
-  badge: { fontSize: 9, fontWeight: "800", letterSpacing: 1.5 },
-  h: { fontSize: 22, fontWeight: "900", letterSpacing: -0.4, marginTop: 3 },
+  badge: { fontSize: 13, fontWeight: "600" },
+  h: { fontSize: 22, fontWeight: "700", letterSpacing: -0.4, marginTop: 3 },
   empty: { margin: 20, padding: 36, borderRadius: 22, borderWidth: 1, alignItems: "center" },
 
   post: { marginBottom: 24, borderBottomWidth: 1, paddingBottom: 18 },
@@ -812,7 +833,7 @@ const s = StyleSheet.create({
     justifyContent: "center"
   },
   avatar: { width: 36, height: 36, borderRadius: 18 },
-  creator: { fontSize: 13, fontWeight: "900" },
+  creator: { fontSize: 13, fontWeight: "700" },
   loc: { flexDirection: "row", gap: 3, alignItems: "center", marginTop: 1 },
   styleTag: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1 },
 
@@ -848,7 +869,7 @@ const s = StyleSheet.create({
     borderRadius: 8,
     marginTop: 4
   },
-  tagNameText: { color: "#FFF", fontSize: 10, fontWeight: "800" },
+  tagNameText: { color: "#FFF", fontSize: 10, fontWeight: "600" },
   tagBrandText: { color: "rgba(255,255,255,0.75)", fontSize: 9 },
 
   actions: {
@@ -860,7 +881,7 @@ const s = StyleSheet.create({
   },
   leftActions: { flexDirection: "row", gap: 18, alignItems: "center" },
   body: { paddingHorizontal: 20, paddingTop: 8 },
-  likes: { fontSize: 13, fontWeight: "900" },
+  likes: { fontSize: 13, fontWeight: "700" },
   caption: { fontSize: 13, lineHeight: 19, marginTop: 5 },
   cta: {
     height: 44,
@@ -879,7 +900,7 @@ const s = StyleSheet.create({
     borderTopWidth: 1,
     borderBottomWidth: 1
   },
-  suggestionsTitle: { fontSize: 13, fontWeight: "800", paddingHorizontal: 20, marginBottom: 10 },
+  suggestionsTitle: { fontSize: 13, fontWeight: "600", paddingHorizontal: 20, marginBottom: 10 },
   suggestionsScroll: { paddingHorizontal: 16, gap: 12 },
   suggestedCard: {
     width: 130,
@@ -890,7 +911,7 @@ const s = StyleSheet.create({
     gap: 6
   },
   suggestedAvatar: { width: 50, height: 50, borderRadius: 25 },
-  suggestedName: { fontSize: 12, fontWeight: "800" },
+  suggestedName: { fontSize: 12, fontWeight: "600" },
   suggestedFollowBtn: {
     width: "100%",
     paddingVertical: 6,
@@ -898,5 +919,5 @@ const s = StyleSheet.create({
     alignItems: "center",
     marginTop: 4
   },
-  suggestedFollowText: { fontSize: 11, fontWeight: "800" }
+  suggestedFollowText: { fontSize: 11, fontWeight: "600" }
 });

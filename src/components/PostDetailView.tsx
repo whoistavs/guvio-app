@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import { ReelsViewer } from "./ReelsViewer";
+import { loadFollowedUsers as loadFollowedIds, saveFollowedUsers as saveFollowedIds } from "../services/storage";
 import { ActivityIndicator, Alert, Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Bookmark, Heart, MapPin, MessageCircle, MoreHorizontal, Send, Shirt } from "lucide-react-native";
 import { FeedPost } from "../data/mockData";
@@ -47,6 +49,11 @@ export function PostDetailView({
   const [showLikers, setShowLikers] = useState(false);
   const [reposting, setReposting] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [reel, setReel] = useState(false);
+  const [followed, setFollowed] = useState<string[]>([]);
+  useEffect(() => {
+    loadFollowedIds().then(setFollowed).catch(() => {});
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -160,8 +167,10 @@ export function PostDetailView({
         <PostMedia
           images={post.images && post.images.length ? post.images : [post.image]}
           video={post.videoUrl}
+          aspect={post.aspect}
           labels={post.kind === "poll" ? post.poll?.options : undefined}
           onDoubleTap={() => toggleLike(true)}
+          onOpenVideo={() => setReel(true)}
           onOpenZoom={i => setZoom(i)}
         />
         <PollBar post={post} isMine={isMine} onChange={u => setPost(u)} />
@@ -190,15 +199,15 @@ export function PostDetailView({
 
         <View style={{ paddingHorizontal: 16, gap: 6 }}>
           {post.archived ? (
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>📦 Arquivado: só você vê este look</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Arquivado: só você vê este look</Text>
           ) : null}
           {post.hideLikes && !isMine ? (
-            <Text style={{ color: colors.text, fontWeight: "800" }}>
+            <Text style={{ color: colors.text, fontWeight: "600" }}>
               {post.isLiked ? "Você e outras pessoas curtiram" : "Curtido por outras pessoas"}
             </Text>
           ) : (
             <Pressable onPress={() => post.likes > 0 && setShowLikers(true)} hitSlop={6}>
-              <Text style={{ color: colors.text, fontWeight: "800" }}>
+              <Text style={{ color: colors.text, fontWeight: "600" }}>
                 {post.likes} {post.likes === 1 ? "curtida" : "curtidas"}
                 {post.hideLikes ? <Text style={{ color: colors.muted, fontWeight: "600" }}> · só você vê</Text> : null}
               </Text>
@@ -209,15 +218,15 @@ export function PostDetailView({
             <RichCaption
               text={post.caption}
               style={{ color: colors.text, lineHeight: 20 }}
-              prefix={<Text style={{ fontWeight: "800" }}>@{post.creatorUsername || post.creatorName} </Text>}
+              prefix={<Text style={{ fontWeight: "600" }}>@{post.creatorUsername || post.creatorName} </Text>}
               onTag={onOpenTag}
               onMention={u => onOpenProfile?.(u)}
             />
           ) : null}
           {post.clothingTags && post.clothingTags.length > 0 ? (
             <View style={{ marginTop: 6 }}>
-              <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.2, marginBottom: 8 }}>
-                PEÇAS DO LOOK
+              <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600", marginBottom: 8 }}>
+                Peças do look
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                 {post.clothingTags.map(t => (
@@ -229,11 +238,11 @@ export function PostDetailView({
                         <Shirt size={18} color={colors.muted} />
                       </View>
                     )}
-                    <Text style={{ color: colors.text, fontSize: 11, fontWeight: "800" }} numberOfLines={1}>{t.name}</Text>
+                    <Text style={{ color: colors.text, fontSize: 11, fontWeight: "600" }} numberOfLines={1}>{t.name}</Text>
                     {t.brand ? <Text style={{ color: colors.muted, fontSize: 10 }} numberOfLines={1}>{t.brand}</Text> : null}
                     {t.link ? (
                       <Pressable onPress={() => openBioLink(t.link!)} style={[s.buy, { backgroundColor: colors.text }]} hitSlop={4}>
-                        <Text style={{ color: colors.bg, fontSize: 10, fontWeight: "900" }}>Comprar ↗</Text>
+                        <Text style={{ color: colors.bg, fontSize: 10, fontWeight: "700" }}>Comprar ↗</Text>
                       </Pressable>
                     ) : null}
                   </View>
@@ -269,6 +278,25 @@ export function PostDetailView({
         onCommented={(_, total) => setPost(p => (p ? { ...p, commentsCount: total } : p))}
       />
       <RepostModal post={reposting ? post : null} onClose={() => setReposting(false)} />
+      <ReelsViewer
+        posts={[post]}
+        startId={reel ? post.id : null}
+        onClose={() => setReel(false)}
+        actions={{
+          isMine: () => isMine,
+          isFollowing: p => followed.includes(p.userId || ""),
+          onToggle: (_id, key) => (key === "isLiked" ? toggleLike() : toggleSave()),
+          onToggleFollow: p => {
+            if (!p.userId) return;
+            const next = [...followed, p.userId];
+            setFollowed(next);
+            saveFollowedIds(next).catch(() => {});
+          },
+          onOpenProfile: u => onOpenProfile?.(u),
+          onPostChange: u => setPost(u),
+          onRemoved: () => onBack()
+        }}
+      />
       <SharePostModal post={post} visible={sharing} onClose={() => setSharing(false)} />
       <CollectionPickerModal
         post={picking ? post : null}
@@ -289,7 +317,7 @@ export function PostDetailView({
 const s = StyleSheet.create({
   creator: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 10 },
   avatar: { width: 38, height: 38, borderRadius: 19 },
-  name: { fontWeight: "800", fontSize: 14 },
+  name: { fontWeight: "600", fontSize: 14 },
   place: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
   buy: { marginTop: 4, borderRadius: 8, paddingVertical: 4, alignItems: "center" },
   piece: { width: 96, borderWidth: 1, borderRadius: 14, padding: 6, gap: 2 },

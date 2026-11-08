@@ -14,7 +14,9 @@ export function PostMedia({
   onOpenZoom,
   children,
   video,
-  labels
+  labels,
+  onOpenVideo,
+  aspect = 1
 }: {
   images: string[];
   /** post de vídeo: a primeira imagem é a capa */
@@ -22,6 +24,10 @@ export function PostMedia({
   /** enquete: nome de cada opção, por cima de cada foto */
   labels?: string[];
   onDoubleTap?: () => void;
+  /** vídeo: um toque abre em tela cheia */
+  onOpenVideo?: () => void;
+  /** proporção da foto (largura/altura) */
+  aspect?: number;
   onOpenZoom?: (index: number) => void;
   /** coisas por cima da foto (coração animado, etiquetas das peças) */
   children?: React.ReactNode;
@@ -30,6 +36,10 @@ export function PostMedia({
   const [index, setIndex] = useState(0);
   const lastTap = useRef(0);
   const list = images.length ? images : [""];
+  // como no feed das redes: entre 3:4 (retrato) e 1,91:1 (paisagem); fora disso, a foto aparece inteira com faixas
+  const shown = Math.min(1.91, Math.max(0.75, aspect || 1));
+  const fit = Math.abs(shown - (aspect || 1)) < 0.01 ? "cover" : "contain";
+  const imgStyle = [s.image, { aspectRatio: shown }];
 
   const handlePress = () => {
     const now = Date.now();
@@ -44,7 +54,7 @@ export function PostMedia({
   if (video) {
     return (
       <View style={s.wrap}>
-        <VideoMedia uri={video} poster={list[0]} style={s.image} />
+        <VideoMedia uri={video} poster={list[0]} style={imgStyle} onOpen={onOpenVideo} onDoubleTap={onDoubleTap} />
         {children}
       </View>
     );
@@ -54,7 +64,7 @@ export function PostMedia({
     <View style={s.wrap} onLayout={e => setWidth(e.nativeEvent.layout.width)}>
       {list.length === 1 ? (
         <Pressable onPress={handlePress} onLongPress={() => onOpenZoom?.(0)} delayLongPress={350}>
-          <FastImage source={list[0]} style={s.image} contentFit="cover" transition={120} />
+          <FastImage source={list[0]} style={imgStyle} contentFit={fit} transition={120} />
         </Pressable>
       ) : (
         <ScrollView
@@ -73,7 +83,7 @@ export function PostMedia({
               delayLongPress={350}
               style={{ width: width || 1 }}
             >
-              <FastImage source={uri} style={s.image} contentFit="cover" transition={120} />
+              <FastImage source={uri} style={imgStyle} contentFit={fit} transition={120} />
               {labels?.[i] ? (
                 <View style={s.label} pointerEvents="none">
                   <Text style={s.labelNum}>{i + 1}</Text>
@@ -115,12 +125,12 @@ export function PostMedia({
 
 const s = StyleSheet.create({
   label: { position: "absolute", left: 12, bottom: 34, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(0,0,0,.65)", borderRadius: 18, paddingRight: 12, maxWidth: "80%" },
-  labelNum: { color: "#000", backgroundColor: "#FFF", fontWeight: "900", width: 28, height: 28, borderRadius: 14, textAlign: "center", lineHeight: 28, overflow: "hidden" },
-  labelText: { color: "#FFF", fontWeight: "800", fontSize: 13 },
+  labelNum: { color: "#000", backgroundColor: "#FFF", fontWeight: "700", width: 28, height: 28, borderRadius: 14, textAlign: "center", lineHeight: 28, overflow: "hidden" },
+  labelText: { color: "#FFF", fontWeight: "600", fontSize: 13 },
   wrap: { position: "relative", width: "100%" },
   image: { width: "100%", aspectRatio: 1, backgroundColor: "#111" },
   counter: { position: "absolute", top: 12, right: 12, backgroundColor: "rgba(0,0,0,.6)", borderRadius: 12, paddingHorizontal: 9, paddingVertical: 3 },
-  counterText: { color: "#FFF", fontSize: 11, fontWeight: "800" },
+  counterText: { color: "#FFF", fontSize: 11, fontWeight: "600" },
   dots: { position: "absolute", bottom: 10, alignSelf: "center", flexDirection: "row", gap: 5 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,.45)" },
   dotOn: { backgroundColor: "#FFF" },

@@ -49,5 +49,5 @@ export function UpdateBanner() {
 const s = StyleSheet.create({
   wrap: { position: "absolute", top: 14, left: 0, right: 0, alignItems: "center", zIndex: 9999 },
   pill: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#111", borderRadius: 22, paddingHorizontal: 16, height: 42, shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 10 },
-  t: { color: "#FFF", fontWeight: "800", fontSize: 13 }
+  t: { color: "#FFF", fontWeight: "600", fontSize: 13 }
 });

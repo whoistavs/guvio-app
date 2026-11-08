@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Dimensions, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { BadgeCheck, Clock3, Compass, Hash, Search, TrendingUp, Users, X } from "lucide-react-native";
+import { BadgeCheck, Heart, Clock3, Compass, Hash, Search, TrendingUp, Users, X } from "lucide-react-native";
 import { FeedPost, UserProfile } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
 import { GridSkeleton } from "./SkeletonLoader";
@@ -187,7 +187,7 @@ export function SearchProfilesView({
     list.length === 0 ? (
       <View style={s.empty}>
         <Users size={38} color={colors.muted} />
-        <Text style={{ color: colors.text, fontWeight: "800", marginTop: 8 }}>Nenhum perfil encontrado</Text>
+        <Text style={{ color: colors.text, fontWeight: "600", marginTop: 8 }}>Nenhum perfil encontrado</Text>
       </View>
     ) : (
       list.map(p => {
@@ -221,7 +221,7 @@ export function SearchProfilesView({
               }}
               style={[s.follow, { backgroundColor: isF ? colors.surface : "#0095F6" }]}
             >
-              <Text style={{ color: isF ? colors.text : "#FFF", fontWeight: "800", fontSize: 11 }}>
+              <Text style={{ color: isF ? colors.text : "#FFF", fontWeight: "600", fontSize: 11 }}>
                 {isF ? "Seguindo" : "Seguir"}
               </Text>
             </Pressable>
@@ -267,7 +267,7 @@ export function SearchProfilesView({
       {focused && !hasQuery && recent.length > 0 ? (
         <View style={{ marginTop: 14 }}>
           <View style={s.recentHead}>
-            <Text style={[s.label, { color: colors.muted, marginTop: 0, marginBottom: 0 }]}>RECENTES</Text>
+            <Text style={[s.label, { color: colors.muted, marginTop: 0, marginBottom: 0 }]}>Recentes</Text>
             <Pressable
               onPress={() => {
                 removeRecentSearch();
@@ -275,7 +275,7 @@ export function SearchProfilesView({
               }}
               hitSlop={10}
             >
-              <Text style={{ color: "#0095F6", fontWeight: "800", fontSize: 12 }}>Limpar tudo</Text>
+              <Text style={{ color: "#0095F6", fontWeight: "600", fontSize: 12 }}>Limpar tudo</Text>
             </Pressable>
           </View>
           {recent.map(r => (
@@ -305,7 +305,7 @@ export function SearchProfilesView({
                 onPress={() => setMode(m)}
                 style={[s.tab, mode === m && { borderBottomColor: colors.text }]}
               >
-                <Text style={{ color: mode === m ? colors.text : colors.muted, fontWeight: "800" }}>
+                <Text style={{ color: mode === m ? colors.text : colors.muted, fontWeight: "600" }}>
                   {m === "looks" ? `Looks (${looks.length})` : `Pessoas (${people.length})`}
                 </Text>
               </Pressable>
@@ -317,7 +317,7 @@ export function SearchProfilesView({
             ) : looks.length === 0 ? (
               <View style={s.empty}>
                 <Compass size={38} color={colors.muted} />
-                <Text style={{ color: colors.text, fontWeight: "800", marginTop: 8 }}>Nenhum look encontrado</Text>
+                <Text style={{ color: colors.text, fontWeight: "600", marginTop: 8 }}>Nenhum look encontrado</Text>
                 <Text style={{ color: colors.muted, fontSize: 12, textAlign: "center", marginTop: 4 }}>
                   Tente uma cidade (Porto, Lisboa, Campinas) ou um estilo.
                 </Text>
@@ -336,11 +336,11 @@ export function SearchProfilesView({
             <>
               <View style={s.cityHead}>
                 <Text style={[s.label, { color: colors.muted, marginTop: 0, marginBottom: 0, flex: 1 }]} numberOfLines={1}>
-                  🏆 TOP LOOKS DE {cityFocus.title.toUpperCase()}
+                  Top looks de {cityFocus.title}
                 </Text>
                 <Pressable onPress={onClearCityFocus} hitSlop={10} style={[s.clear, { backgroundColor: colors.surface }]}>
                   <X size={13} color={colors.text} />
-                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 11 }}>Limpar</Text>
+                  <Text style={{ color: colors.text, fontWeight: "600", fontSize: 11 }}>Limpar</Text>
                 </Pressable>
               </View>
               {(() => {
@@ -360,7 +360,7 @@ export function SearchProfilesView({
             <>
               <View style={[s.recentHead, { marginTop: 22 }]}>
                 <TrendingUp size={14} color={colors.muted} />
-                <Text style={[s.label, { color: colors.muted, marginTop: 0, marginBottom: 0, flex: 1 }]}>HASHTAGS EM ALTA</Text>
+                <Text style={[s.label, { color: colors.muted, marginTop: 0, marginBottom: 0, flex: 1 }]}>Hashtags em alta</Text>
               </View>
               <View style={s.tagWrap}>
                 {trending.map((t, i) => (
@@ -372,8 +372,8 @@ export function SearchProfilesView({
                     }}
                     style={[s.tagChip, { backgroundColor: colors.surface, borderColor: colors.border }]}
                   >
-                    <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "800" }}>{i + 1}</Text>
-                    <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>#{t.tag}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "600" }}>{i + 1}</Text>
+                    <Text style={{ color: colors.text, fontWeight: "600", fontSize: 12 }}>#{t.tag}</Text>
                     <Text style={{ color: colors.muted, fontSize: 10 }}>{t.count}</Text>
                   </Pressable>
                 ))}
@@ -382,26 +382,29 @@ export function SearchProfilesView({
           ) : null}
           {creators.length > 0 ? (
             <>
-              <Text style={[s.label, { color: colors.muted }]}>⭐ CRIADORES DA SEMANA</Text>
+              <Text style={[s.label, { color: colors.muted }]}>Criadores da semana</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 4 }}>
                 {creators.map((c, i) => (
                   <Pressable key={c.id || c.username} onPress={() => onOpenProfile(c)} style={{ width: 76, alignItems: "center" }}>
                     <View>
                       <FastImage source={c.avatar} style={[s.creatorAv, { borderColor: i === 0 ? "#F2C230" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : colors.border }]} contentFit="cover" />
                       <View style={[s.rank, { backgroundColor: colors.text }]}>
-                        <Text style={{ color: colors.bg, fontSize: 10, fontWeight: "900" }}>{i + 1}</Text>
+                        <Text style={{ color: colors.bg, fontSize: 10, fontWeight: "700" }}>{i + 1}</Text>
                       </View>
                     </View>
-                    <Text style={{ color: colors.text, fontSize: 11, fontWeight: "800", marginTop: 6 }} numberOfLines={1}>
+                    <Text style={{ color: colors.text, fontSize: 11, fontWeight: "600", marginTop: 6 }} numberOfLines={1}>
                       @{c.username}
                     </Text>
-                    <Text style={{ color: colors.muted, fontSize: 10 }}>❤️ {c.weekLikes}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                      <Heart size={10} color={colors.muted} />
+                      <Text style={{ color: colors.muted, fontSize: 10 }}>{c.weekLikes}</Text>
+                    </View>
                   </Pressable>
                 ))}
               </ScrollView>
             </>
           ) : null}
-          <Text style={[s.label, { color: colors.muted }]}>LOOKS POR COR</Text>
+          <Text style={[s.label, { color: colors.muted }]}>Looks por cor</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
             {COLOR_CHIPS.map(c => {
               const on = colorFilter === c.term;
@@ -412,7 +415,7 @@ export function SearchProfilesView({
                   style={[s.colorChip, { borderColor: on ? colors.text : colors.border, backgroundColor: on ? colors.surface : "transparent" }]}
                 >
                   <View style={[s.colorDot, { backgroundColor: c.hex, borderColor: colors.border }]} />
-                  <Text style={{ color: colors.text, fontSize: 12, fontWeight: on ? "900" : "700" }}>{c.label}</Text>
+                  <Text style={{ color: colors.text, fontSize: 12, fontWeight: on ? "700" : "700" }}>{c.label}</Text>
                 </Pressable>
               );
             })}
@@ -430,7 +433,7 @@ export function SearchProfilesView({
               <View style={{ marginTop: 10 }}>{renderGrid(colorLooks)}</View>
             )
           ) : null}
-          <Text style={[s.label, { color: colors.muted }]}>EM ALTA NA COMUNIDADE</Text>
+          <Text style={[s.label, { color: colors.muted }]}>Em alta na comunidade</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 10 }}>
             {[null, ...STYLES.map(st => st.title)].map(t => {
               const on = styleFilter === t;
@@ -440,7 +443,7 @@ export function SearchProfilesView({
                   onPress={() => setStyleFilter(t)}
                   style={[s.styleChip, { backgroundColor: on ? colors.text : colors.surface, borderColor: colors.border }]}
                 >
-                  <Text style={{ color: on ? colors.bg : colors.text, fontWeight: "800", fontSize: 12 }}>{t || "Todos"}</Text>
+                  <Text style={{ color: on ? colors.bg : colors.text, fontWeight: "600", fontSize: 12 }}>{t || "Todos"}</Text>
                 </Pressable>
               );
             })}
@@ -450,7 +453,7 @@ export function SearchProfilesView({
           ) : exploreShown.length === 0 ? (
             <View style={s.empty}>
               <Compass size={38} color={colors.muted} />
-              <Text style={{ color: colors.text, fontWeight: "800", marginTop: 8 }}>
+              <Text style={{ color: colors.text, fontWeight: "600", marginTop: 8 }}>
                 {styleFilter ? `Nenhum look ${styleFilter} por enquanto` : "Ainda não há looks para explorar"}
               </Text>
             </View>
@@ -460,7 +463,7 @@ export function SearchProfilesView({
           <View style={{ marginHorizontal: -20, marginTop: 10 }}>
             <SuggestionsRow onOpenProfile={onOpenProfile} title="Quem seguir" />
           </View>
-          <Text style={[s.label, { color: colors.muted }]}>MEMBROS DA COMUNIDADE</Text>
+          <Text style={[s.label, { color: colors.muted }]}>Membros da comunidade</Text>
           {renderPeople(profiles.slice(0, 20))}
         </>
       )}
@@ -470,10 +473,10 @@ export function SearchProfilesView({
 
 const s = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 120, maxWidth: 700, width: "100%", alignSelf: "center" },
-  h: { fontSize: 28, fontWeight: "900", letterSpacing: -0.8, marginBottom: 18 },
+  h: { fontSize: 28, fontWeight: "700", letterSpacing: -0.8, marginBottom: 18 },
   search: { height: 46, borderRadius: 14, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, gap: 9 },
   input: { flex: 1, height: "100%", fontSize: 14 },
-  label: { fontSize: 10, fontWeight: "800", letterSpacing: 1.3, marginTop: 24, marginBottom: 10 },
+  label: { fontSize: 13, fontWeight: "600", marginTop: 24, marginBottom: 10 },
   recentHead: { flexDirection: "row", alignItems: "center", gap: 6, justifyContent: "space-between", marginBottom: 8 },
   recentRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 },
   tagWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
@@ -499,11 +502,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 2
   },
-  tileTagText: { color: "#FFF", fontSize: 9, fontWeight: "800" },
+  tileTagText: { color: "#FFF", fontSize: 9, fontWeight: "600" },
   row: { flexDirection: "row", alignItems: "center", paddingVertical: 11 },
   avatar: { width: 54, height: 54, borderRadius: 27, marginRight: 12 },
   name: { flexDirection: "row", alignItems: "center", gap: 4 },
-  user: { fontSize: 14, fontWeight: "800" },
+  user: { fontSize: 14, fontWeight: "600" },
   follow: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 10, minWidth: 78, alignItems: "center" },
   empty: { alignItems: "center", justifyContent: "center", padding: 40, width: "100%" }
 });

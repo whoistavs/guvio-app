@@ -61,7 +61,7 @@ export function WishlistModal({
     if (next.bought) {
       successFeedback();
       if (onMoveToWardrobe)
-        Alert.alert("Comprou! 🎉", "Quer adicionar essa peça ao seu guarda-roupa?", [
+        Alert.alert("Comprou!", "Quer adicionar essa peça ao seu guarda-roupa?", [
           { text: "Agora não", style: "cancel" },
           { text: "Adicionar", onPress: () => onMoveToWardrobe(next) }
         ]);
@@ -92,7 +92,7 @@ export function WishlistModal({
     <Pressable key={w.id} onPress={() => setForm(w)} style={[s.row, { backgroundColor: colors.surface, borderColor: colors.border, opacity: w.bought ? 0.6 : 1 }]}>
       {w.image ? <FastImage source={w.image} style={s.img} contentFit="cover" /> : <View style={[s.img, { backgroundColor: colors.bg }]} />}
       <View style={{ flex: 1 }}>
-        <Text style={{ color: colors.text, fontWeight: "800", textDecorationLine: w.bought ? "line-through" : "none" }} numberOfLines={1}>
+        <Text style={{ color: colors.text, fontWeight: "600", textDecorationLine: w.bought ? "line-through" : "none" }} numberOfLines={1}>
           {w.name}
         </Text>
         {w.price ? <Text style={{ color: colors.muted, fontSize: 12 }}>{w.price}</Text> : null}
@@ -127,7 +127,7 @@ export function WishlistModal({
           <ScrollView contentContainerStyle={s.c}>
             <Pressable onPress={() => setForm({ id: "tmp-new", name: "" })} style={[s.add, { backgroundColor: colors.text }]}>
               <Plus size={16} color={colors.bg} />
-              <Text style={{ color: colors.bg, fontWeight: "900" }}>Adicionar desejo</Text>
+              <Text style={{ color: colors.bg, fontWeight: "700" }}>Adicionar desejo</Text>
             </Pressable>
             {pending.length ? (
               <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 10 }}>
@@ -137,11 +137,11 @@ export function WishlistModal({
             ) : null}
             {list.length === 0 ? (
               <Text style={{ color: colors.muted, textAlign: "center", marginTop: 20, lineHeight: 20 }}>
-                Viu uma peça que amou? Guarde aqui com o link e o preço. Quando comprar, marque ✓ e ela vai para o guarda-roupa.
+                Viu uma peça que amou? Guarde aqui com o link e o preço. Quando comprar, marque como comprada e ela vai para o guarda-roupa.
               </Text>
             ) : null}
             {pending.map(row)}
-            {bought.length ? <Text style={[s.label, { color: colors.muted }]}>COMPRADOS</Text> : null}
+            {bought.length ? <Text style={[s.label, { color: colors.muted }]}>Comprados</Text> : null}
             {bought.map(row)}
           </ScrollView>
         )}
@@ -150,7 +150,7 @@ export function WishlistModal({
       <Modal visible={!!form} transparent animationType="fade" onRequestClose={() => setForm(null)}>
         <KeyboardAvoidingView style={s.back} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <View style={[s.card, { backgroundColor: colors.bg }]}>
-            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>{form?.id?.startsWith("tmp-") ? "Novo desejo" : "Editar desejo"}</Text>
+            <Text style={{ color: colors.text, fontWeight: "700", fontSize: 16 }}>{form?.id?.startsWith("tmp-") ? "Novo desejo" : "Editar desejo"}</Text>
             <Pressable onPress={pick} style={[s.pickImg, { backgroundColor: colors.surface }]}>
               {form?.image ? <Image source={{ uri: form.image }} style={{ width: "100%", height: "100%", borderRadius: 14 }} /> : <ImagePlus size={24} color={colors.muted} />}
             </Pressable>
@@ -168,10 +168,10 @@ export function WishlistModal({
             ))}
             <View style={{ flexDirection: "row", gap: 8 }}>
               <Pressable onPress={() => setForm(null)} style={[s.btn, { backgroundColor: colors.surface }]}>
-                <Text style={{ color: colors.text, fontWeight: "800" }}>Cancelar</Text>
+                <Text style={{ color: colors.text, fontWeight: "600" }}>Cancelar</Text>
               </Pressable>
               <Pressable onPress={save} disabled={saving} style={[s.btn, { backgroundColor: colors.text }]}>
-                {saving ? <ActivityIndicator color={colors.bg} /> : <Text style={{ color: colors.bg, fontWeight: "800" }}>Salvar</Text>}
+                {saving ? <ActivityIndicator color={colors.bg} /> : <Text style={{ color: colors.bg, fontWeight: "600" }}>Salvar</Text>}
               </Pressable>
             </View>
           </View>
@@ -184,14 +184,14 @@ export function WishlistModal({
 const s = StyleSheet.create({
   full: { flex: 1, paddingTop: 50 },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20 },
-  h: { fontSize: 26, fontWeight: "900" },
+  h: { fontSize: 26, fontWeight: "700" },
   c: { padding: 20, paddingBottom: 60 },
   add: { height: 46, borderRadius: 23, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center", marginBottom: 14 },
   row: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderRadius: 16, padding: 10, marginBottom: 8 },
   img: { width: 56, height: 56, borderRadius: 12 },
   link: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 },
   check: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, alignItems: "center", justifyContent: "center" },
-  label: { fontSize: 10, fontWeight: "800", letterSpacing: 1.3, marginTop: 18, marginBottom: 8 },
+  label: { fontSize: 13, fontWeight: "600", marginTop: 18, marginBottom: 8 },
   back: { flex: 1, backgroundColor: "rgba(0,0,0,.5)", justifyContent: "center", padding: 22 },
   card: { borderRadius: 24, padding: 18, gap: 10 },
   pickImg: { alignSelf: "center", width: 110, height: 110, borderRadius: 14, alignItems: "center", justifyContent: "center" },

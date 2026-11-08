@@ -90,7 +90,7 @@ export function StoryStickerView({
       {isMe && !preview ? (
         <Text style={s.hint}>As respostas aparecem em "Quem viu"</Text>
       ) : sent ? (
-        <Text style={[s.hint, { color: "#111" }]}>Resposta enviada ✓</Text>
+        <Text style={[s.hint, { color: "#111" }]}>Resposta enviada</Text>
       ) : (
         <View style={s.answerRow}>
           <TextInput
@@ -125,11 +125,11 @@ export function StoryStickerView({
 
 const s = StyleSheet.create({
   card: { alignSelf: "center", width: "78%", backgroundColor: "#FFF", borderRadius: 20, padding: 14, gap: 8, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 12, elevation: 6 },
-  question: { color: "#111", fontWeight: "900", fontSize: 16, textAlign: "center" },
+  question: { color: "#111", fontWeight: "700", fontSize: 16, textAlign: "center" },
   option: { height: 42, borderRadius: 12, borderWidth: 2, borderColor: "#E6E6E6", justifyContent: "center", paddingHorizontal: 12, overflow: "hidden", flexDirection: "row", alignItems: "center" },
   fill: { position: "absolute", left: 0, top: 0, bottom: 0, backgroundColor: "rgba(0,149,246,.22)" },
-  optionText: { color: "#111", fontWeight: "800", flex: 1, textAlign: "center" },
-  pct: { color: "#111", fontWeight: "900" },
+  optionText: { color: "#111", fontWeight: "600", flex: 1, textAlign: "center" },
+  pct: { color: "#111", fontWeight: "700" },
   hint: { color: "#777", fontSize: 11, textAlign: "center" },
   answerRow: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#F2F2F2", borderRadius: 12, paddingHorizontal: 10 },
   answerInput: { flex: 1, height: 40, color: "#111" }

@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.guvio.ios",
-      "buildNumber": "9"
+      "buildNumber": "10"
     },
     "android": {
       "package": "app.guvio.android",
@@ -67,6 +67,14 @@
         {
           "supportsBackgroundPlayback": false,
           "supportsPictureInPicture": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "O Guvio acessa suas fotos e vídeos para você publicar looks, stories e peças do guarda-roupa.",
+          "savePhotosPermission": "O Guvio salva imagens dos seus looks na galeria quando você pede.",
+          "isAccessMediaLocationEnabled": false
         }
       ]
     ],

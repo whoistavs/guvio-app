@@ -143,9 +143,9 @@ function HighlightEditor({
           <Pressable onPress={onClose} hitSlop={10}>
             <X size={24} color={colors.icon} />
           </Pressable>
-          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>{highlight ? "Editar destaque" : "Novo destaque"}</Text>
+          <Text style={{ color: colors.text, fontWeight: "700", fontSize: 16 }}>{highlight ? "Editar destaque" : "Novo destaque"}</Text>
           <Pressable onPress={save} disabled={saving} hitSlop={10}>
-            {saving ? <ActivityIndicator color={colors.text} /> : <Text style={{ color: "#0095F6", fontWeight: "900" }}>Salvar</Text>}
+            {saving ? <ActivityIndicator color={colors.text} /> : <Text style={{ color: "#0095F6", fontWeight: "700" }}>Salvar</Text>}
           </Pressable>
         </View>
         <TextInput
@@ -202,5 +202,5 @@ const s = StyleSheet.create({
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 2, paddingBottom: 40 },
   tile: { width: "33%", aspectRatio: 9 / 16 },
   check: { position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: "#FFF", alignItems: "center", justifyContent: "center" },
-  tileTime: { position: "absolute", left: 6, bottom: 6, color: "#FFF", fontSize: 10, fontWeight: "800" }
+  tileTime: { position: "absolute", left: 6, bottom: 6, color: "#FFF", fontSize: 10, fontWeight: "600" }
 });

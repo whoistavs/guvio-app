@@ -95,7 +95,7 @@ export function ActivityView({
         <View style={s.messageContainer}>
           <Text style={[s.activityText, { color: colors.text }]}>
             <Text
-              style={{ fontWeight: "900" }}
+              style={{ fontWeight: "700" }}
               onPress={() => onOpenProfile?.(item.username)}
             >
               @{item.username}{" "}
@@ -109,7 +109,7 @@ export function ActivityView({
         {item.type === "follow_request" ? (
           answered[item.id] ? (
             <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-              {answered[item.id] === "ok" ? "Aceito ✓" : "Recusado"}
+              {answered[item.id] === "ok" ? "Aceito" : "Recusado"}
             </Text>
           ) : (
             <View style={{ flexDirection: "row", gap: 6 }}>
@@ -153,7 +153,7 @@ export function ActivityView({
       <ScrollView contentContainerStyle={s.content}>
         {activities.length === 0 && (
           <View style={{ alignItems: "center", paddingTop: 60, gap: 8 }}>
-            <Text style={{ color: colors.text, fontWeight: "800", fontSize: 16 }}>Nada por aqui ainda</Text>
+            <Text style={{ color: colors.text, fontWeight: "600", fontSize: 16 }}>Nada por aqui ainda</Text>
             <Text style={{ color: colors.muted, textAlign: "center", fontSize: 12 }}>
               Curtidas, comentários e novos seguidores aparecerão aqui.
             </Text>
@@ -181,7 +181,7 @@ const s = StyleSheet.create({
   container: { flex: 1, paddingBottom: 80 },
   content: { paddingHorizontal: 18, paddingTop: 10 },
   section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 15, fontWeight: "900", marginBottom: 14, letterSpacing: -0.2 },
+  sectionTitle: { fontSize: 15, fontWeight: "700", marginBottom: 14, letterSpacing: -0.2 },
   activityRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 },
   avatarContainer: { position: "relative" },
   avatar: { width: 44, height: 44, borderRadius: 22 },
@@ -208,6 +208,6 @@ const s = StyleSheet.create({
     minWidth: 90,
     alignItems: "center"
   },
-  followButtonText: { fontSize: 11, fontWeight: "800" },
+  followButtonText: { fontSize: 11, fontWeight: "600" },
   postThumb: { width: 44, height: 44, borderRadius: 8 }
 });

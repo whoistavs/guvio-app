@@ -134,7 +134,7 @@ export function BottomNavLiquid({ activeTab, onTabChange }: { activeTab: string;
                   ) : (
                     <>
                       <Icon size={20} color={active ? colors.text : colors.muted} fill={active && it.id === "home" ? colors.text : "none"} />
-                      <Text style={[styles.label, { color: active ? colors.text : colors.muted, fontWeight: active ? "800" : "600" }]}>
+                      <Text style={[styles.label, { color: active ? colors.text : colors.muted, fontWeight: active ? "600" : "600" }]}>
                         {it.label}
                       </Text>
                     </>

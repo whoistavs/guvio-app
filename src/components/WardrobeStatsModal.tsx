@@ -65,13 +65,13 @@ export function WardrobeStatsModal({
                 { v: outfits.length, l: "looks salvos" }
               ].map(k => (
                 <View key={k.l} style={[s.kpi, { backgroundColor: colors.surface }]}>
-                  <Text style={{ color: colors.text, fontSize: 24, fontWeight: "900" }}>{k.v}</Text>
+                  <Text style={{ color: colors.text, fontSize: 24, fontWeight: "700" }}>{k.v}</Text>
                   <Text style={{ color: colors.muted, fontSize: 11 }}>{k.l}</Text>
                 </View>
               ))}
             </View>
 
-            <Text style={[s.label, { color: colors.muted }]}>POR CATEGORIA</Text>
+            <Text style={[s.label, { color: colors.muted }]}>Por categoria</Text>
             {stats.byCategory.map(c => (
               <View key={c.label} style={s.barRow}>
                 <Text style={{ color: colors.text, fontSize: 12, width: 92 }} numberOfLines={1}>
@@ -84,7 +84,7 @@ export function WardrobeStatsModal({
               </View>
             ))}
 
-            <Text style={[s.label, { color: colors.muted }]}>CORES QUE MAIS APARECEM</Text>
+            <Text style={[s.label, { color: colors.muted }]}>Cores que mais aparecem</Text>
             <View style={s.colorStrip}>
               {stats.byColor.map(c => (
                 <View key={c.label} style={{ flex: c.count, backgroundColor: swatchOf(c.label) }} />
@@ -101,7 +101,7 @@ export function WardrobeStatsModal({
               ))}
             </View>
 
-            <Text style={[s.label, { color: colors.muted }]}>SUA PALETA</Text>
+            <Text style={[s.label, { color: colors.muted }]}>Sua paleta</Text>
             {palette.have.length === 0 ? (
               <Text style={{ color: colors.muted, fontSize: 12 }}>Escreva a cor das peças para montar sua paleta.</Text>
             ) : (
@@ -125,7 +125,7 @@ export function WardrobeStatsModal({
                 </Text>
                 {palette.missing.length ? (
                   <>
-                    <Text style={{ color: colors.text, fontSize: 12, fontWeight: "800", marginTop: 12, marginBottom: 8 }}>
+                    <Text style={{ color: colors.text, fontSize: 12, fontWeight: "600", marginTop: 12, marginBottom: 8 }}>
                       Cores que combinariam e você ainda não tem
                     </Text>
                     <View style={{ flexDirection: "row", gap: 10 }}>
@@ -143,7 +143,7 @@ export function WardrobeStatsModal({
               </View>
             )}
 
-            <Text style={[s.label, { color: colors.muted }]}>MAIS USADAS</Text>
+            <Text style={[s.label, { color: colors.muted }]}>Mais usadas</Text>
             {stats.mostUsed.length === 0 ? (
               <Text style={{ color: colors.muted, fontSize: 12 }}>
                 Marque peças nos seus posts ou salve looks para ver quais você mais usa.
@@ -151,7 +151,7 @@ export function WardrobeStatsModal({
             ) : (
               stats.mostUsed.map((r, i) => (
                 <View key={r.item.id} style={s.useRow}>
-                  <Text style={{ color: colors.muted, fontWeight: "900", width: 22 }}>{i + 1}</Text>
+                  <Text style={{ color: colors.muted, fontWeight: "700", width: 22 }}>{i + 1}</Text>
                   <FastImage source={r.item.image} style={s.thumb} contentFit="cover" />
                   <Text style={{ color: colors.text, fontWeight: "700", flex: 1 }} numberOfLines={1}>
                     {r.item.name}
@@ -163,9 +163,9 @@ export function WardrobeStatsModal({
               ))
             )}
 
-            <Text style={[s.label, { color: colors.muted }]}>ESQUECIDAS ({stats.forgotten.length})</Text>
+            <Text style={[s.label, { color: colors.muted }]}>Esquecidas ({stats.forgotten.length})</Text>
             {stats.forgotten.length === 0 ? (
-              <Text style={{ color: colors.muted, fontSize: 12 }}>Nenhuma! Você usa todo o seu guarda-roupa. 👏</Text>
+              <Text style={{ color: colors.muted, fontSize: 12 }}>Nenhuma! Você usa todo o seu guarda-roupa.</Text>
             ) : (
               <>
                 <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 10 }}>
@@ -195,11 +195,11 @@ const s = StyleSheet.create({
   paletteBox: { borderRadius: 16, padding: 14 },
   chip: { width: 40, height: 40, borderRadius: 20, borderWidth: 1 },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, marginBottom: 6 },
-  h: { fontSize: 26, fontWeight: "900" },
+  h: { fontSize: 26, fontWeight: "700" },
   c: { padding: 20, paddingBottom: 60 },
   kpis: { flexDirection: "row", gap: 8 },
   kpi: { flex: 1, borderRadius: 16, padding: 12, alignItems: "center" },
-  label: { fontSize: 10, fontWeight: "800", letterSpacing: 1.3, marginTop: 26, marginBottom: 12 },
+  label: { fontSize: 13, fontWeight: "600", marginTop: 26, marginBottom: 12 },
   barRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
   barTrack: { flex: 1, height: 10, borderRadius: 5, overflow: "hidden" },
   bar: { height: "100%", borderRadius: 5 },

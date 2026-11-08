@@ -73,7 +73,7 @@ export function SuggestionsRow({
                 onPress={() => toggleFollow(p)}
                 style={[s.btn, { backgroundColor: on ? colors.bg : "#0095F6", borderColor: on ? colors.border : "#0095F6" }]}
               >
-                <Text style={{ color: on ? colors.text : "#FFF", fontWeight: "800", fontSize: 12 }}>
+                <Text style={{ color: on ? colors.text : "#FFF", fontWeight: "600", fontSize: 12 }}>
                   {on ? "Seguindo" : "Seguir"}
                 </Text>
               </PressableScale>
@@ -87,11 +87,11 @@ export function SuggestionsRow({
 
 const s = StyleSheet.create({
   wrap: { paddingVertical: 14 },
-  title: { fontSize: 14, fontWeight: "900", paddingHorizontal: 16, marginBottom: 10 },
+  title: { fontSize: 14, fontWeight: "700", paddingHorizontal: 16, marginBottom: 10 },
   row: { paddingHorizontal: 16, gap: 10 },
   card: { width: 150, borderWidth: 1, borderRadius: 18, padding: 12, alignItems: "center", gap: 4 },
   close: { position: "absolute", top: 8, right: 8, zIndex: 2 },
   avatar: { width: 66, height: 66, borderRadius: 33, marginBottom: 4 },
-  user: { fontWeight: "800", fontSize: 13, maxWidth: 126 },
+  user: { fontWeight: "600", fontSize: 13, maxWidth: 126 },
   btn: { marginTop: 6, alignSelf: "stretch", height: 32, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center" }
 });

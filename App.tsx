@@ -344,6 +344,7 @@ function Guvio() {
     caption: string;
     video?: string;
     pollOptions?: string[];
+    aspect?: number;
   }): Promise<boolean> => {
     if (publishing) return false;
     setPublishing(true);
@@ -359,7 +360,8 @@ function Guvio() {
         lat: place?.lat,
         lng: place?.lng,
         video: x.video,
-        pollOptions: x.pollOptions
+        pollOptions: x.pollOptions,
+        aspect: x.aspect
       });
       setPosts(prev => {
         const updated = prev.some(v => v.id === p.id) ? prev : [p, ...prev];
@@ -636,7 +638,7 @@ function Guvio() {
           }}
           style={s.newPill}
         >
-          <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 13 }}>
+          <Text style={{ color: "#FFF", fontWeight: "700", fontSize: 13 }}>
             ↑ {newLooks === 1 ? "1 novo look" : `${newLooks} novos looks`}
           </Text>
         </Pressable>

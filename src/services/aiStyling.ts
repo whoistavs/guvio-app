@@ -10,17 +10,17 @@ export interface AIOutfitRecommendation {
 
 export function getWeatherRecommendationTip(weather?: WeatherData | null): string {
   if (!weather) {
-    return "💡 Dica de Estilo Guvio: Camadas leves com jaqueta coringa são ideais para qualquer clima urbano.";
+    return "Camadas leves com jaqueta coringa são ideais para qualquer clima urbano.";
   }
 
   const { temperature, condition } = weather;
   if (temperature < 15) {
-    return `❄️ Frio em foco (${temperature}°C - ${condition}): A IA recomenda casacos estruturados, gola alta e botas de couro.`;
+    return `Frio (${temperature}°C, ${condition}): casacos estruturados, gola alta e botas de couro.`;
   }
   if (temperature <= 22) {
-    return `🍂 Clima Ameno (${temperature}°C - ${condition}): Camisas de manga longa, suéteres leves e tênis casuais são perfeitos.`;
+    return `Clima ameno (${temperature}°C, ${condition}): camisas de manga longa, suéteres leves e tênis casuais são perfeitos.`;
   }
-  return `☀️ Clima Quente (${temperature}°C - ${condition}): Tecidos fluídos como linho, camisetas de algodão e calçados abertos.`;
+  return `Calor (${temperature}°C, ${condition}): tecidos fluídos como linho, camisetas de algodão e calçados abertos.`;
 }
 
 export function generateSmartOutfit(
@@ -107,9 +107,9 @@ export function generateSmartOutfit(
   // Weather reasoning
   let reasoning = "";
   if (isCold) {
-    reasoning = `Temperatura de ${temp}°C (${condition}). A IA priorizou camadas térmicas e jaquetas/sobretudos (${finalItems[0]?.name || "casaco"}) para manter o aquecimento com estilo ${style.title}.`;
+    reasoning = `Temperatura de ${temp}°C (${condition}). Priorizamos camadas térmicas e jaquetas/sobretudos (${finalItems[0]?.name || "casaco"}) para manter o aquecimento com estilo ${style.title}.`;
   } else if (isWarm) {
-    reasoning = `Clima agradável de ${temp}°C (${condition}). A IA selecionou tecidos leves e caimento fluído (${finalItems[0]?.name || "camiseta"}) ideal para o clima do destino.`;
+    reasoning = `Clima agradável de ${temp}°C (${condition}). Selecionamos tecidos leves e caimento fluído (${finalItems[0]?.name || "camiseta"}) ideal para o clima do destino.`;
   } else {
     reasoning = `Clima ameno de ${temp}°C (${condition}). Visual estruturado em camadas leves equilibrando o estilo ${style.title}.`;
   }

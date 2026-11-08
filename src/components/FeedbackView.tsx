@@ -44,7 +44,7 @@ export function FeedbackView({ onBack }: { onBack: () => void }) {
     try {
       await sendFeedback({ kind, text, screenshot: shot || undefined, appVersion: APP_VERSION });
       successFeedback();
-      toast("Obrigado! Seu feedback chegou", "💜");
+      toast("Obrigado! Seu feedback chegou");
       onBack();
     } catch (e: any) {
       Alert.alert("Não foi possível enviar", e?.message || "Tente novamente.");
@@ -71,7 +71,7 @@ export function FeedbackView({ onBack }: { onBack: () => void }) {
                 style={[s.kind, { backgroundColor: on ? colors.text : colors.surface, borderColor: colors.border }]}
               >
                 <I size={16} color={on ? colors.bg : colors.text} />
-                <Text style={{ color: on ? colors.bg : colors.text, fontWeight: "800" }}>{k.label}</Text>
+                <Text style={{ color: on ? colors.bg : colors.text, fontWeight: "600" }}>{k.label}</Text>
               </Pressable>
             );
           })}
@@ -99,7 +99,7 @@ export function FeedbackView({ onBack }: { onBack: () => void }) {
           </Pressable>
         )}
         <Pressable onPress={send} disabled={sending} style={[s.send, { backgroundColor: colors.text, opacity: sending ? 0.6 : 1 }]}>
-          {sending ? <ActivityIndicator color={colors.bg} /> : <Text style={{ color: colors.bg, fontWeight: "900" }}>Enviar</Text>}
+          {sending ? <ActivityIndicator color={colors.bg} /> : <Text style={{ color: colors.bg, fontWeight: "700" }}>Enviar</Text>}
         </Pressable>
         <Text style={{ color: colors.muted, fontSize: 11, textAlign: "center", marginTop: 14 }}>Versão {APP_VERSION}</Text>
       </ScrollView>

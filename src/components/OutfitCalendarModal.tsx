@@ -88,7 +88,7 @@ export function OutfitCalendarModal({
             <Pressable onPress={() => setMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))} hitSlop={10}>
               <ChevronLeft size={22} color={colors.icon} />
             </Pressable>
-            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>{label}</Text>
+            <Text style={{ color: colors.text, fontWeight: "700", fontSize: 16 }}>{label}</Text>
             <Pressable onPress={() => setMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))} hitSlop={10}>
               <ChevronRight size={22} color={colors.icon} />
             </Pressable>
@@ -132,7 +132,7 @@ export function OutfitCalendarModal({
       <Modal visible={!!editing} transparent animationType="slide" onRequestClose={() => setEditing(null)}>
         <View style={s.back}>
           <View style={[s.sheet, { backgroundColor: colors.bg }]}>
-            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16, marginBottom: 10 }}>
+            <Text style={{ color: colors.text, fontWeight: "700", fontSize: 16, marginBottom: 10 }}>
               {editing ? new Date(editing.day + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" }) : ""}
             </Text>
             {outfits.length ? (
@@ -143,7 +143,7 @@ export function OutfitCalendarModal({
                     onPress={() => editing && setEditing({ ...editing, itemIds: o.itemIds.filter(id => itemById(id)) })}
                     style={[s.chip, { backgroundColor: colors.surface, borderColor: colors.border }]}
                   >
-                    <Text style={{ color: colors.text, fontSize: 12, fontWeight: "800" }}>{o.name}</Text>
+                    <Text style={{ color: colors.text, fontSize: 12, fontWeight: "600" }}>{o.name}</Text>
                   </Pressable>
                 ))}
               </ScrollView>
@@ -174,10 +174,10 @@ export function OutfitCalendarModal({
             />
             <View style={{ flexDirection: "row", gap: 8 }}>
               <Pressable onPress={() => setEditing(null)} style={[s.btn, { backgroundColor: colors.surface }]}>
-                <Text style={{ color: colors.text, fontWeight: "800" }}>Cancelar</Text>
+                <Text style={{ color: colors.text, fontWeight: "600" }}>Cancelar</Text>
               </Pressable>
               <Pressable onPress={save} style={[s.btn, { backgroundColor: colors.text }]}>
-                <Text style={{ color: colors.bg, fontWeight: "800" }}>{editing?.itemIds.length ? "Salvar" : "Limpar dia"}</Text>
+                <Text style={{ color: colors.bg, fontWeight: "600" }}>{editing?.itemIds.length ? "Salvar" : "Limpar dia"}</Text>
               </Pressable>
             </View>
           </View>
@@ -190,15 +190,15 @@ export function OutfitCalendarModal({
 const s = StyleSheet.create({
   full: { flex: 1, paddingTop: 50 },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20 },
-  h: { fontSize: 24, fontWeight: "900" },
+  h: { fontSize: 24, fontWeight: "700" },
   c: { padding: 16, paddingBottom: 60 },
   monthRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginVertical: 12 },
   grid: { flexDirection: "row", flexWrap: "wrap" },
-  week: { width: `${100 / 7}%`, textAlign: "center", fontSize: 11, fontWeight: "800", marginBottom: 6 },
+  week: { width: `${100 / 7}%`, textAlign: "center", fontSize: 11, fontWeight: "600", marginBottom: 6 },
   cell: { width: `${100 / 7 - 1}%`, margin: "0.5%", aspectRatio: 0.8, borderRadius: 10, borderWidth: 1, overflow: "hidden", padding: 4 },
-  dayNum: { fontSize: 12, fontWeight: "800" },
+  dayNum: { fontSize: 12, fontWeight: "600" },
   dayShadow: { textShadowColor: "rgba(0,0,0,.8)", textShadowRadius: 4 },
-  more: { position: "absolute", right: 4, bottom: 3, color: "#FFF", fontSize: 10, fontWeight: "900", textShadowColor: "rgba(0,0,0,.8)", textShadowRadius: 4 },
+  more: { position: "absolute", right: 4, bottom: 3, color: "#FFF", fontSize: 10, fontWeight: "700", textShadowColor: "rgba(0,0,0,.8)", textShadowRadius: 4 },
   back: { flex: 1, backgroundColor: "rgba(0,0,0,.5)", justifyContent: "flex-end" },
   sheet: { borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 18, paddingBottom: 34, gap: 10 },
   chip: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 },

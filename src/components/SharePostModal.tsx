@@ -107,7 +107,7 @@ export function SharePostModal({
     try {
       await sharePostToProfiles(post, selected, note);
       successFeedback();
-      toast(selected.length === 1 ? `Look enviado para @${selected[0].username}` : `Look enviado para ${selected.length} pessoas`, "✈️");
+      toast(selected.length === 1 ? `Look enviado para @${selected[0].username}` : `Look enviado para ${selected.length} pessoas`);
       onClose();
     } catch (e: any) {
       Alert.alert("Falha ao enviar", e?.message || "Tente novamente.");
@@ -120,14 +120,14 @@ export function SharePostModal({
     const who = post.creatorUsername || post.creatorName;
     try {
       const link = postWebLink(post.id);
-      const message = `Olha esse look de @${who} no Guvio${post.city ? ` (${post.city})` : ""} 👗 ${link}`;
+      const message = `Olha esse look de @${who} no Guvio${post.city ? ` (${post.city})` : ""}: ${link}`;
       if (Platform.OS === "web") {
         const nav: any = typeof navigator !== "undefined" ? navigator : null;
         if (nav?.share) {
           await nav.share({ text: message, url: link }).catch(() => {});
         } else {
           await nav?.clipboard?.writeText(link);
-          toast("Link copiado", "🔗");
+          toast("Link copiado");
         }
         return;
       }
@@ -161,11 +161,11 @@ export function SharePostModal({
             </View>
             <Pressable onPress={shareOutside} hitSlop={8} style={[s.outBtn, { borderColor: colors.border }]}>
               <Link2 size={15} color={colors.icon} />
-              <Text style={{ color: colors.text, fontSize: 11, fontWeight: "800" }}>Link</Text>
+              <Text style={{ color: colors.text, fontSize: 11, fontWeight: "600" }}>Link</Text>
             </Pressable>
             <Pressable onPress={() => setAsImage(true)} hitSlop={8} style={[s.outBtn, { borderColor: colors.border }]}>
               <ImageIcon size={15} color={colors.icon} />
-              <Text style={{ color: colors.text, fontSize: 11, fontWeight: "800" }}>Imagem</Text>
+              <Text style={{ color: colors.text, fontSize: 11, fontWeight: "600" }}>Imagem</Text>
             </Pressable>
           </View>
 
@@ -245,10 +245,10 @@ const s = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12, alignItems: "center" },
   dragHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "rgba(150,150,150,0.4)", marginBottom: 12 },
   titleRow: { width: "100%", flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { fontSize: 16, fontWeight: "900" },
+  title: { fontSize: 16, fontWeight: "700" },
   postPreview: { flexDirection: "row", gap: 8, marginHorizontal: 20, marginBottom: 14, padding: 8, borderRadius: 14, borderWidth: 1, alignItems: "center" },
   postThumb: { width: 44, height: 44, borderRadius: 8 },
-  postAuthor: { fontSize: 13, fontWeight: "800" },
+  postAuthor: { fontSize: 13, fontWeight: "600" },
   outBtn: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderRadius: 14, paddingHorizontal: 9, paddingVertical: 6 },
   searchBar: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 20, paddingHorizontal: 14, height: 40, borderRadius: 12, marginBottom: 6 },
   searchInput: { flex: 1, fontSize: 13, height: "100%" },
@@ -260,5 +260,5 @@ const s = StyleSheet.create({
   footer: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 20, paddingTop: 12, gap: 10 },
   note: { height: 42, borderRadius: 14, paddingHorizontal: 14, fontSize: 13 },
   sendBtn: { height: 46, borderRadius: 23, backgroundColor: "#0095F6", alignItems: "center", justifyContent: "center" },
-  sendText: { color: "#FFF", fontWeight: "900" }
+  sendText: { color: "#FFF", fontWeight: "700" }
 });

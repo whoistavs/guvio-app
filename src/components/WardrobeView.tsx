@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { BarChart3, CalendarDays, Camera, Check, Heart, ImagePlus, Layers, Luggage, Plus, Send, Sparkles, Tag, Trash2, X } from "lucide-react-native";
+import { BarChart3, CalendarDays, Camera, Check, Heart, ImagePlus, Layers, Luggage, Plus, Send, Tag, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { ClothingTag, Outfit, OutfitStyle, STYLES, WardrobeItem } from "../data/mockData";
 import { StyleCard } from "./OutfitCard";
@@ -180,7 +180,7 @@ export function WardrobeView({
             onPress={() => set(v)}
             style={[s.chip, { backgroundColor: on ? colors.text : colors.surface, borderColor: colors.border }]}
           >
-            <Text style={{ color: on ? colors.bg : colors.text, fontSize: 11, fontWeight: "800" }}>{v}</Text>
+            <Text style={{ color: on ? colors.bg : colors.text, fontSize: 11, fontWeight: "600" }}>{v}</Text>
           </Pressable>
         );
       })}
@@ -321,7 +321,7 @@ export function WardrobeView({
               const o = await saveOutfit("Look do dia", pieces.map(p => p.id));
               setOutfits(prev => [o, ...prev]);
               successFeedback();
-              toast("Look salvo em Meus looks", "👗");
+              toast("Look salvo em Meus looks");
             } catch (e: any) {
               Alert.alert("Não foi possível salvar", e?.message || "Tente novamente.");
             }
@@ -331,7 +331,7 @@ export function WardrobeView({
             try {
               await saveOutfitLog({ day: dayKey(new Date()), itemIds: pieces.map(p => p.id), note: "" });
               successFeedback();
-              toast("Look de hoje anotado no calendário", "📅");
+              toast("Look de hoje anotado no calendário");
             } catch (e: any) {
               Alert.alert("Erro", e?.message || "Tente novamente.");
             }
@@ -348,7 +348,7 @@ export function WardrobeView({
             return (
               <PressableScale haptic key={t.id} onPress={() => setTool(t.id)} style={[s.toolBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <I size={18} color={colors.text} />
-                <Text style={{ color: colors.text, fontWeight: "800", fontSize: 11 }} numberOfLines={1}>
+                <Text style={{ color: colors.text, fontWeight: "600", fontSize: 11 }} numberOfLines={1}>
                   {t.label}
                 </Text>
               </PressableScale>
@@ -356,10 +356,10 @@ export function WardrobeView({
           })}
         </View>
 
-        <Text style={[s.badge, { color: colors.muted }]}>SELEÇÃO DE ESTILO</Text>
+        <Text style={[s.badge, { color: colors.muted }]}>Seleção de estilo</Text>
         <Text style={[s.h, { color: colors.text }]}>Qual estilo você quer hoje?</Text>
         <Text style={{ color: colors.muted, marginBottom: 18 }}>
-          {currentWeather ? `Clima atual: ${currentWeather.temperature}°C (${currentWeather.condition}).` : "Escolha um estilo e a IA montará uma combinação."}
+          {currentWeather ? `Clima atual: ${currentWeather.temperature}°C (${currentWeather.condition}).` : "Escolha um estilo e montamos uma combinação com suas peças."}
         </Text>
         
         <View style={s.grid}>
@@ -375,21 +375,21 @@ export function WardrobeView({
 
         {selectedStyle ? (
           <Pressable onPress={() => handleSelectStyle(selectedStyle)} style={[s.ai, { backgroundColor: colors.text }]}>
-            <Sparkles size={18} color={colors.bg} />
-            <Text style={{ color: colors.bg, fontWeight: "900" }}>Montar look {selectedStyle.title}</Text>
+            <Layers size={18} color={colors.bg} />
+            <Text style={{ color: colors.bg, fontWeight: "700" }}>Montar look {selectedStyle.title}</Text>
           </Pressable>
         ) : null}
 
         {outfits.length > 0 ? (
           <View style={[s.section, { borderTopColor: colors.border }]}>
-            <Text style={[s.badge, { color: colors.muted }]}>LOOKS SALVOS ({outfits.length})</Text>
+            <Text style={[s.badge, { color: colors.muted }]}>Looks salvos ({outfits.length})</Text>
             <Text style={[s.sh, { color: colors.text, marginBottom: 12 }]}>Meus looks</Text>
             {outfits.map(o => {
               const pieces = byId(o.itemIds);
               return (
                 <View key={o.id} style={[s.outfit, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <View style={s.outfitHead}>
-                    <Text style={{ color: colors.text, fontWeight: "900", flex: 1 }} numberOfLines={1}>
+                    <Text style={{ color: colors.text, fontWeight: "700", flex: 1 }} numberOfLines={1}>
                       {o.name}
                     </Text>
                     <Pressable onPress={() => handleDeleteOutfit(o)} hitSlop={10}>
@@ -406,12 +406,12 @@ export function WardrobeView({
                       onPress={() => pieces.length && setStoryLook({ pieces, title: o.name })}
                       style={[s.outfitBtn, { flex: 1, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border }]}
                     >
-                      <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12 }}>◎ Story</Text>
+                      <Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>◎ Story</Text>
                     </Pressable>
                     {onPublishOutfit ? (
                       <Pressable onPress={() => publishPieces(pieces, o.name)} style={[s.outfitBtn, { flex: 1, backgroundColor: colors.text }]}>
                         <Send size={14} color={colors.bg} />
-                        <Text style={{ color: colors.bg, fontWeight: "900", fontSize: 12 }}>Publicar</Text>
+                        <Text style={{ color: colors.bg, fontWeight: "700", fontSize: 12 }}>Publicar</Text>
                       </Pressable>
                     ) : null}
                   </View>
@@ -424,13 +424,13 @@ export function WardrobeView({
         <View style={[s.section, { borderTopColor: colors.border }]}>
           <View style={s.row}>
             <View style={{ flexGrow: 1, minWidth: 170 }}>
-              <Text style={[s.badge, { color: colors.muted }]}>PEÇAS CADASTRADAS ({items.length})</Text>
+              <Text style={[s.badge, { color: colors.muted }]}>Peças cadastradas ({items.length})</Text>
               <Text style={[s.sh, { color: colors.text }]}>{building ? "Escolha as peças" : "Meu guarda-roupa"}</Text>
             </View>
             {building ? (
               <Pressable onPress={cancelBuild} style={[s.add, { backgroundColor: colors.surface }]}>
                 <X size={16} color={colors.text} />
-                <Text style={{ color: colors.text, fontWeight: "800", fontSize: 11 }}>Cancelar</Text>
+                <Text style={{ color: colors.text, fontWeight: "600", fontSize: 11 }}>Cancelar</Text>
               </Pressable>
             ) : (
               <View style={{ flexDirection: "row", gap: 8 }}>
@@ -442,7 +442,7 @@ export function WardrobeView({
                 {items.length >= 2 ? (
                   <Pressable onPress={() => setBuilding(true)} style={[s.add, { backgroundColor: colors.surface }]}>
                     <Layers size={16} color={colors.text} />
-                    <Text style={{ color: colors.text, fontWeight: "800", fontSize: 11 }}>Montar look</Text>
+                    <Text style={{ color: colors.text, fontWeight: "600", fontSize: 11 }}>Montar look</Text>
                   </Pressable>
                 ) : null}
                 <Pressable
@@ -456,7 +456,7 @@ export function WardrobeView({
               style={[s.add, { backgroundColor: colors.text }]}
             >
                   <Plus size={16} color={colors.bg} />
-                  <Text style={{ color: colors.bg, fontWeight: "800", fontSize: 11 }}>Adicionar</Text>
+                  <Text style={{ color: colors.bg, fontWeight: "600", fontSize: 11 }}>Adicionar</Text>
                 </Pressable>
               </View>
             )}
@@ -477,7 +477,7 @@ export function WardrobeView({
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <Pressable onPress={handleSaveOutfit} style={[s.outfitBtn, { flex: 1, backgroundColor: colors.text }]}>
                   <Check size={14} color={colors.bg} />
-                  <Text style={{ color: colors.bg, fontWeight: "900", fontSize: 12 }}>Salvar look</Text>
+                  <Text style={{ color: colors.bg, fontWeight: "700", fontSize: 12 }}>Salvar look</Text>
                 </Pressable>
                 {onPublishOutfit ? (
                   <Pressable
@@ -492,7 +492,7 @@ export function WardrobeView({
                     style={[s.outfitBtn, { flex: 1, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border }]}
                   >
                     <Send size={14} color={colors.text} />
-                    <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12 }}>Publicar</Text>
+                    <Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Publicar</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -530,7 +530,7 @@ export function WardrobeView({
                   <FastImage source={it.image} style={s.img} contentFit="cover" transition={100} />
                   {building ? (
                     <View style={[s.pickDot, { backgroundColor: on ? colors.text : "rgba(0,0,0,0.45)" }]}>
-                      {on ? <Text style={{ color: colors.bg, fontWeight: "900", fontSize: 12 }}>{picked.indexOf(it.id) + 1}</Text> : null}
+                      {on ? <Text style={{ color: colors.bg, fontWeight: "700", fontSize: 12 }}>{picked.indexOf(it.id) + 1}</Text> : null}
                     </View>
                   ) : (
                     <Pressable onPress={() => handleDeleteItem(it.id, it.name)} style={s.trashBtn}>
@@ -540,9 +540,9 @@ export function WardrobeView({
                   <View style={{ padding: 10 }}>
                     <View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
                       <Tag size={10} color={colors.muted} />
-                      <Text style={{ fontSize: 9, color: colors.muted, fontWeight: "800" }}>{it.category.toUpperCase()}</Text>
+                      <Text style={{ fontSize: 11, color: colors.muted, fontWeight: "500" }}>{it.category}</Text>
                     </View>
-                    <Text numberOfLines={1} style={{ color: colors.text, fontWeight: "800", fontSize: 12, marginTop: 3 }}>
+                    <Text numberOfLines={1} style={{ color: colors.text, fontWeight: "600", fontSize: 12, marginTop: 3 }}>
                       {it.name}
                     </Text>
                     <Text style={{ color: colors.muted, fontSize: 10 }}>{it.colorTag}</Text>
@@ -576,7 +576,7 @@ export function WardrobeView({
             const o = await saveOutfit(name, ids);
             setOutfits(prev => [o, ...prev]);
             successFeedback();
-            toast("Mala salva em Meus looks", "🧳");
+            toast("Mala salva em Meus looks");
           } catch (e: any) {
             Alert.alert("Erro", e?.message || "Tente novamente.");
           }
@@ -597,7 +597,7 @@ export function WardrobeView({
             const o = await saveOutfit(`Combina com ${matchFor?.name || "peça"}`.slice(0, 40), ids);
             setOutfits(prev => [o, ...prev]);
             successFeedback();
-            toast("Look salvo em Meus looks", "✨");
+            toast("Look salvo em Meus looks");
           } catch (e: any) {
             Alert.alert("Erro", e?.message || "Tente novamente.");
           }
@@ -605,7 +605,7 @@ export function WardrobeView({
       />
       <WardrobeStatsModal visible={showStats} onClose={() => setShowStats(false)} items={items} outfits={outfits} />
 
-      {/* AI Recommendation Modal */}
+      {/* sugestão de look */}
       <Modal visible={!!selectedStyle} transparent animationType="fade" onRequestClose={() => setSelectedStyle(null)}>
         <View style={s.modalBack}>
           <View style={[s.modal, { backgroundColor: colors.bg }]}>
@@ -614,15 +614,15 @@ export function WardrobeView({
             </Pressable>
             
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Sparkles size={28} color={colors.icon} />
+              <Layers size={26} color={colors.icon} />
               <Text style={[s.modalH, { color: colors.text }]}>Look {selectedStyle?.title}</Text>
             </View>
 
             {aiResult ? (
               <>
                 <View style={[s.scoreBadge, { backgroundColor: colors.surface }]}>
-                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 11 }}>
-                    Compatibilidade IA: {aiResult.matchScore}%
+                  <Text style={{ color: colors.text, fontWeight: "600", fontSize: 11 }}>
+                    Combinação: {aiResult.matchScore}%
                   </Text>
                 </View>
 
@@ -655,11 +655,11 @@ export function WardrobeView({
                 }}
                 style={[s.done, { backgroundColor: colors.surface }]}
               >
-                <Text style={{ color: colors.text, fontWeight: "900" }}>Salvar nos meus looks</Text>
+                <Text style={{ color: colors.text, fontWeight: "700" }}>Salvar nos meus looks</Text>
               </Pressable>
             ) : null}
             <Pressable onPress={() => setSelectedStyle(null)} style={[s.done, { backgroundColor: colors.text }]}>
-              <Text style={{ color: colors.bg, fontWeight: "900" }}>Usar este look hoje</Text>
+              <Text style={{ color: colors.bg, fontWeight: "700" }}>Usar este look hoje</Text>
             </Pressable>
           </View>
         </View>
@@ -731,7 +731,7 @@ export function WardrobeView({
             />
 
             <Pressable onPress={handleSaveItem} style={[s.done, { backgroundColor: colors.text, marginTop: 6 }]}>
-              <Text style={{ color: colors.bg, fontWeight: "900" }}>{editingItemId ? "Salvar alterações" : "Salvar no Guarda-roupa"}</Text>
+              <Text style={{ color: colors.bg, fontWeight: "700" }}>{editingItemId ? "Salvar alterações" : "Salvar no Guarda-roupa"}</Text>
             </Pressable>
           </View>
         </View>
@@ -758,13 +758,13 @@ const s = StyleSheet.create({
     fontWeight: "600",
     lineHeight: 16,
   },
-  badge: { fontSize: 10, fontWeight: "800", letterSpacing: 1.4, marginBottom: 5 },
-  h: { fontSize: 25, fontWeight: "900", letterSpacing: -0.5, marginBottom: 6 },
+  badge: { fontSize: 13, fontWeight: "600", marginBottom: 4 },
+  h: { fontSize: 25, fontWeight: "700", letterSpacing: -0.5, marginBottom: 6 },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
   ai: { height: 48, borderRadius: 24, flexDirection: "row", gap: 7, alignItems: "center", justifyContent: "center", marginVertical: 8 },
   section: { borderTopWidth: 1, paddingTop: 22, marginTop: 12 },
   row: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14 },
-  sh: { fontSize: 20, fontWeight: "900" },
+  sh: { fontSize: 20, fontWeight: "700" },
   add: { flexDirection: "row", gap: 4, alignItems: "center", paddingHorizontal: 13, paddingVertical: 8, borderRadius: 16 },
   items: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
   item: { width: "48%", borderRadius: 18, borderWidth: 1, overflow: "hidden", marginBottom: 14, position: "relative" },
@@ -772,7 +772,7 @@ const s = StyleSheet.create({
   trashBtn: { position: "absolute", top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center" },
   modalBack: { flex: 1, backgroundColor: "rgba(0,0,0,.45)", alignItems: "center", justifyContent: "center", padding: 20 },
   modal: { width: "100%", maxWidth: 390, borderRadius: 28, padding: 22, alignItems: "center", gap: 10 },
-  modalH: { fontSize: 22, fontWeight: "900" },
+  modalH: { fontSize: 22, fontWeight: "700" },
   scoreBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, marginVertical: 4 },
   mini: { flexDirection: "row", gap: 10, marginVertical: 10 },
   miniImg: { width: 82, height: 100, borderRadius: 14 },

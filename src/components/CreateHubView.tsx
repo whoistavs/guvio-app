@@ -1,13 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { Camera, Check, Crop, FileText, Film, ImagePlus, RotateCw, Shirt, Sparkles, Trash2, Upload, X } from "lucide-react-native";
-import { videoThumbnail } from "../utils/videoThumb";
+import { BarChart2, Check, FileText, Film, ImagePlus, Shirt, Trash2, Upload, X } from "lucide-react-native";
+import { MediaPicker, PickerResult } from "./MediaPicker";
 import { Toggle } from "./Toggle";
-import * as ImagePicker from "expo-image-picker";
 import { useAppTheme } from "../context/AppTheme";
 import { toast } from "./motion";
 import { ImagePlaceholder } from "./FastImage";
-import { OutfitPromoExporter } from "./OutfitPromoExporter";
 import { ClothingTag, WardrobeItem } from "../data/mockData";
 import { deleteDraft, loadDrafts, loadSavedWardrobe, PostDraftData, saveDraft } from "../services/storage";
 import { getSavedAuthSession } from "../services/auth";
@@ -46,6 +44,7 @@ export function CreateHubView({
     caption: string;
     video?: string;
     pollOptions?: string[];
+    aspect?: number;
   }) => void | boolean | Promise<void | boolean>;
   onWardrobe: () => void;
   publishing?: boolean;
@@ -59,58 +58,50 @@ export function CreateHubView({
   const [tags, setTags] = useState<ClothingTag[]>([]);
   const [wardrobe, setWardrobe] = useState<WardrobeItem[]>([]);
   const [current, setCurrent] = useState(0);
-  const [showPromoExporter, setShowPromoExporter] = useState(false);
   const [drafts, setDrafts] = useState<PostDraftData[]>(() => loadDrafts());
   const [draftId, setDraftId] = useState<string | null>(null);
-  const [editingImg, setEditingImg] = useState(false);
   const [video, setVideo] = useState<string | null>(null);
-  const [loadingVideo, setLoadingVideo] = useState(false);
   const [pollOn, setPollOn] = useState(false);
   const [pollLabels, setPollLabels] = useState<string[]>([]);
+  const [aspect, setAspect] = useState(1);
+  const [picker, setPicker] = useState<null | "new" | "add">(null);
 
-  // vídeo de até 30s; a capa vira a "foto" do post
-  const pickVideo = async () => {
-    try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (perm.status !== "granted") {
-        Alert.alert("Permissão necessária", "Libere o acesso aos vídeos nos Ajustes.");
-        return;
-      }
-      const r = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["videos"],
-        videoMaxDuration: 30,
-        allowsEditing: true,
-        quality: 0.7,
-        videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720
-      });
-      if (r.canceled || !r.assets?.[0]) return;
-      const a = r.assets[0];
-      if (a.duration && a.duration > 31000) {
-        Alert.alert("Vídeo longo demais", "Escolha um vídeo de até 30 segundos (dá para cortar ao escolher).");
-        return;
-      }
-      if (a.fileSize && a.fileSize > 48 * 1024 * 1024) {
-        Alert.alert("Vídeo pesado demais", "O limite é de uns 45 MB. Tente um vídeo mais curto.");
-        return;
-      }
-      setLoadingVideo(true);
-      const cover = await videoThumbnail(a.uri).catch(() => "");
-      setVideo(a.uri);
-      setImages(cover ? [cover] : []);
-      setCurrent(0);
+  const onPicked = (r: PickerResult) => {
+    const mode0 = picker;
+    setPicker(null);
+    if (r.kind === "video") {
+      setVideo(r.video);
+      setImages(r.cover ? [r.cover] : []);
+      setAspect(r.aspect);
       setPollOn(false);
-      if (!cover) Alert.alert("Escolha uma capa", "Não conseguimos gerar a capa. Escolha uma foto na galeria para ser a capa.");
-    } catch (e: any) {
-      Alert.alert("Não deu para usar o vídeo", e?.message || "Tente outro.");
-    } finally {
-      setLoadingVideo(false);
+      if (!r.cover) Alert.alert("Sem capa", "Não conseguimos gerar a capa do vídeo. Tente outro vídeo.");
+    } else if (mode0 === "add" && images.length && !video) {
+      setImages(prev => [...prev, ...r.images].slice(0, MAX_PHOTOS));
+    } else {
+      setVideo(null);
+      setImages(r.images.slice(0, MAX_PHOTOS));
+      setAspect(r.aspect);
+      setCurrent(0);
     }
+    setMode("post");
   };
+
+  // rascunhos e looks do guarda-roupa: proporção da primeira foto
+  const aspectFrom = (uri?: string) => {
+    if (!uri) return setAspect(1);
+    Image.getSize(
+      uri,
+      (w, h) => setAspect(Math.min(1.91, Math.max(0.75, w / h))),
+      () => setAspect(1)
+    );
+  };
+
   const imageUri = images[current] || images[0] || DEFAULT_IMAGE;
 
   useEffect(() => {
     if (!draft) return;
     setImages(draft.images.slice(0, MAX_PHOTOS));
+    setAspect(1);
     setTags(draft.tags);
     setCaption(draft.caption);
     setCurrent(0);
@@ -134,45 +125,6 @@ export function CreateHubView({
     });
   };
 
-  // ----- girar e recortar a foto atual -----
-  const manipulate = async (actions: any[]) => {
-    const uri = images[current];
-    if (!uri) return;
-    setEditingImg(true);
-    try {
-      const { manipulateAsync, SaveFormat } = require("expo-image-manipulator") as typeof import("expo-image-manipulator");
-      const out = await manipulateAsync(uri, actions, { compress: 0.92, format: SaveFormat.JPEG });
-      setImages(prev => prev.map((x, i) => (i === current ? out.uri : x)));
-    } catch (e: any) {
-      Alert.alert("Não deu para editar a foto", e?.message || "Tente outra imagem.");
-    } finally {
-      setEditingImg(false);
-    }
-  };
-
-  const sizeOf = (uri: string) =>
-    new Promise<{ width: number; height: number } | null>(res => Image.getSize(uri, (width, height) => res({ width, height }), () => res(null)));
-
-  const cropTo = async (ratio: number) => {
-    const size = await sizeOf(images[current]);
-    if (!size) return;
-    let w = size.width,
-      h = Math.round(size.width / ratio);
-    if (h > size.height) {
-      h = size.height;
-      w = Math.round(size.height * ratio);
-    }
-    await manipulate([{ crop: { originX: Math.round((size.width - w) / 2), originY: Math.round((size.height - h) / 2), width: w, height: h } }]);
-  };
-
-  const askCrop = () =>
-    Alert.alert("Recortar foto", "Corta pelo centro da imagem.", [
-      { text: "Quadrado 1:1", onPress: () => cropTo(1) },
-      { text: "Retrato 4:5", onPress: () => cropTo(4 / 5) },
-      { text: "Story 9:16", onPress: () => cropTo(9 / 16) },
-      { text: "Cancelar", style: "cancel" }
-    ]);
-
   // ----- rascunhos -----
   const resetPost = () => {
     setVideo(null);
@@ -183,6 +135,7 @@ export function CreateHubView({
     setTags([]);
     setCurrent(0);
     setDraftId(null);
+    setAspect(1);
   };
 
   const handleSaveDraft = async () => {
@@ -195,7 +148,7 @@ export function CreateHubView({
       setDrafts(loadDrafts());
       resetPost();
       setMode("hub");
-      toast("Rascunho salvo em Criar › Rascunhos", "📝");
+      toast("Rascunho salvo em Criar › Rascunhos");
     } catch (e: any) {
       Alert.alert("Erro", e?.message || "Não foi possível salvar o rascunho.");
     }
@@ -203,6 +156,7 @@ export function CreateHubView({
 
   const openDraft = (d: PostDraftData) => {
     setImages(d.images);
+    aspectFrom(d.images[0]);
     setCaption(d.caption);
     setTags(d.tags);
     setCurrent(0);
@@ -236,50 +190,6 @@ export function CreateHubView({
     });
   };
 
-  const pickImage = async (useCamera: boolean) => {
-    try {
-      if (useCamera) {
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== "granted") {
-          Alert.alert("Permissão necessária", "Precisamos de acesso à câmera para tirar fotos do seu look.");
-          return;
-        }
-        const result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ["images"],
-          quality: 0.8,
-          allowsEditing: true,
-          aspect: [1, 1],
-        });
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-          addImages([result.assets[0].uri]);
-        }
-      } else {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== "granted") {
-          Alert.alert("Permissão necessária", "Precisamos de acesso à galeria de fotos.");
-          return;
-        }
-        const room = MAX_PHOTOS - images.length;
-        if (room <= 0) {
-          Alert.alert("Limite de fotos", `Um post pode ter até ${MAX_PHOTOS} fotos.`);
-          return;
-        }
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ["images"],
-          quality: 0.8,
-          allowsMultipleSelection: true,
-          selectionLimit: room,
-          orderedSelection: true
-        });
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-          addImages(result.assets.map(a => a.uri));
-        }
-      }
-    } catch (error: any) {
-      Alert.alert("Erro de mídia", "Não foi possível carregar a imagem selecionada.");
-    }
-  };
-
   if (mode === "hub") {
     return (
       <>
@@ -287,7 +197,7 @@ export function CreateHubView({
           <Text style={[s.h, { color: colors.text }]}>Criar</Text>
           <Text style={{ color: colors.muted, marginBottom: 22 }}>O que você quer adicionar ao Guvio?</Text>
           
-          <Pressable onPress={() => setMode("post")} style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Pressable onPress={() => setPicker("new")} style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Upload size={28} color={colors.icon} />
             <View style={{ flex: 1 }}>
               <Text style={[s.ct, { color: colors.text }]}>Publicar um look</Text>
@@ -305,7 +215,7 @@ export function CreateHubView({
 
           {drafts.length > 0 ? (
             <View style={{ marginBottom: 12 }}>
-              <Text style={[s.label, { color: colors.muted, marginTop: 8 }]}>RASCUNHOS ({drafts.length})</Text>
+              <Text style={[s.label, { color: colors.muted, marginTop: 8 }]}>Rascunhos ({drafts.length})</Text>
               {drafts.map(d => (
                 <Pressable key={d.id} onPress={() => openDraft(d)} style={[s.draft, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   {d.images[0] ? (
@@ -316,7 +226,7 @@ export function CreateHubView({
                     </View>
                   )}
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.text, fontWeight: "800" }} numberOfLines={1}>
+                    <Text style={{ color: colors.text, fontWeight: "600" }} numberOfLines={1}>
                       {d.caption.trim() || "Sem legenda"}
                     </Text>
                     <Text style={{ color: colors.muted, fontSize: 11 }}>
@@ -331,25 +241,14 @@ export function CreateHubView({
             </View>
           ) : null}
 
-          <Pressable onPress={() => setShowPromoExporter(true)} style={[s.card, s.viralCard, { backgroundColor: colors.text }]}>
-            <Sparkles size={28} color={colors.bg} />
-            <View style={{ flex: 1 }}>
-              <Text style={[s.ct, { color: colors.bg }]}>Gerar Vídeo Promo 9:16 ✨</Text>
-              <Text style={{ color: colors.bg, opacity: 0.8, fontSize: 12 }}>Crie comerciais virais de seus looks para o TikTok & Reels.</Text>
-            </View>
-          </Pressable>
         </ScrollView>
-
-        <OutfitPromoExporter
-          visible={showPromoExporter}
-          onClose={() => setShowPromoExporter(false)}
-          items={[]}
-        />
+        <MediaPicker visible={!!picker} maxPhotos={picker === "add" ? Math.max(1, MAX_PHOTOS - images.length) : MAX_PHOTOS} onClose={() => setPicker(null)} onDone={onPicked} />
       </>
     );
   }
 
   return (
+    <>
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={s.c}>
       <Pressable onPress={() => setMode("hub")}>
         <Text style={{ color: colors.muted }}>← Voltar</Text>
@@ -358,21 +257,12 @@ export function CreateHubView({
       
       {imageUri ? (
         <View>
-          <Image source={{ uri: imageUri }} style={s.preview} />
+          <Image source={{ uri: imageUri }} style={[s.preview, { aspectRatio: Math.min(1.91, Math.max(0.75, aspect)), backgroundColor: "#000" }]} resizeMode={aspect < 0.75 || aspect > 1.91 ? "contain" : "cover"} />
           {tags.map(t => (
             <View key={t.id} style={[s.pin, { left: `${t.x}%`, top: `${t.y}%` }]} pointerEvents="none">
               <Text style={s.pinText} numberOfLines={1}>{t.name}</Text>
             </View>
           ))}
-          <View style={s.editBar}>
-            <Pressable onPress={() => manipulate([{ rotate: 90 }])} disabled={editingImg} style={s.editBtn} hitSlop={6}>
-              <RotateCw size={16} color="#FFF" />
-            </Pressable>
-            <Pressable onPress={askCrop} disabled={editingImg} style={s.editBtn} hitSlop={6}>
-              <Crop size={16} color="#FFF" />
-            </Pressable>
-            {editingImg ? <ActivityIndicator color="#FFF" /> : null}
-          </View>
           {images.length > 1 ? (
             <View style={s.counter}>
               <Text style={s.counterText}>{current + 1}/{images.length}</Text>
@@ -380,7 +270,7 @@ export function CreateHubView({
           ) : null}
         </View>
       ) : (
-        <Pressable onPress={() => pickImage(false)}>
+        <Pressable onPress={() => setPicker("new")}>
           <ImagePlaceholder style={s.preview} kind="photo" />
           <Text style={{ color: colors.muted, textAlign: "center", marginTop: -40, marginBottom: 24, fontSize: 12 }}>
             Toque para escolher as fotos do look (até {MAX_PHOTOS})
@@ -404,9 +294,9 @@ export function CreateHubView({
               ) : null}
             </Pressable>
           ))}
-          {images.length < MAX_PHOTOS ? (
+          {images.length < MAX_PHOTOS && !video ? (
             <Pressable
-              onPress={() => pickImage(false)}
+              onPress={() => setPicker("add")}
               style={[s.thumb, s.thumbAdd, { borderColor: colors.border, backgroundColor: colors.surface }]}
             >
               <ImagePlus size={20} color={colors.icon} />
@@ -418,7 +308,7 @@ export function CreateHubView({
       {video ? (
         <View style={[s.videoInfo, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Film size={18} color={colors.icon} />
-          <Text style={{ color: colors.text, fontWeight: "800", flex: 1 }}>Vídeo pronto · a foto acima é a capa</Text>
+          <Text style={{ color: colors.text, fontWeight: "600", flex: 1 }}>Vídeo pronto · a foto acima é a capa</Text>
           <Pressable
             onPress={() => {
               setVideo(null);
@@ -432,26 +322,18 @@ export function CreateHubView({
       ) : null}
 
       <View style={s.pickers}>
-        <Pressable onPress={() => pickImage(true)} style={[s.pickerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Camera size={18} color={colors.icon} />
-          <Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Tirar Foto</Text>
-        </Pressable>
-        <Pressable onPress={() => pickImage(false)} style={[s.pickerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Pressable onPress={() => setPicker("new")} style={[s.pickerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <ImagePlus size={18} color={colors.icon} />
-          <Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Galeria</Text>
-        </Pressable>
-        <Pressable onPress={pickVideo} style={[s.pickerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          {loadingVideo ? <ActivityIndicator color={colors.icon} /> : <Film size={18} color={colors.icon} />}
-          <Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Vídeo</Text>
+          <Text style={{ color: colors.text, fontWeight: "600", fontSize: 13 }}>{images.length ? "Trocar fotos ou vídeo" : "Escolher fotos ou vídeo"}</Text>
         </Pressable>
       </View>
 
       {!video && images.length >= 2 && images.length <= 4 ? (
         <View style={[s.pollBox, { backgroundColor: colors.surface, borderColor: pollOn ? colors.text : colors.border }]}>
           <Pressable onPress={() => setPollOn(v => !v)} style={s.pollHead}>
-            <Text style={{ fontSize: 18 }}>🗳️</Text>
+            <BarChart2 size={20} color={colors.icon} />
             <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.text, fontWeight: "900" }}>Enquete "Qual look?"</Text>
+              <Text style={{ color: colors.text, fontWeight: "700" }}>Enquete "Qual look?"</Text>
               <Text style={{ color: colors.muted, fontSize: 11 }}>Cada foto vira uma opção para a comunidade votar</Text>
             </View>
             <Toggle value={pollOn} onValueChange={() => setPollOn(v => !v)} />
@@ -476,7 +358,7 @@ export function CreateHubView({
         </View>
       ) : null}
 
-      <Text style={[s.label, { color: colors.muted }]}>MARCAR PEÇAS DO GUARDA-ROUPA</Text>
+      <Text style={[s.label, { color: colors.muted }]}>Marcar peças do guarda-roupa</Text>
       {wardrobe.length === 0 ? (
         <Pressable onPress={onWardrobe}>
           <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 12 }}>
@@ -514,7 +396,7 @@ export function CreateHubView({
       />
       
       <Pressable onPress={handleSaveDraft} disabled={publishing} style={[s.draftBtn, { borderColor: colors.border }]}>
-        <Text style={{ color: colors.text, fontWeight: "800" }}>{draftId ? "Atualizar rascunho" : "Salvar rascunho"}</Text>
+        <Text style={{ color: colors.text, fontWeight: "600" }}>{draftId ? "Atualizar rascunho" : "Salvar rascunho"}</Text>
       </Pressable>
 
       <Pressable
@@ -530,6 +412,7 @@ export function CreateHubView({
             clothingTags: tags,
             caption: caption || "Novo look no Guvio.",
             video: video || undefined,
+            aspect,
             pollOptions: !video && pollOn && images.length >= 2 && images.length <= 4 ? images.map((_, i) => pollLabels[i] || `Look ${i + 1}`) : undefined
           });
           if (ok === false) return;
@@ -545,19 +428,20 @@ export function CreateHubView({
         {publishing ? (
           <ActivityIndicator color={colors.bg} />
         ) : (
-          <Text style={{ color: colors.bg, fontWeight: "900" }}>Publicar</Text>
+          <Text style={{ color: colors.bg, fontWeight: "700" }}>Publicar</Text>
         )}
       </Pressable>
     </ScrollView>
+    <MediaPicker visible={!!picker} maxPhotos={picker === "add" ? Math.max(1, MAX_PHOTOS - images.length) : MAX_PHOTOS} onClose={() => setPicker(null)} onDone={onPicked} />
+    </>
   );
 }
 
 const s = StyleSheet.create({
   c: { padding: 22, paddingBottom: 120 },
-  h: { fontSize: 28, fontWeight: "900", marginVertical: 16 },
+  h: { fontSize: 28, fontWeight: "700", marginVertical: 16 },
   card: { borderWidth: 1, borderRadius: 22, padding: 20, flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 12 },
-  viralCard: { marginTop: 6 },
-  ct: { fontSize: 16, fontWeight: "900", marginBottom: 4 },
+  ct: { fontSize: 16, fontWeight: "700", marginBottom: 4 },
   preview: { width: "100%", aspectRatio: 1, borderRadius: 22 },
   pickers: { flexDirection: "row", gap: 10, marginVertical: 14 },
   pickerBtn: { flex: 1, height: 44, borderWidth: 1, borderRadius: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
@@ -571,17 +455,17 @@ const s = StyleSheet.create({
   draft: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderRadius: 16, padding: 10, marginBottom: 8 },
   draftImg: { width: 46, height: 46, borderRadius: 10 },
   draftBtn: { height: 46, borderRadius: 23, borderWidth: 1, alignItems: "center", justifyContent: "center", marginTop: 14 },
-  label: { fontSize: 10, fontWeight: "800", letterSpacing: 1.3, marginTop: 4, marginBottom: 8 },
+  label: { fontSize: 13, fontWeight: "600", marginTop: 4, marginBottom: 8 },
   pin: { position: "absolute", maxWidth: 130, backgroundColor: "rgba(0,0,0,.7)", borderRadius: 8, paddingHorizontal: 7, paddingVertical: 4 },
-  pinText: { color: "#FFF", fontSize: 10, fontWeight: "800" },
+  pinText: { color: "#FFF", fontSize: 10, fontWeight: "600" },
   counter: { position: "absolute", top: 12, right: 12, backgroundColor: "rgba(0,0,0,.6)", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
-  counterText: { color: "#FFF", fontSize: 11, fontWeight: "800" },
+  counterText: { color: "#FFF", fontSize: 11, fontWeight: "600" },
   thumbs: { gap: 8, paddingTop: 12 },
   thumb: { width: 62, height: 62, borderRadius: 12, borderWidth: 2 },
   thumbAdd: { alignItems: "center", justifyContent: "center", borderStyle: "dashed" },
   thumbX: { position: "absolute", top: 3, right: 3, width: 18, height: 18, borderRadius: 9, backgroundColor: "rgba(0,0,0,.65)", alignItems: "center", justifyContent: "center" },
   capa: { position: "absolute", left: 4, bottom: 4, backgroundColor: "rgba(0,0,0,.65)", borderRadius: 5, paddingHorizontal: 4 },
-  capaText: { color: "#FFF", fontSize: 8, fontWeight: "900" },
+  capaText: { color: "#FFF", fontSize: 8, fontWeight: "700" },
   chips: { gap: 8, paddingBottom: 14 },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: 18, paddingHorizontal: 10, height: 36, maxWidth: 180 },
   chipImg: { width: 22, height: 22, borderRadius: 6 },

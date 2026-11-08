@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Repeat2 } from "lucide-react-native";
+import { Check, Flame, Repeat2, Snowflake } from "lucide-react-native";
 import { FeedPost } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
 import { ratePost, votePoll } from "../services/storage";
 import { likeFeedback, tapFeedback } from "../utils/haptics";
 import { PressableScale } from "./motion";
 
-/** "🔁 repost de @ana" acima da foto */
+/** "repost de @ana" acima da foto */
 export function RepostLine({ post, onOpenProfile }: { post: FeedPost; onOpenProfile?: (u: string) => void }) {
   const { colors } = useAppTheme();
   if (post.kind !== "repost" || !post.originalUsername) return null;
@@ -15,7 +15,7 @@ export function RepostLine({ post, onOpenProfile }: { post: FeedPost; onOpenProf
     <Pressable onPress={() => onOpenProfile?.(post.originalUsername!)} style={s.repost} hitSlop={6}>
       <Repeat2 size={14} color={colors.muted} />
       <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-        repost de <Text style={{ color: colors.text, fontWeight: "900" }}>@{post.originalUsername}</Text>
+        repost de <Text style={{ color: colors.text, fontWeight: "700" }}>@{post.originalUsername}</Text>
       </Text>
     </Pressable>
   );
@@ -45,7 +45,7 @@ export function PollBar({ post, onChange, isMine }: { post: FeedPost; onChange: 
 
   return (
     <View style={s.poll}>
-      <Text style={{ color: colors.text, fontWeight: "900", marginBottom: 8 }}>
+      <Text style={{ color: colors.text, fontWeight: "700", marginBottom: 8 }}>
         Qual look? <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 12 }}>· {total} {total === 1 ? "voto" : "votos"}</Text>
       </Text>
       {options.map((o, i) => {
@@ -55,11 +55,12 @@ export function PollBar({ post, onChange, isMine }: { post: FeedPost; onChange: 
         return (
           <PressableScale key={i} onPress={() => vote(i)} style={[s.option, { borderColor: mine ? colors.text : colors.border, backgroundColor: colors.surface }]}>
             {showResults ? <View style={[s.fill, { width: `${pct}%`, backgroundColor: leader ? "rgba(0,149,246,.28)" : "rgba(127,127,127,.18)" }]} /> : null}
-            <Text style={{ color: colors.text, fontWeight: "900", width: 22 }}>{i + 1}</Text>
-            <Text style={{ color: colors.text, fontWeight: mine ? "900" : "700", flex: 1 }} numberOfLines={1}>
-              {o} {mine ? "✓" : ""}
+            <Text style={{ color: colors.text, fontWeight: "700", width: 22 }}>{i + 1}</Text>
+            <Text style={{ color: colors.text, fontWeight: mine ? "700" : "700", flex: 1 }} numberOfLines={1}>
+              {o}
             </Text>
-            {showResults ? <Text style={{ color: colors.text, fontWeight: "900" }}>{pct}%</Text> : null}
+            {mine ? <Check size={15} color={colors.text} /> : null}
+            {showResults ? <Text style={{ color: colors.text, fontWeight: "700" }}>{pct}%</Text> : null}
           </PressableScale>
         );
       })}
@@ -68,7 +69,7 @@ export function PollBar({ post, onChange, isMine }: { post: FeedPost; onChange: 
   );
 }
 
-/** Avaliação 🔥 (aprovado) ou 🧊 (não curti) */
+/** Avaliação: aprovado ou não curti */
 export function RatingBar({ post, onChange }: { post: FeedPost; onChange: (p: FeedPost) => void }) {
   const { colors } = useAppTheme();
   const r = post.rating || { fire: 0, ice: 0, mine: 0 };
@@ -97,15 +98,15 @@ export function RatingBar({ post, onChange }: { post: FeedPost; onChange: (p: Fe
   return (
     <View style={s.rating}>
       <PressableScale onPress={() => rate(1)} style={[s.rateBtn, { borderColor: r.mine === 1 ? "#FF6B2C" : colors.border, backgroundColor: r.mine === 1 ? "rgba(255,107,44,.15)" : "transparent" }]}>
-        <Text style={{ fontSize: 14 }}>🔥</Text>
-        <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>{r.fire}</Text>
+        <Flame size={15} color={r.mine === 1 ? "#FF6B2C" : colors.icon} fill={r.mine === 1 ? "#FF6B2C" : "none"} />
+        <Text style={{ color: colors.text, fontWeight: "600", fontSize: 12 }}>{r.fire}</Text>
       </PressableScale>
       <PressableScale onPress={() => rate(-1)} style={[s.rateBtn, { borderColor: r.mine === -1 ? "#4AA3FF" : colors.border, backgroundColor: r.mine === -1 ? "rgba(74,163,255,.15)" : "transparent" }]}>
-        <Text style={{ fontSize: 14 }}>🧊</Text>
-        <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>{r.ice}</Text>
+        <Snowflake size={15} color={r.mine === -1 ? "#4AA3FF" : colors.icon} />
+        <Text style={{ color: colors.text, fontWeight: "600", fontSize: 12 }}>{r.ice}</Text>
       </PressableScale>
       {total >= 3 ? (
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{pct}% 🔥</Text>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{pct}% aprovam</Text>
       ) : null}
     </View>
   );

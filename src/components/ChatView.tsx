@@ -65,7 +65,7 @@ function SharedPostCard({
     <Pressable onPress={() => onOpen?.(post.id)} style={s.postCard}>
       <View style={s.postHead}>
         <FastImage source={post.creatorAvatar} style={s.postAvatar} />
-        <Text style={{ color: isMe ? colors.bg : colors.text, fontWeight: "800", fontSize: 12 }} numberOfLines={1}>
+        <Text style={{ color: isMe ? colors.bg : colors.text, fontWeight: "600", fontSize: 12 }} numberOfLines={1}>
           @{post.creatorUsername || post.creatorName}
         </Text>
       </View>
@@ -244,7 +244,7 @@ export function ChatView({
   };
 
   const preview = (m?: ChatMessage) =>
-    !m ? "Mensagem" : m.deleted ? "Mensagem apagada" : m.text || (m.postId ? "👗 Look" : "📷 Foto");
+    !m ? "Mensagem" : m.deleted ? "Mensagem apagada" : m.text || (m.postId ? "Look" : "Foto");
 
   const status = typing ? "digitando..." : online ? "online agora" : "";
 
@@ -260,7 +260,7 @@ export function ChatView({
             {online ? <View style={[s.onlineDot, { borderColor: colors.bg }]} /> : null}
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.text, fontWeight: "800", fontSize: 15 }} numberOfLines={1}>
+            <Text style={{ color: colors.text, fontWeight: "600", fontSize: 15 }} numberOfLines={1}>
               @{thread.username}
             </Text>
             {status ? (
@@ -306,7 +306,7 @@ export function ChatView({
           </View>
         ) : null}
         {!loading && messages.length === 0 ? (
-          <Text style={{ color: colors.muted, textAlign: "center", marginTop: 40 }}>Diga oi para @{thread.username} 👋</Text>
+          <Text style={{ color: colors.muted, textAlign: "center", marginTop: 40 }}>Diga oi para @{thread.username}</Text>
         ) : null}
         {shown.map(m => {
           const isMe = m.sender === "me";
@@ -332,7 +332,7 @@ export function ChatView({
               >
                 {m.replyTo && !m.deleted ? (
                   <View style={[s.quote, { borderLeftColor: isMe ? colors.bg : colors.muted }]}>
-                    <Text style={{ color: fg, opacity: 0.7, fontSize: 11, fontWeight: "800" }}>
+                    <Text style={{ color: fg, opacity: 0.7, fontSize: 11, fontWeight: "600" }}>
                       {quoted?.sender === "me" ? "Você" : `@${thread.username}`}
                     </Text>
                     <Text style={{ color: fg, opacity: 0.7, fontSize: 12 }} numberOfLines={2}>
@@ -379,7 +379,7 @@ export function ChatView({
           <View style={[s.replyBar, { backgroundColor: colors.surface }]}>
             <CornerUpLeft size={14} color={colors.muted} />
             <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.text, fontSize: 11, fontWeight: "800" }}>
+              <Text style={{ color: colors.text, fontSize: 11, fontWeight: "600" }}>
                 Respondendo {replyTo.sender === "me" ? "a você" : `@${thread.username}`}
               </Text>
               <Text style={{ color: colors.muted, fontSize: 12 }} numberOfLines={1}>

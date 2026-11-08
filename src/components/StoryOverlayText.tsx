@@ -26,6 +26,6 @@ export function StoryOverlayText({ overlay }: { overlay?: StoryOverlay | null })
 
 const s = StyleSheet.create({
   wrap: { position: "absolute", left: 24, right: 24, alignItems: "center", zIndex: 5 },
-  text: { fontSize: 26, fontWeight: "900", textAlign: "center", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, overflow: "hidden" },
+  text: { fontSize: 26, fontWeight: "700", textAlign: "center", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, overflow: "hidden" },
   shadow: { textShadowColor: "rgba(0,0,0,.6)", textShadowRadius: 8, textShadowOffset: { width: 0, height: 1 } }
 });

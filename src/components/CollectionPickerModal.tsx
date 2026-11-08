@@ -121,7 +121,7 @@ export function CollectionPickerModal({
                       </View>
                     )}
                     <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors.text, fontWeight: "800" }}>{c.name}</Text>
+                      <Text style={{ color: colors.text, fontWeight: "600" }}>{c.name}</Text>
                       <Text style={{ color: colors.muted, fontSize: 11 }}>
                         {c.count} {c.count === 1 ? "look" : "looks"}
                       </Text>
@@ -148,13 +148,13 @@ export function CollectionPickerModal({
                 style={[s.input, { backgroundColor: colors.surface, color: colors.text }]}
               />
               <Pressable onPress={create} style={[s.createBtn, { backgroundColor: colors.text }]}>
-                <Text style={{ color: colors.bg, fontWeight: "900" }}>Criar</Text>
+                <Text style={{ color: colors.bg, fontWeight: "700" }}>Criar</Text>
               </Pressable>
             </View>
           ) : (
             <Pressable onPress={() => setCreating(true)} style={[s.newBtn, { borderColor: colors.border }]}>
               <FolderPlus size={18} color={colors.icon} />
-              <Text style={{ color: colors.text, fontWeight: "800" }}>Nova coleção</Text>
+              <Text style={{ color: colors.text, fontWeight: "600" }}>Nova coleção</Text>
             </Pressable>
           )}
         </View>
@@ -167,7 +167,7 @@ const s = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" },
   sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, padding: 20, paddingBottom: 34 },
   titleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
-  title: { fontSize: 16, fontWeight: "900" },
+  title: { fontSize: 16, fontWeight: "700" },
   row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 },
   cover: { width: 48, height: 48, borderRadius: 10 },
   check: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: "center", justifyContent: "center" },

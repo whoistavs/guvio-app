@@ -153,8 +153,7 @@ export function ToastHost({ bottom = 110 }: { bottom?: number }) {
           { opacity: v, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }, { scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }] }
         ]}
       >
-        {msg.icon ? <Text style={{ fontSize: 15 }}>{msg.icon}</Text> : null}
-        <Text style={st.text} numberOfLines={2}>
+                <Text style={st.text} numberOfLines={2}>
           {msg.text}
         </Text>
       </Animated.View>
@@ -180,7 +179,7 @@ const st = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 }
   },
-  text: { color: "#FFF", fontWeight: "800", fontSize: 13 }
+  text: { color: "#FFF", fontWeight: "500", fontSize: 14 }
 });
 
 /** Pula sozinho quando "active" vira true (coração ao curtir, salvar...) */

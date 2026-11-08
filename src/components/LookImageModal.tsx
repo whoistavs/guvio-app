@@ -109,7 +109,7 @@ export function LookImageModal({ post, onClose }: { post: FeedPost | null; onClo
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.back}>
         <View style={s.head}>
-          <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 16 }}>Compartilhar como imagem</Text>
+          <Text style={{ color: "#FFF", fontWeight: "700", fontSize: 16 }}>Compartilhar como imagem</Text>
           <Pressable onPress={onClose} hitSlop={10}>
             <X size={22} color="#FFF" />
           </Pressable>
@@ -143,7 +143,7 @@ export function LookImageModal({ post, onClose }: { post: FeedPost | null; onClo
           ) : (
             <>
               {Platform.OS === "web" ? <Download size={18} color="#111" /> : <Share2 size={18} color="#111" />}
-              <Text style={{ color: "#111", fontWeight: "900" }}>{Platform.OS === "web" ? "Baixar / compartilhar" : "Compartilhar"}</Text>
+              <Text style={{ color: "#111", fontWeight: "700" }}>{Platform.OS === "web" ? "Baixar / compartilhar" : "Compartilhar"}</Text>
             </>
           )}
         </Pressable>
@@ -156,9 +156,9 @@ const s = StyleSheet.create({
   back: { flex: 1, backgroundColor: "rgba(0,0,0,.88)", alignItems: "center", justifyContent: "center", gap: 14, padding: 20 },
   head: { width: W, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   canvas: { width: W, height: H, borderRadius: 18, overflow: "hidden", alignItems: "center", paddingTop: 22 },
-  brand: { fontWeight: "900", fontSize: 16, letterSpacing: 2, marginBottom: 14 },
+  brand: { fontWeight: "700", fontSize: 16, letterSpacing: 2, marginBottom: 14 },
   photo: { width: W - 46, height: (W - 46) * 1.25, borderRadius: 12 },
-  user: { fontWeight: "900", fontSize: 14, marginTop: 14 },
+  user: { fontWeight: "700", fontSize: 14, marginTop: 14 },
   sub: { fontSize: 10, opacity: 0.7, marginTop: 3, paddingHorizontal: 16 },
   site: { position: "absolute", bottom: 14, fontSize: 8, opacity: 0.7 },
   bgs: { flexDirection: "row", gap: 12 },

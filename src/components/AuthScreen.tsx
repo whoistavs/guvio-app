@@ -77,7 +77,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void })
       if (e instanceof ConfirmEmailError) {
         setSignup(false);
         setPassword("");
-        Alert.alert("Confirme seu e-mail 📩", e.message);
+        Alert.alert("Confirme seu e-mail", e.message);
       } else {
         Alert.alert("Acesso", e.message || "Não foi possível autenticar.");
       }
@@ -174,7 +174,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void })
           {busy ? (
             <ActivityIndicator color={colors.bg} />
           ) : (
-            <Text style={{ color: colors.bg, fontWeight: "900", fontSize: 14 }}>
+            <Text style={{ color: colors.bg, fontWeight: "700", fontSize: 14 }}>
               {signup ? "Criar conta e Começar" : "Entrar no Guvio"}
             </Text>
           )}
@@ -193,8 +193,8 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void })
             onPress={() => oauth("google")}
             style={[s.social, { borderColor: colors.border }]}
           >
-            <Text style={{ color: colors.text, fontWeight: "800", fontSize: 16 }}>G</Text>
-            <Text style={{ color: colors.text, fontWeight: "800", fontSize: 13 }}>Continuar com Google</Text>
+            <Text style={{ color: colors.text, fontWeight: "600", fontSize: 16 }}>G</Text>
+            <Text style={{ color: colors.text, fontWeight: "600", fontSize: 13 }}>Continuar com Google</Text>
           </Pressable>
         ) : null}
 
@@ -204,7 +204,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void })
             style={[s.social, { borderColor: colors.border }]}
           >
             <Apple size={19} color={colors.icon} />
-            <Text style={{ color: colors.text, fontWeight: "800", fontSize: 13 }}>Continuar com Apple</Text>
+            <Text style={{ color: colors.text, fontWeight: "600", fontSize: 13 }}>Continuar com Apple</Text>
           </Pressable>
         ) : null}
 
@@ -223,8 +223,8 @@ const s = StyleSheet.create({
   c: { paddingHorizontal: 28, maxWidth: 500, width: "100%", alignSelf: "center" },
   logo: { alignItems: "center", marginBottom: 28 },
   logoImg: { width: 88, height: 88, borderRadius: 22, marginBottom: 12 },
-  brand: { fontSize: 32, fontWeight: "900", letterSpacing: 5 },
-  h: { fontSize: 24, fontWeight: "900", marginBottom: 16 },
+  brand: { fontSize: 32, fontWeight: "700", letterSpacing: 5 },
+  h: { fontSize: 24, fontWeight: "700", marginBottom: 16 },
   inputWrap: {
     height: 50,
     borderRadius: 14,

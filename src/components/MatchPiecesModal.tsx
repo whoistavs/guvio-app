@@ -62,7 +62,7 @@ export function MatchPiecesModal({
           <View style={[s.hero, { backgroundColor: colors.surface }]}>
             <FastImage source={item.image} style={s.heroImg} contentFit="cover" />
             <View style={{ flex: 1, gap: 4 }}>
-              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }} numberOfLines={2}>
+              <Text style={{ color: colors.text, fontWeight: "700", fontSize: 16 }} numberOfLines={2}>
                 {item.name}
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -88,7 +88,7 @@ export function MatchPiecesModal({
           ) : (
             groups.map(([slot, list]) => (
               <View key={slot} style={{ marginTop: 20 }}>
-                <Text style={[s.label, { color: colors.muted }]}>{(SLOT_LABEL[slot] || slot).toUpperCase()}</Text>
+                <Text style={[s.label, { color: colors.muted }]}>{SLOT_LABEL[slot] || slot}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
                   {list.map(m => {
                     const on = picked.includes(m.item.id);
@@ -109,10 +109,10 @@ export function MatchPiecesModal({
                             </View>
                           ) : null}
                           <View style={[s.score, { backgroundColor: "rgba(0,0,0,.65)" }]}>
-                            <Text style={{ color: "#FFF", fontSize: 10, fontWeight: "900" }}>{m.score}%</Text>
+                            <Text style={{ color: "#FFF", fontSize: 10, fontWeight: "700" }}>{m.score}%</Text>
                           </View>
                         </View>
-                        <Text style={{ color: colors.text, fontSize: 11, fontWeight: "800", marginTop: 4 }} numberOfLines={1}>
+                        <Text style={{ color: colors.text, fontSize: 11, fontWeight: "600", marginTop: 4 }} numberOfLines={1}>
                           {m.item.name}
                         </Text>
                         <Text style={{ color: colors.muted, fontSize: 10 }} numberOfLines={1}>
@@ -134,7 +134,7 @@ export function MatchPiecesModal({
             }}
             style={[s.save, { backgroundColor: colors.text }]}
           >
-            <Text style={{ color: colors.bg, fontWeight: "900" }}>Salvar look com {picked.length + 1} peças</Text>
+            <Text style={{ color: colors.bg, fontWeight: "700" }}>Salvar look com {picked.length + 1} peças</Text>
           </Pressable>
         ) : null}
       </View>
@@ -145,11 +145,11 @@ export function MatchPiecesModal({
 const s = StyleSheet.create({
   full: { flex: 1, paddingTop: 50 },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingBottom: 6 },
-  h: { fontSize: 22, fontWeight: "900" },
+  h: { fontSize: 22, fontWeight: "700" },
   hero: { flexDirection: "row", gap: 14, padding: 12, borderRadius: 18, alignItems: "center" },
   heroImg: { width: 84, height: 100, borderRadius: 12 },
   dot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1 },
-  label: { fontSize: 11, fontWeight: "900", letterSpacing: 1, marginBottom: 8 },
+  label: { fontSize: 13, fontWeight: "600", marginBottom: 8 },
   img: { width: 104, height: 124, borderRadius: 14 },
   check: { position: "absolute", top: 6, right: 6, width: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   score: { position: "absolute", left: 6, bottom: 6, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },

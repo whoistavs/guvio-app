@@ -79,19 +79,19 @@ export function DailyLookCard({
       <View style={s.actions}>
         {onWore ? (
           <PressableScale haptic onPress={() => onWore(look.items)} style={[s.btn, { backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1 }]}>
-            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12 }}>✓ Usei hoje</Text>
+            <Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Usei hoje</Text>
           </PressableScale>
         ) : null}
         {onSave ? (
           <PressableScale haptic onPress={() => onSave(look.items)} style={[s.btn, { backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1 }]}>
             <Bookmark size={14} color={colors.text} />
-            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12 }}>Salvar</Text>
+            <Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Salvar</Text>
           </PressableScale>
         ) : null}
         {onPublish ? (
           <PressableScale haptic onPress={() => onPublish(look.items)} style={[s.btn, { backgroundColor: colors.text }]}>
             <Send size={14} color={colors.bg} />
-            <Text style={{ color: colors.bg, fontWeight: "900", fontSize: 12 }}>Publicar</Text>
+            <Text style={{ color: colors.bg, fontWeight: "700", fontSize: 12 }}>Publicar</Text>
           </PressableScale>
         ) : null}
       </View>
@@ -102,7 +102,7 @@ export function DailyLookCard({
 const s = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 22, padding: 14, marginBottom: 16 },
   head: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
-  title: { fontSize: 16, fontWeight: "900" },
+  title: { fontSize: 16, fontWeight: "700" },
   iconBtn: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   img: { width: 86, height: 104, borderRadius: 14 },
   actions: { flexDirection: "row", gap: 8, marginTop: 12 },

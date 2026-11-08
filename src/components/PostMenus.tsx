@@ -29,7 +29,7 @@ export function askReport(post: FeedPost): Promise<boolean> {
         onPress: async () => {
           try {
             await reportPost(post.id, reason);
-            toast("Obrigado pela denúncia. Esse post sumiu do seu feed", "🛡️");
+            toast("Obrigado pela denúncia. Esse post sumiu do seu feed");
             resolve(true);
           } catch (e: any) {
             Alert.alert("Erro", e?.message || "Não foi possível denunciar.");
@@ -78,7 +78,7 @@ export function openOwnPostMenu(
       const updated = await setPostFlags(post, flags);
       // arquivado continua na lista com archived: true (as telas escondem); nunca é apagado
       h.onChanged(updated);
-      if (msg) toast(msg, flags.archived ? "📦" : "✓");
+      if (msg) toast(msg);
     } catch (e: any) {
       Alert.alert("Erro", e?.message || "Não foi possível alterar o post.");
     }
@@ -197,11 +197,11 @@ export function EditPostModal({
               <TextInput value={country} onChangeText={setCountry} placeholder="País" placeholderTextColor={colors.muted} style={[s.field, { color: colors.text, backgroundColor: colors.surface }]} />
             </View>
             <TextInput value={style} onChangeText={setStyle} placeholder="Estilo (ex.: Streetwear)" placeholderTextColor={colors.muted} style={[s.field, { color: colors.text, backgroundColor: colors.surface, flex: 0 }]} />
-            <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.2 }}>PEÇAS MARCADAS</Text>
+            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>Peças marcadas</Text>
             <View style={s.chips}>
               {extra.map(t => (
                 <Pressable key={t.id} onPress={() => setTags(prev => prev.filter(x => x.id !== t.id))} style={[s.chip, { backgroundColor: colors.text, borderColor: colors.border }]}>
-                  <Text style={{ color: colors.bg, fontSize: 12, fontWeight: "700" }}>{t.name} ✕</Text>
+                  <Text style={{ color: colors.bg, fontSize: 12, fontWeight: "700" }}>{t.name}  ×</Text>
                 </Pressable>
               ))}
               {wardrobe.map(it => {
@@ -209,7 +209,7 @@ export function EditPostModal({
                 return (
                   <Pressable key={it.id} onPress={() => toggle(it)} style={[s.chip, { backgroundColor: on ? colors.text : colors.surface, borderColor: colors.border }]}>
                     <Text style={{ color: on ? colors.bg : colors.text, fontSize: 12, fontWeight: "700" }}>
-                      {on ? "✓ " : ""}{it.name}
+                      {it.name}
                     </Text>
                   </Pressable>
                 );
@@ -221,10 +221,10 @@ export function EditPostModal({
           </ScrollView>
           <View style={s.row}>
             <Pressable onPress={onClose} style={[s.btn, { backgroundColor: colors.surface }]}>
-              <Text style={{ color: colors.text, fontWeight: "800" }}>Cancelar</Text>
+              <Text style={{ color: colors.text, fontWeight: "600" }}>Cancelar</Text>
             </Pressable>
             <Pressable onPress={save} disabled={saving} style={[s.btn, { backgroundColor: colors.text }]}>
-              {saving ? <ActivityIndicator color={colors.bg} /> : <Text style={{ color: colors.bg, fontWeight: "800" }}>Salvar</Text>}
+              {saving ? <ActivityIndicator color={colors.bg} /> : <Text style={{ color: colors.bg, fontWeight: "600" }}>Salvar</Text>}
             </Pressable>
           </View>
         </View>
@@ -236,7 +236,7 @@ export function EditPostModal({
 const s = StyleSheet.create({
   back: { flex: 1, backgroundColor: "rgba(0,0,0,.35)", justifyContent: "center", padding: 24 },
   card: { borderRadius: 22, padding: 20, gap: 14 },
-  title: { fontSize: 16, fontWeight: "900" },
+  title: { fontSize: 16, fontWeight: "700" },
   input: { minHeight: 110, borderRadius: 14, padding: 14, fontSize: 14, textAlignVertical: "top" },
   row: { flexDirection: "row", gap: 10 },
   btn: { flex: 1, height: 46, borderRadius: 14, alignItems: "center", justifyContent: "center" },

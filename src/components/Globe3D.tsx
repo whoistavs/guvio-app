@@ -823,7 +823,7 @@ export const Globe3D: React.FC<Globe3DProps> = React.memo(
               }}
             >
               <Text style={[styles.offText, { color: dark ? "#8E8E93" : "#8A8A8E" }]}>
-                🌍 Globo em modo de segurança
+                Globo em modo de segurança
               </Text>
               {globeError ? (
                 <Text style={[styles.offSub, { color: dark ? "#6C6C70" : "#A0A0A5" }]} numberOfLines={3}>
@@ -911,12 +911,12 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth
   },
   badgeDot: { width: 8, height: 8, borderRadius: 4 },
-  badgeTitle: { fontSize: 14, fontWeight: "800" },
+  badgeTitle: { fontSize: 14, fontWeight: "600" },
   badgeSub: { fontSize: 10, fontWeight: "600", marginTop: 1 },
   hint: { position: "absolute", bottom: 4, fontSize: 11, fontWeight: "600" },
   diagBottom: { fontSize: 9, textAlign: "center", paddingHorizontal: 16, marginTop: 4 },
   diag: { position: "absolute", top: 0, fontSize: 9, textAlign: "center", paddingHorizontal: 20 },
   off: { flex: 1, alignItems: "center", justifyContent: "center", gap: 6, padding: 24 },
-  offText: { fontSize: 14, fontWeight: "800" },
+  offText: { fontSize: 14, fontWeight: "600" },
   offSub: { fontSize: 11, textAlign: "center" }
 });
