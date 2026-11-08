@@ -84,9 +84,9 @@ export function InstallPrompt() {
 
           {ios ? (
             <View style={{ gap: 12, marginTop: 6, alignSelf: "stretch" }}>
-              <Step n={1} colors={colors} icon={<Share size={18} color={colors.text} />} text="Toque em Compartilhar, na barra do navegador" />
-              <Step n={2} colors={colors} icon={<PlusSquare size={18} color={colors.text} />} text="Escolha “Adicionar à Tela de Início”" />
-              <Step n={3} colors={colors} icon={<Text style={{ color: colors.text, fontWeight: "700" }}>OK</Text>} text="Toque em Adicionar e abra pelo ícone" />
+              <Step n={1} colors={colors} icon={<Share size={18} color={colors.text} />} text="Toque em Compartilhar. No iOS 26 ele fica no ícone à esquerda do endereço (ou em ···)" />
+              <Step n={2} colors={colors} icon={<PlusSquare size={18} color={colors.text} />} text="Role a lista e escolha “Adicionar à Tela de Início”" />
+              <Step n={3} colors={colors} icon={<Text style={{ color: colors.text, fontWeight: "700" }}>OK</Text>} text="Deixe “Abrir como App Web” ligado e toque em Adicionar" />
             </View>
           ) : deferred ? (
             <Pressable onPress={install} style={[s.btn, { backgroundColor: colors.text }]}>
