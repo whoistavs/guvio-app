@@ -464,7 +464,10 @@ function ActivePlayer({
   return (
     <>
       <FastImage source={poster} style={StyleSheet.absoluteFill as any} contentFit="contain" />
-      <VideoView playsInline allowsFullscreen={false} player={player} style={StyleSheet.absoluteFill} contentFit="contain" nativeControls={false} />
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        {/* tamanho em % explícito: no site o <video> ignorava o absoluteFill e aparecia gigante/cortado */}
+        <VideoView playsInline allowsFullscreen={false} player={player} style={{ width: "100%", height: "100%" }} contentFit="contain" nativeControls={false} />
+      </View>
       <Pressable onPress={onTap} style={StyleSheet.absoluteFill}>
         {paused ? (
           <View style={s.center} pointerEvents="box-none">
