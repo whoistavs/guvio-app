@@ -45,7 +45,7 @@ jobs:
           # mais tempo para baixar o Gradle e até 3 tentativas (a rede às vezes engasga)
           sed -i 's/networkTimeout=.*/networkTimeout=120000/' gradle/wrapper/gradle-wrapper.properties
           for i in 1 2 3; do
-            ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --no-daemon && break
+            ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a,x86_64 --no-daemon && break
             if [ "$i" = 3 ]; then exit 1; fi
             echo "Tentativa $i falhou, tentando de novo..."; sleep 20
           done
