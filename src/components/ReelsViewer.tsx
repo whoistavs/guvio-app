@@ -464,7 +464,7 @@ function ActivePlayer({
   return (
     <>
       <FastImage source={poster} style={StyleSheet.absoluteFill as any} contentFit="contain" />
-      <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="contain" nativeControls={false} />
+      <VideoView playsInline allowsFullscreen={false} player={player} style={StyleSheet.absoluteFill} contentFit="contain" nativeControls={false} />
       <Pressable onPress={onTap} style={StyleSheet.absoluteFill}>
         {paused ? (
           <View style={s.center} pointerEvents="box-none">
