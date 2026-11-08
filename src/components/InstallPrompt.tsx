@@ -24,6 +24,8 @@ export function isInstalledApp(): boolean {
   if (Platform.OS !== "web" || typeof window === "undefined") return true;
   return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || (navigator as any).standalone === true;
 }
+export const APK_URL = "https://github.com/whoistavs/guvio-app/releases/download/beta-android/GUVIO.apk";
+const isAndroid = () => Platform.OS === "web" && typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
 const isIOS = () =>
   Platform.OS === "web" &&
   typeof navigator !== "undefined" &&
@@ -99,6 +101,12 @@ export function InstallPrompt() {
               <Step n={2} colors={colors} icon={<Download size={18} color={colors.text} />} text="Toque em “Instalar app” ou “Adicionar à tela inicial”" />
             </View>
           )}
+          {isAndroid() ? (
+            <Pressable onPress={() => window.open(APK_URL, "_blank")} style={[s.btn, { borderWidth: 1, borderColor: colors.border }]}>
+              <Download size={18} color={colors.text} />
+              <Text style={{ color: colors.text, fontWeight: "600" }}>Baixar o app Android (APK)</Text>
+            </Pressable>
+          ) : null}
           <Pressable onPress={close} style={{ marginTop: 14 }} hitSlop={8}>
             <Text style={{ color: colors.muted, fontWeight: "500" }}>Agora não</Text>
           </Pressable>
