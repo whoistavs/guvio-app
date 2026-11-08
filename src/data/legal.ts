@@ -1,8 +1,8 @@
 // Textos de Política de Privacidade e Termos de Uso mostrados em Configurações.
-// Modelo inicial em linguagem simples, alinhado à LGPD. Revise com um advogado
-// antes de publicar na App Store / Play Store e preencha o e-mail de contato.
+// Linguagem simples, alinhado à LGPD (Brasil) e ao RGPD (União Europeia).
+// Revise com um advogado antes de publicar na App Store / Play Store.
 
-export const CONTACT_EMAIL = ""; // ex.: "contato@guvio.app"
+export const CONTACT_EMAIL = "guvioapp@gmail.com";
 
 const contato = CONTACT_EMAIL
   ? `Fale com a gente pelo e-mail ${CONTACT_EMAIL}.`
@@ -18,16 +18,19 @@ export const LEGAL_TEXTS: Record<string, LegalDoc> = {
       {
         h: "1. Quem somos",
         p: [
-          "O Guvio é uma rede social de moda onde você publica looks, organiza seu guarda-roupa digital e descobre o estilo de pessoas do mundo todo. Esta política explica quais dados coletamos, por que e quais são os seus direitos, de acordo com a Lei Geral de Proteção de Dados (Lei 13.709/2018 – LGPD)."
+          "O Guvio é uma rede social de moda onde você publica looks, organiza seu guarda-roupa digital e descobre o estilo de pessoas do mundo todo. Esta política explica quais dados coletamos, por que e quais são os seus direitos, de acordo com a Lei Geral de Proteção de Dados (Lei 13.709/2018 – LGPD) e, para quem está na União Europeia, com o Regulamento Geral sobre a Proteção de Dados (RGPD).",
+          "O Guvio está em versão de testes (beta). Isso quer dizer que recursos podem mudar e que podem acontecer instabilidades."
         ]
       },
       {
         h: "2. Dados que coletamos",
         p: [
           "Dados de conta: e-mail, nome de usuário, nome de exibição e, se você entrar com o Google, o identificador da sua conta Google. Não usamos a sua foto do Google automaticamente.",
-          "Conteúdo que você cria: fotos, legendas, hashtags, comentários, curtidas, stories, mensagens do Direct, peças do guarda-roupa e looks montados.",
+          "Conteúdo que você cria: fotos, vídeos, legendas, hashtags, comentários, curtidas, votos em enquetes, avaliações de looks, stories e respostas a stories, mensagens do Direct, peças do guarda-roupa, lista de desejos, calendário de looks e looks montados.",
+          "Acesso à galeria e à câmera: só quando você escolhe publicar algo, e apenas as fotos e vídeos que você seleciona são enviados.",
           "Localização: somente se você permitir, usamos a sua localização aproximada para marcar a cidade de um look e mostrar o clima. Você pode negar ou revogar essa permissão nos ajustes do celular.",
-          "Dados técnicos básicos: informações necessárias para manter sua sessão ativa e para corrigir erros do app."
+          "Dados técnicos básicos: informações necessárias para manter sua sessão ativa e para corrigir erros do app. Não usamos ferramentas de rastreamento de anúncios.",
+          "Feedbacks que você envia pelo app (texto e, se quiser, um print) são usados só para melhorar o Guvio."
         ]
       },
       {
@@ -40,25 +43,27 @@ export const LEGAL_TEXTS: Record<string, LegalDoc> = {
       {
         h: "4. O que fica público",
         p: [
-          "Seu nome de usuário, nome de exibição, foto de perfil, bio, posts, stories e a cidade marcada nos looks podem ser vistos por outras pessoas do Guvio. Mensagens do Direct são visíveis apenas para quem participa da conversa. Seu guarda-roupa e seus looks salvos são privados."
+          "Seu nome de usuário, nome de exibição, foto de perfil, bio, posts, stories e a cidade marcada nos looks podem ser vistos por outras pessoas do Guvio. Se o seu perfil for privado, posts e stories aparecem só para quem você aprovou. Stories para Melhores amigos aparecem só para essa lista.",
+          "Mensagens do Direct são visíveis apenas para quem participa da conversa. Seu guarda-roupa, lista de desejos, calendário e looks salvos são privados.",
+          "Votos em enquetes de posts e avaliações aparecem apenas como totais. Em enquetes e perguntas de stories, quem publicou o story pode ver quem votou ou respondeu."
         ]
       },
       {
         h: "5. Onde os dados ficam",
         p: [
-          "Os dados são armazenados com o provedor de infraestrutura Supabase, que pode processá-los fora do Brasil, com medidas de segurança como criptografia em trânsito e regras de acesso por usuário."
+          "Os dados são armazenados com o provedor de infraestrutura Supabase, que pode processá-los fora do Brasil e de Portugal, com medidas de segurança como criptografia em trânsito e regras de acesso por usuário. O site do Guvio é hospedado no GitHub Pages."
         ]
       },
       {
         h: "6. Seus direitos",
         p: [
           "Você pode acessar e corrigir seus dados editando o perfil, apagar posts, comentários e stories a qualquer momento, e apagar a sua conta em Configurações › Apagar minha conta. Ao apagar a conta, seu perfil e todo o conteúdo associado são removidos de forma definitiva.",
-          `Para outros pedidos previstos na LGPD (confirmação, portabilidade, informações sobre compartilhamento), ${contato.charAt(0).toLowerCase()}${contato.slice(1)}`
+          `Para outros pedidos previstos na LGPD e no RGPD (confirmação, portabilidade, informações sobre compartilhamento), ${contato.charAt(0).toLowerCase()}${contato.slice(1)}`
         ]
       },
       {
         h: "7. Crianças",
-        p: ["O Guvio não é destinado a menores de 13 anos."]
+        p: ["O Guvio não é destinado a menores de 13 anos. Se você souber de uma conta de criança, avise pelo e-mail de contato para removermos."]
       },
       {
         h: "8. Mudanças",
@@ -76,7 +81,8 @@ export const LEGAL_TEXTS: Record<string, LegalDoc> = {
       {
         h: "1. Aceite",
         p: [
-          "Ao criar uma conta ou usar o Guvio, você concorda com estes Termos e com a Política de Privacidade. Se não concordar, não use o app."
+          "Ao criar uma conta ou usar o Guvio, você concorda com estes Termos e com a Política de Privacidade. Se não concordar, não use o app.",
+          "O Guvio está em versão de testes (beta). Recursos podem mudar ou sair do ar, e a gente conta com seu feedback para melhorar."
         ]
       },
       {
@@ -102,7 +108,7 @@ export const LEGAL_TEXTS: Record<string, LegalDoc> = {
       {
         h: "5. Denúncias e moderação",
         p: [
-          "Você pode denunciar posts e bloquear perfis. Podemos remover conteúdo ou suspender contas que violem estes Termos, com ou sem aviso prévio, para proteger a comunidade."
+          "Você pode denunciar posts, silenciar e bloquear perfis. As denúncias são analisadas pela equipe do Guvio. Podemos remover conteúdo ou suspender contas que violem estes Termos, com ou sem aviso prévio, para proteger a comunidade."
         ]
       },
       {
@@ -119,7 +125,10 @@ export const LEGAL_TEXTS: Record<string, LegalDoc> = {
       },
       {
         h: "8. Lei aplicável",
-        p: ["Estes Termos seguem as leis do Brasil.", contato]
+        p: [
+          "Estes Termos seguem as leis do Brasil. Se você mora em Portugal ou em outro país da União Europeia, também valem os direitos que as leis do seu país garantem.",
+          contato
+        ]
       }
     ]
   }

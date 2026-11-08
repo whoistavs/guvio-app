@@ -432,6 +432,9 @@ export function clearMyCache() {
   if (supabaseConfigured) {
     FastStorage.setItemSync(KEYS.POSTS, []);
     FastStorage.setItemSync(KEYS.STORIES_CACHE, []);
+    // rascunhos e buscas recentes são da conta que saiu
+    FastStorage.setItemSync(KEYS.DRAFTS, []);
+    FastStorage.setItemSync(KEYS.RECENT_SEARCHES, []);
   }
 }
 

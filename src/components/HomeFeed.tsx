@@ -136,7 +136,7 @@ export function HomeFeed({
   const lastTap = useRef<Record<string, number>>({});
 
   const [myId, setMyId] = useState<string | null>(null);
-  const [suggested, setSuggested] = useState<UserProfile[]>(MOCK_PROFILES);
+  const [suggested, setSuggested] = useState<UserProfile[]>([]);
 
   useEffect(() => {
     if (refreshKey > 0) loadStories().then(setStories);
