@@ -64,20 +64,29 @@ export type ReelsActions = {
   onReposted?: (p: FeedPost) => void;
 };
 
-/** Vídeos em tela cheia, um por tela, arrastando para cima/baixo */
-export function ReelsViewer({
-  posts,
-  startId,
-  onClose,
-  actions
-}: {
+type ViewerProps = {
   posts: FeedPost[];
   startId: string | null;
   onClose: () => void;
   actions: ReelsActions;
-}) {
+};
+
+/** Vídeos em tela cheia, um por tela, arrastando para cima/baixo */
+export function ReelsViewer(props: ViewerProps) {
+  if (!props.startId) return null;
+  // "key": cada abertura começa do zero, já no vídeo tocado
+  return <Viewer key={props.startId} {...props} startId={props.startId} />;
+}
+
+function Viewer({ posts: livePosts, startId, onClose, actions }: ViewerProps & { startId: string }) {
+  // a ordem fica congelada enquanto a tela está aberta (curtir ou "não tenho interesse" não embaralha a lista)
+  const [order] = useState(() => livePosts.map(p => p.id));
+  const posts = useMemo(() => {
+    const byId = new Map(livePosts.map(p => [p.id, p]));
+    return order.map(id => byId.get(id)).filter(Boolean) as FeedPost[];
+  }, [livePosts, order]);
   const [size, setSize] = useState(() => Dimensions.get("window"));
-  const [active, setActive] = useState(0);
+  const [active, setActive] = useState(() => Math.max(0, livePosts.findIndex(p => p.id === startId)));
   // no site o navegador só deixa tocar sozinho sem som
   const [muted, setMuted] = useState(Platform.OS === "web");
   const [speed, setSpeed] = useState(1);
@@ -87,18 +96,13 @@ export function ReelsViewer({
   const [menu, setMenu] = useState<FeedPost | null>(null);
   const listRef = useRef<FlatList<FeedPost>>(null);
 
-  const startIndex = useMemo(() => Math.max(0, posts.findIndex(p => p.id === startId)), [startId]);
-
-  useEffect(() => {
-    if (startId) setActive(startIndex);
-  }, [startId]);
+  const [startIndex] = useState(active);
 
   useEffect(() => {
     const sub = Dimensions.addEventListener("change", ({ window }) => setSize(window));
     return () => sub.remove();
   }, []);
 
-  if (!startId) return null;
   const H = size.height;
 
   const close = () => {
@@ -142,7 +146,8 @@ export function ReelsViewer({
             <Reel
               post={item}
               height={H}
-              active={index === active && !comments && !share && !repost}
+              active={index === active}
+              suspended={!!comments || !!share || !!repost}
               muted={muted}
               speed={speed}
               onToggleMute={() => setMuted(m => !m)}
@@ -208,6 +213,7 @@ function Reel({
   post,
   height,
   active,
+  suspended,
   muted,
   speed,
   onToggleMute,
@@ -221,6 +227,7 @@ function Reel({
   post: FeedPost;
   height: number;
   active: boolean;
+  suspended: boolean;
   muted: boolean;
   speed: number;
   onToggleMute: () => void;
@@ -252,7 +259,7 @@ function Reel({
   return (
     <View style={[s.reel, { height }]}>
       {active && post.videoUrl ? (
-        <ActivePlayer uri={post.videoUrl} poster={post.image} muted={muted} speed={speed} onToggleMute={onToggleMute} onDoubleTap={likeByDoubleTap} />
+        <ActivePlayer uri={post.videoUrl} poster={post.image} suspended={suspended} muted={muted} speed={speed} onToggleMute={onToggleMute} onDoubleTap={likeByDoubleTap} />
       ) : (
         <FastImage source={post.image} style={StyleSheet.absoluteFill as any} contentFit="contain" />
       )}
@@ -340,6 +347,7 @@ function SideBtn({ icon, label, onPress }: { icon: React.ReactNode; label?: stri
 function ActivePlayer({
   uri,
   poster,
+  suspended,
   muted,
   speed,
   onToggleMute,
@@ -347,6 +355,7 @@ function ActivePlayer({
 }: {
   uri: string;
   poster: string;
+  suspended: boolean;
   muted: boolean;
   speed: number;
   onToggleMute: () => void;
@@ -365,6 +374,15 @@ function ActivePlayer({
   const lastTap = useRef(0);
   const single = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const suspendedRef = useRef(suspended);
+  useEffect(() => {
+    // comentários/enviar por cima: pausa e depois continua de onde parou
+    suspendedRef.current = suspended;
+    try {
+      if (suspended) player.pause();
+      else if (!userPaused.current) player.play();
+    } catch {}
+  }, [suspended]);
   useEffect(() => {
     player.muted = muted;
   }, [muted]);
@@ -378,7 +396,7 @@ function ActivePlayer({
     const t = setInterval(() => {
       try {
         setTime({ cur: player.currentTime || 0, dur: player.duration || 0 });
-        if (!userPaused.current) {
+        if (!userPaused.current && !suspendedRef.current) {
           // o navegador pode ter barrado o play: tenta de novo
           if (!player.playing) player.play();
         }

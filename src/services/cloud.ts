@@ -267,6 +267,20 @@ async function attachExtras(rows: any[], posts: FeedPost[]): Promise<FeedPost[]>
   if (!posts.length) return posts;
   const uid = await me();
   const ids = posts.map(p => p.id);
+  // contagens prontas do servidor (migration_010); se ainda não existir, conta aqui
+  const fast = await db().rpc("post_extras", { ids });
+  if (!fast.error && Array.isArray(fast.data)) {
+    const by = new Map<string, any>((fast.data as any[]).map(x => [x.post_id, x]));
+    return posts.map((p, i) => {
+      const x = by.get(p.id);
+      const rating = { fire: x?.fire || 0, ice: x?.ice || 0, mine: ((x?.mine || 0) as 1 | -1 | 0) };
+      const row = rows[i];
+      if (row?.kind !== "poll") return { ...p, rating };
+      const options: string[] = Array.isArray(row.poll?.options) ? row.poll.options : ["Look 1", "Look 2"];
+      const votes = options.map((_, k) => Number(x?.votes?.[String(k)] || 0));
+      return { ...p, rating, poll: { options, votes, myVote: x?.my_vote ?? null } };
+    });
+  }
   const pollIds = rows.filter(r => r.kind === "poll").map(r => r.id);
   const [ratings, votes] = await Promise.all([
     db().from("post_ratings").select("post_id, user_id, value").in("post_id", ids),

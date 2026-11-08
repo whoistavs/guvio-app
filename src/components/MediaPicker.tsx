@@ -57,10 +57,15 @@ export function MediaPicker({
   visible,
   maxPhotos,
   onClose,
-  onDone
+  onDone,
+  lockAspect,
+  photosOnly
 }: {
   visible: boolean;
   maxPhotos: number;
+  /** adicionando fotos a um post: usa a mesma proporção das que já estão */
+  lockAspect?: number;
+  photosOnly?: boolean;
   onClose: () => void;
   onDone: (r: PickerResult) => void;
 }) {
@@ -157,11 +162,12 @@ export function MediaPicker({
   const base = selected.find(i => !i.isVideo) || focus;
   // proporção do quadro: a escolhida ou a da foto (no carrossel, a da primeira)
   const frameRatio = useMemo(() => {
+    if (lockAspect) return lockAspect;
     if (!base) return 1;
     if (hasVideo) return base.width / base.height;
     if (ratio === "original") return base.width / base.height;
     return RATIO_VALUE[ratio];
-  }, [base?.id, ratio, hasVideo]);
+  }, [base?.id, ratio, hasVideo, lockAspect]);
 
   // o quadro cabe num quadrado W x W
   const fw = frameRatio >= 1 ? W : W * frameRatio;
@@ -234,7 +240,14 @@ export function MediaPicker({
             const cur = cropsRef.current[it.id] || { z: 1, tx: 0, ty: 0 };
             next = { ...cur, z };
           } else {
-            next = { z: cropsRef.current[it.id]?.z || st.startZ, tx: st.startTx + g.dx, ty: st.startTy + g.dy };
+            const cur = cropsRef.current[it.id] || { z: 1, tx: 0, ty: 0 };
+            if (st.pinch) {
+              // soltou um dedo depois de pinçar: continua arrastando de onde está, sem pulo
+              st.pinch = false;
+              st.startTx = cur.tx - g.dx;
+              st.startTy = cur.ty - g.dy;
+            }
+            next = { z: cur.z, tx: st.startTx + g.dx, ty: st.startTy + g.dy };
           }
           setCrops(prev => ({ ...prev, [it.id]: clamp(it, next) }));
         },
@@ -255,6 +268,10 @@ export function MediaPicker({
 
   const tapItem = (it: Item) => {
     tapFeedback();
+    if (photosOnly && it.isVideo) {
+      Alert.alert("Só fotos aqui", "Para publicar um vídeo, comece uma publicação nova.");
+      return;
+    }
     if (!multi) {
       setSelected([it]);
       setFocusId(it.id);
@@ -302,7 +319,7 @@ export function MediaPicker({
 
   // ---- câmera e galeria do sistema (também é o caminho no site) ----
   const fromPicker = (assetsIn: ImagePicker.ImagePickerAsset[]) => {
-    const list: Item[] = assetsIn.map((a, i) => ({
+    const list: Item[] = assetsIn.filter(a => !(photosOnly && a.type === "video")).map((a, i) => ({
       id: `pick-${Date.now()}-${i}`,
       uri: a.uri,
       width: a.width || 1080,
@@ -519,7 +536,7 @@ export function MediaPicker({
           <Text style={{ color: colors.muted, textAlign: "center" }}>Escolha fotos ou um vídeo abaixo</Text>
         </View>
       )}
-      {focus && !hasVideo ? (
+      {focus && !hasVideo && !lockAspect ? (
         <Pressable
           onPress={() => {
             tapFeedback();

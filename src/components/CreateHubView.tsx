@@ -243,7 +243,7 @@ export function CreateHubView({
           ) : null}
 
         </ScrollView>
-        <MediaPicker visible={!!picker} maxPhotos={picker === "add" ? Math.max(1, MAX_PHOTOS - images.length) : MAX_PHOTOS} onClose={() => setPicker(null)} onDone={onPicked} />
+        <MediaPicker visible={!!picker} maxPhotos={picker === "add" ? Math.max(1, MAX_PHOTOS - images.length) : MAX_PHOTOS} lockAspect={picker === "add" ? aspect : undefined} photosOnly={picker === "add"} onClose={() => setPicker(null)} onDone={onPicked} />
       </>
     );
   }
@@ -433,7 +433,7 @@ export function CreateHubView({
         )}
       </Pressable>
     </ScrollView>
-    <MediaPicker visible={!!picker} maxPhotos={picker === "add" ? Math.max(1, MAX_PHOTOS - images.length) : MAX_PHOTOS} onClose={() => setPicker(null)} onDone={onPicked} />
+    <MediaPicker visible={!!picker} maxPhotos={picker === "add" ? Math.max(1, MAX_PHOTOS - images.length) : MAX_PHOTOS} lockAspect={picker === "add" ? aspect : undefined} photosOnly={picker === "add"} onClose={() => setPicker(null)} onDone={onPicked} />
     </>
   );
 }
