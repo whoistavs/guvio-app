@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { topPad } from "../utils/insets";
 import { KeyboardSafeView } from "./KeyboardSafeView";
 import { Check, ExternalLink, ImagePlus, Plus, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
@@ -183,7 +184,7 @@ export function WishlistModal({
 }
 
 const s = StyleSheet.create({
-  full: { flex: 1, paddingTop: 50 },
+  full: { flex: 1, paddingTop: topPad(50) },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20 },
   h: { fontSize: 26, fontWeight: "700" },
   c: { padding: 20, paddingBottom: 60 },

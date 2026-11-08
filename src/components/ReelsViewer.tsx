@@ -12,6 +12,7 @@ import {
   Text,
   View
 } from "react-native";
+import { topPad } from "../utils/insets";
 import { useVideoPlayer, VideoView } from "expo-video";
 import {
   Bookmark,
@@ -609,12 +610,12 @@ const s = StyleSheet.create({
   reel: { width: "100%", backgroundColor: "#000", overflow: "hidden" },
   center: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
   fade: { position: "absolute", left: 0, right: 0, bottom: 0, height: 260, backgroundColor: "rgba(0,0,0,.28)" },
-  top: { position: "absolute", top: Platform.OS === "ios" ? 50 : 16, left: 8, right: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  top: { position: "absolute", top: topPad(16), left: 8, right: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   topBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   topTitle: { color: "#FFF", fontSize: 17, fontWeight: "700" },
   bigPlay: { width: 74, height: 74, borderRadius: 37, backgroundColor: "rgba(0,0,0,.45)", alignItems: "center", justifyContent: "center", paddingLeft: 4 },
   pausedMute: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,.45)", alignItems: "center", justifyContent: "center", marginBottom: 18 },
-  mutedPill: { position: "absolute", top: Platform.OS === "ios" ? 104 : 70, right: 16, width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(0,0,0,.5)", alignItems: "center", justifyContent: "center" },
+  mutedPill: { position: "absolute", top: topPad(16) + 54, right: 16, width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(0,0,0,.5)", alignItems: "center", justifyContent: "center" },
   side: { position: "absolute", right: 10, bottom: 120, alignItems: "center", gap: 18 },
   sideBtn: { alignItems: "center", gap: 4, minWidth: 48 },
   sideLabel: { color: "#FFF", fontSize: 12, fontWeight: "600", textShadowColor: "rgba(0,0,0,.5)", textShadowRadius: 4 },

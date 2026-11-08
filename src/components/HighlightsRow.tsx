@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { topPad } from "../utils/insets";
 import { Check, Plus, X } from "lucide-react-native";
 import { Highlight, StoryItem, UserStoryGroup } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
@@ -196,7 +197,7 @@ const s = StyleSheet.create({
   circle: { width: 64, height: 64, borderRadius: 32, borderWidth: 1.5, padding: 3, overflow: "hidden" },
   cover: { width: "100%", height: "100%", borderRadius: 30 },
   label: { fontSize: 11, fontWeight: "600" },
-  full: { flex: 1, paddingTop: 50 },
+  full: { flex: 1, paddingTop: topPad(50) },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, marginBottom: 14 },
   input: { marginHorizontal: 16, height: 46, borderRadius: 14, paddingHorizontal: 14, marginBottom: 14 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 2, paddingBottom: 40 },

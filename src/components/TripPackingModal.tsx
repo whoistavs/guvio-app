@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { topPad } from "../utils/insets";
 import { MapPin, Search, X } from "lucide-react-native";
 import { WardrobeItem } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
@@ -204,7 +205,7 @@ export function TripPackingModal({
 }
 
 const s = StyleSheet.create({
-  full: { flex: 1, paddingTop: 50 },
+  full: { flex: 1, paddingTop: topPad(50) },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20 },
   h: { fontSize: 24, fontWeight: "700" },
   c: { padding: 20, paddingBottom: 60 },

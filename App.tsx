@@ -7,7 +7,6 @@ import {
   Platform,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -18,6 +17,7 @@ import { AppThemeProvider, useAppTheme } from "./src/context/AppTheme";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import { UpdateBanner } from "./src/components/UpdateBanner";
 import { InstallPrompt } from "./src/components/InstallPrompt";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { WebAlertHost, installWebAlert } from "./src/components/WebAlertHost";
 
 installWebAlert();
@@ -761,8 +761,10 @@ export default function App() {
   return (
     <AppThemeProvider>
       <ErrorBoundary>
-        <Guvio />
-        <WebAlertHost />
+        <SafeAreaProvider>
+          <Guvio />
+          <WebAlertHost />
+        </SafeAreaProvider>
       </ErrorBoundary>
     </AppThemeProvider>
   );

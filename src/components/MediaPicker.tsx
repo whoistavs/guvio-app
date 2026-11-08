@@ -14,6 +14,7 @@ import {
   Text,
   View
 } from "react-native";
+import { topPad } from "../utils/insets";
 import * as ImagePicker from "expo-image-picker";
 import { Camera, Copy, ImagePlus, Minus, Plus, Scan, X } from "lucide-react-native";
 import { useAppTheme } from "../context/AppTheme";
@@ -682,7 +683,7 @@ export function MediaPicker({
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, paddingTop: Platform.OS === "ios" ? 50 : 10 },
+  root: { flex: 1, paddingTop: topPad(10) },
   head: { height: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
   headBtn: { minWidth: 70, height: 40, justifyContent: "center" },
   title: { fontSize: 17, fontWeight: "700" },

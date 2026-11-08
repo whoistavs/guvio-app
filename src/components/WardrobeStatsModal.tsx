@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { topPad } from "../utils/insets";
 import { X } from "lucide-react-native";
 import { FeedPost, Outfit, WardrobeItem } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
@@ -191,7 +192,7 @@ export function WardrobeStatsModal({
 }
 
 const s = StyleSheet.create({
-  full: { flex: 1, paddingTop: 50 },
+  full: { flex: 1, paddingTop: topPad(50) },
   paletteBox: { borderRadius: 16, padding: 14 },
   chip: { width: 40, height: 40, borderRadius: 20, borderWidth: 1 },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, marginBottom: 6 },

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { topPad } from "../utils/insets";
 import { Check, X } from "lucide-react-native";
 import { WardrobeItem } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
@@ -143,7 +144,7 @@ export function MatchPiecesModal({
 }
 
 const s = StyleSheet.create({
-  full: { flex: 1, paddingTop: 50 },
+  full: { flex: 1, paddingTop: topPad(50) },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingBottom: 6 },
   h: { fontSize: 22, fontWeight: "700" },
   hero: { flexDirection: "row", gap: 14, padding: 12, borderRadius: 18, alignItems: "center" },

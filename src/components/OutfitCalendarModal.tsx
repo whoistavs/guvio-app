@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { topPad } from "../utils/insets";
 import { ChevronLeft, ChevronRight, X } from "lucide-react-native";
 import { OutfitLogEntry, Outfit, WardrobeItem } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
@@ -188,7 +189,7 @@ export function OutfitCalendarModal({
 }
 
 const s = StyleSheet.create({
-  full: { flex: 1, paddingTop: 50 },
+  full: { flex: 1, paddingTop: topPad(50) },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20 },
   h: { fontSize: 24, fontWeight: "700" },
   c: { padding: 16, paddingBottom: 60 },

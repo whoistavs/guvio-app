@@ -3,7 +3,6 @@ import {
   Dimensions,
   Modal,
   Pressable,
-  SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
@@ -13,6 +12,7 @@ import {
   Animated,
   ScrollView
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { BarChart2, Camera, ChevronLeft, Eye, Heart, HelpCircle, ImagePlus, MoveVertical, Plus, Send, Square, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { StoryOverlay, StorySticker } from "../data/mockData";

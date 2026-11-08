@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { topPad } from "../utils/insets";
 import { MessageCircle, Search, SquarePen, X } from "lucide-react-native";
 import { ChatView } from "./ChatView";
 import { DirectThread, UserProfile } from "../data/mockData";
@@ -115,7 +116,7 @@ export function DirectView({
         }
       />
       <Modal visible={picking} animationType="slide" onRequestClose={() => setPicking(false)}>
-        <View style={[s.full, { backgroundColor: colors.bg, paddingTop: Platform.OS === "ios" ? 50 : 10 }]}>
+        <View style={[s.full, { backgroundColor: colors.bg, paddingTop: topPad(10) }]}>
           <View style={s.pickHead}>
             <Text style={[s.user, { color: colors.text, fontSize: 17 }]}>Nova mensagem</Text>
             <Pressable onPress={() => setPicking(false)} hitSlop={10}>
