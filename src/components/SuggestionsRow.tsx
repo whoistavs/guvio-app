@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { noSwipeBack } from "./gestures";
 import { X } from "lucide-react-native";
 import { UserProfile } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
@@ -48,7 +49,7 @@ export function SuggestionsRow({
   return (
     <View style={s.wrap}>
       <Text style={[s.title, { color: colors.text }]}>{title}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row}>
+      <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row}>
         {visible.map(p => {
           const on = following.includes(p.id) || following.includes(p.username);
           return (

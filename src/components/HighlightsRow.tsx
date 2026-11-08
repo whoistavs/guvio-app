@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { noSwipeBack } from "./gestures";
 import { topPad } from "../utils/insets";
 import { Check, Plus, X } from "lucide-react-native";
 import { Highlight, StoryItem, UserStoryGroup } from "../data/mockData";
@@ -53,7 +54,7 @@ export function HighlightsRow({
 
   return (
     <>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row}>
+      <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row}>
         {isMe ? (
           <Pressable onPress={() => setEditing("new")} style={s.item}>
             <View style={[s.circle, { borderColor: colors.border, alignItems: "center", justifyContent: "center" }]}>

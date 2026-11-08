@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ReelsViewer } from "./ReelsViewer";
 import { loadFollowedUsers as loadFollowedIds, saveFollowedUsers as saveFollowedIds } from "../services/storage";
 import { ActivityIndicator, Alert, Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { noSwipeBack } from "./gestures";
 import { Bookmark, Heart, MapPin, MessageCircle, MoreHorizontal, Send, Shirt } from "lucide-react-native";
 import { FeedPost } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
@@ -228,7 +229,7 @@ export function PostDetailView({
               <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600", marginBottom: 8 }}>
                 Peças do look
               </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                 {post.clothingTags.map(t => (
                   <View key={t.id} style={[s.piece, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                     {t.image ? (

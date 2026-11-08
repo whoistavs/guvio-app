@@ -71,7 +71,7 @@ import { ShareProfileModal } from "./ShareProfileModal";
 import { GridSkeleton, ProfileSkeleton } from "./SkeletonLoader";
 import { HighlightsRow } from "./HighlightsRow";
 import { canShowInstall, openInstallHelp } from "./InstallPrompt";
-import { peekPost } from "./gestures";
+import { PeekTile, noSwipeBack } from "./gestures";
 import { CloseFriendsView } from "./CloseFriendsView";
 import { BioLink } from "./BioExtras";
 import { AchievementsRow } from "./AchievementsRow";
@@ -111,7 +111,7 @@ function Grid({
   return (
     <View style={s.grid}>
       {posts.map(p => (
-        <Pressable key={p.id} onPress={() => onSelectPost?.(p)} onLongPress={() => peekPost(p)} onPressOut={() => peekPost(null)} delayLongPress={280} style={s.tileWrap}>
+        <PeekTile key={p.id} post={p} onPress={() => onSelectPost?.(p)} style={s.tileWrap}>
           <FastImage source={p.image} style={s.tile} contentFit="cover" transition={100} />
           {p.pinned ? (
             <View style={s.tileIcon}>
@@ -134,7 +134,7 @@ function Grid({
               <Layers size={13} color="#FFF" />
             </View>
           ) : null}
-        </Pressable>
+        </PeekTile>
       ))}
     </View>
   );
@@ -1152,7 +1152,7 @@ export function SimpleSettingsPage({
         )
       ) : kind === "saved" ? (
         <>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.colRow}>
+          <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.colRow}>
             {[{ id: "", name: "Todos", count: savedPosts.length, cover: savedPosts[0]?.image } as SavedCollection, ...cols].map(c => {
               const on = (activeCol || "") === c.id;
               return (

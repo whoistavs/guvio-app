@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Dimensions, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { noSwipeBack } from "./gestures";
 import { X } from "lucide-react-native";
 import { FastImage } from "./FastImage";
 
@@ -28,7 +29,7 @@ export function ImageZoomModal({
   return (
     <Modal visible animationType="fade" transparent={false} onRequestClose={onClose} statusBarTranslucent>
       <View style={s.back}>
-        <ScrollView
+        <ScrollView {...noSwipeBack}
           ref={pager}
           horizontal
           pagingEnabled

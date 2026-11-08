@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { noSwipeBack } from "./gestures";
 import { RefreshCw, Send, Sun, Bookmark } from "lucide-react-native";
 import { WardrobeItem } from "../data/mockData";
 import { WeatherData } from "../services/weather";
@@ -66,7 +67,7 @@ export function DailyLookCard({
         </Pressable>
       </View>
       <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 10 }}>{look.reason}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+      <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
         {look.items.map(i => (
           <View key={i.id} style={{ width: 86 }}>
             <FastImage source={i.image} style={s.img} contentFit="cover" />

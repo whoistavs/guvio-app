@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { noSwipeBack } from "./gestures";
 import { topPad } from "../utils/insets";
 import { ChevronLeft, ChevronRight, X } from "lucide-react-native";
 import { OutfitLogEntry, Outfit, WardrobeItem } from "../data/mockData";
@@ -137,7 +138,7 @@ export function OutfitCalendarModal({
               {editing ? new Date(editing.day + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" }) : ""}
             </Text>
             {outfits.length ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 10 }}>
+              <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 10 }}>
                 {outfits.map(o => (
                   <Pressable
                     key={o.id}

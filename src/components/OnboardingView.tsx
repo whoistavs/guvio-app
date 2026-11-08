@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
 import { Dimensions, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { noSwipeBack } from "./gestures";
 import { Globe2, Images, Shirt, Trophy } from "lucide-react-native";
 import { useAppTheme } from "../context/AppTheme";
 import { FastStorage } from "../services/FastStorage";
@@ -57,7 +58,7 @@ export function OnboardingView({ onDone }: { onDone: () => void }) {
           <View />
         )}
       </View>
-      <ScrollView
+      <ScrollView {...noSwipeBack}
         ref={ref}
         horizontal
         pagingEnabled

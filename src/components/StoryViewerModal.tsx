@@ -123,6 +123,8 @@ export function StoryViewerModal({
   // ---- gestos: arrastar para baixo fecha; para o lado troca de pessoa ----
   const dragY = useRef(new Animated.Value(0)).current;
   const dragX = useRef(new Animated.Value(0)).current;
+  // lado em que a "aresta do cubo" fica enquanto troca de pessoa
+  const [cubeEdge, setCubeEdge] = useState<"left" | "right">("right");
   const navRef = useRef({ next: () => {}, prev: () => {}, close: () => {} });
   navRef.current = {
     next: () => {
@@ -155,6 +157,7 @@ export function StoryViewerModal({
         }
         if (Math.abs(g.dx) > 14 && Math.abs(g.dx) > Math.abs(g.dy) * 1.3) {
           axis = "x";
+          setCubeEdge(g.dx < 0 ? "right" : "left");
           return true;
         }
         return false;
@@ -287,9 +290,19 @@ export function StoryViewerModal({
         style={[
           s.container,
           {
+            transformOrigin: cubeEdge,
             transform: [
+              { perspective: 900 },
               { translateY: dragY },
               { translateX: dragX },
+              {
+                // efeito cubo: a tela gira em volta da aresta enquanto troca de pessoa
+                rotateY: dragX.interpolate({
+                  inputRange: [-Dimensions.get("window").width, 0, Dimensions.get("window").width],
+                  outputRange: ["-75deg", "0deg", "75deg"],
+                  extrapolate: "clamp"
+                })
+              },
               { scale: dragY.interpolate({ inputRange: [0, 600], outputRange: [1, 0.85], extrapolate: "clamp" }) }
             ],
             borderRadius: 18,

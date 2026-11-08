@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Expand } from "lucide-react-native";
 import { FastImage } from "./FastImage";
 import { VideoMedia } from "./VideoMedia";
-import { usePinchZoom } from "./gestures";
+import { usePinchZoom, noSwipeBack } from "./gestures";
 
 /**
  * Foto(s) do post: uma foto ou carrossel (arrastar para os lados), com bolinhas.
@@ -71,7 +71,7 @@ export function PostMedia({
           <FastImage source={list[0]} style={imgStyle} contentFit={fit} transition={120} />
         </Pressable>
       ) : (
-        <ScrollView
+        <ScrollView {...noSwipeBack}
           horizontal
           pagingEnabled
           nestedScrollEnabled

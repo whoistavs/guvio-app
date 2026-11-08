@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { noSwipeBack } from "./gestures";
 import { BarChart3, CalendarDays, Camera, Check, Heart, ImagePlus, Layers, Luggage, Plus, Send, Tag, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { ClothingTag, Outfit, OutfitStyle, STYLES, WardrobeItem } from "../data/mockData";
@@ -171,7 +172,7 @@ export function WardrobeView({
   };
 
   const renderChips = (list: string[], value: string, set: (v: string) => void) => (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
+    <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
       {list.map(v => {
         const on = v === value;
         return (
@@ -396,7 +397,7 @@ export function WardrobeView({
                       <Trash2 size={16} color={colors.muted} />
                     </Pressable>
                   </View>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                     {pieces.map(p => (
                       <FastImage key={p.id} source={p.image} style={s.outfitImg} contentFit="cover" />
                     ))}

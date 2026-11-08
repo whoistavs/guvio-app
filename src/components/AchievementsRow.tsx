@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text } from "react-native";
+import { noSwipeBack } from "./gestures";
 import { FeedPost, UserProfile } from "../data/mockData";
 import { AppIcon } from "./AppIcon";
 import { useAppTheme } from "../context/AppTheme";
@@ -50,7 +51,7 @@ export function AchievementsRow({ profile, posts }: { profile: UserProfile; post
   if (!list.length) return null;
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row}>
+    <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row}>
       {list.map(a => (
         <Pressable
           key={a.id}

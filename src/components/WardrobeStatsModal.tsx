@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { noSwipeBack } from "./gestures";
 import { topPad } from "../utils/insets";
 import { X } from "lucide-react-native";
 import { FeedPost, Outfit, WardrobeItem } from "../data/mockData";
@@ -172,7 +173,7 @@ export function WardrobeStatsModal({
                 <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 10 }}>
                   Peças que ainda não apareceram em nenhum post nem look. Que tal usá-las esta semana?
                 </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                   {stats.forgotten.map(i => (
                     <View key={i.id} style={{ width: 80 }}>
                       <FastImage source={i.image} style={{ width: 80, height: 96, borderRadius: 12 }} contentFit="cover" />

@@ -2,7 +2,37 @@ import React, { useMemo, useRef } from "react";
 import { Animated, Dimensions, Easing, PanResponder, Platform, View } from "react-native";
 
 const ND = Platform.OS !== "web";
+
+// site: fotos não podem ser "arrastadas" pelo navegador nem abrir o menu "Salvar imagem" do iPhone
+// ao segurar — isso roubava os gestos (prévia, pinça, voltar)
+if (Platform.OS === "web" && typeof document !== "undefined" && !document.getElementById("guvio-gestures-css")) {
+  const st = document.createElement("style");
+  st.id = "guvio-gestures-css";
+  st.textContent = "img{-webkit-user-drag:none;user-drag:none;-webkit-touch-callout:none}";
+  document.head.appendChild(st);
+  document.addEventListener("dragstart", e => {
+    if ((e.target as any)?.tagName === "IMG") e.preventDefault();
+  }, true);
+}
 const EDGE = 28; // largura da faixa da borda que aceita o gesto
+
+/**
+ * Listas que rolam para o lado (carrossel de fotos, stories, chips...) avisam quando o dedo
+ * encosta nelas, para o "arrastar para voltar" não roubar o gesto delas.
+ * Uso: <ScrollView horizontal {...noSwipeBack}>
+ */
+let touchingSideScroller = false;
+export const noSwipeBack = {
+  onTouchStart: () => {
+    touchingSideScroller = true;
+  },
+  onTouchEnd: () => {
+    touchingSideScroller = false;
+  },
+  onTouchCancel: () => {
+    touchingSideScroller = false;
+  }
+};
 
 /**
  * Arrastar a partir da borda da tela.
@@ -15,8 +45,11 @@ export function EdgeSwipe({
   interactive = true,
   enabled = true,
   under = "#000",
+  anywhere = false,
   children
 }: {
+  /** aceita o gesto começando em qualquer lugar da tela (fora das listas que rolam para o lado) */
+  anywhere?: boolean;
   /** cor que aparece por trás enquanto a tela desliza */
   under?: string;
   side?: "left" | "right";
@@ -36,7 +69,12 @@ export function EdgeSwipe({
     const fromEdge = (x0: number) => (side === "left" ? x0 <= EDGE : x0 >= W() - EDGE);
     const dir = side === "left" ? 1 : -1;
     // x0 ainda vale 0 antes do gesto ser aceito: o início real é a posição atual menos o quanto andou
-    const grab = (g: any) => on.current && fromEdge(g.moveX - g.dx) && g.dx * dir > 8 && Math.abs(g.dx) > Math.abs(g.dy) * 1.4;
+    const grab = (g: any) => {
+      if (!on.current || g.dx * dir <= 8) return false;
+      if (fromEdge(g.moveX - g.dx)) return Math.abs(g.dx) > Math.abs(g.dy) * 1.4;
+      // fora da borda: só se for bem horizontal e não estiver numa lista que rola para o lado
+      return anywhere && !touchingSideScroller && g.dx * dir > 14 && Math.abs(g.dx) > Math.abs(g.dy) * 2;
+    };
     return PanResponder.create({
       onMoveShouldSetPanResponderCapture: (_e, g) => grab(g),
       onMoveShouldSetPanResponder: (_e, g) => grab(g),
@@ -63,7 +101,7 @@ export function EdgeSwipe({
       },
       onPanResponderTerminate: () => Animated.spring(x, { toValue: 0, useNativeDriver: ND }).start()
     });
-  }, [side, interactive]);
+  }, [side, interactive, anywhere]);
 
   if (!interactive) {
     return (
@@ -255,41 +293,237 @@ export function usePinchZoom(render: () => React.ReactNode) {
 }
 
 /**
- * Segurar uma miniatura da grade: mostra uma prévia grande do post; soltar fecha.
- * Uso: onLongPress={() => peekPost(p)} onPressOut={() => peekPost(null)}
+ * Segurar uma miniatura: abre a prévia grande com botões (Curtir, Ver perfil, Enviar).
+ * Sem soltar, arraste o dedo até um botão e solte para escolher — como no Instagram.
  */
-let showPeek: ((p: any) => void) | null = null;
+type PeekActions = { onProfile?: (username: string) => void };
+type PeekApi = { open: (p: any, a?: PeekActions) => void; move: (x: number, y: number) => void; release: () => void; close: () => void };
+let peekApi: PeekApi | null = null;
+/** compatibilidade: abrir/fechar sem botões */
 export function peekPost(p: any | null) {
-  showPeek?.(p);
+  if (p) peekApi?.open(p);
+  else peekApi?.close();
+}
+
+/** miniatura que sabe abrir a prévia (use no lugar do Pressable da grade) */
+export function PeekTile({
+  post,
+  onPress,
+  actions,
+  style,
+  children
+}: {
+  post: any;
+  onPress: () => void;
+  actions?: PeekActions;
+  style?: any;
+  children: React.ReactNode;
+}) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const open = useRef(false);
+  const start = useRef({ x: 0, y: 0 });
+  const clear = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+  // no site, seleção de texto/rolagem da página derrubam o gesto: depois que a prévia abre,
+  // acompanhamos o dedo/mouse direto pela janela até soltar
+  const detachWeb = useRef<(() => void) | null>(null);
+  const followWindow = () => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    const pt = (ev: any) => (ev.touches && ev.touches[0] ? ev.touches[0] : ev.changedTouches && ev.changedTouches[0] ? ev.changedTouches[0] : ev);
+    const onMove = (ev: any) => {
+      if (!open.current) return;
+      const t = pt(ev);
+      peekApi?.move(t.clientX, t.clientY);
+      if (ev.cancelable) ev.preventDefault();
+    };
+    const onUp = () => {
+      if (open.current) {
+        open.current = false;
+        peekApi?.release();
+      }
+      detach();
+    };
+    const detach = () => {
+      window.removeEventListener("mousemove", onMove, true);
+      window.removeEventListener("touchmove", onMove, true);
+      window.removeEventListener("mouseup", onUp, true);
+      window.removeEventListener("touchend", onUp, true);
+      window.removeEventListener("touchcancel", onUp, true);
+      try {
+        document.body.style.userSelect = "";
+        (document.body.style as any).webkitUserSelect = "";
+      } catch {}
+      detachWeb.current = null;
+    };
+    // "capture": recebe os eventos antes de qualquer outra parte da página poder barrá-los
+    window.addEventListener("mousemove", onMove, true);
+    window.addEventListener("touchmove", onMove, { passive: false, capture: true } as any);
+    window.addEventListener("mouseup", onUp, true);
+    window.addEventListener("touchend", onUp, true);
+    window.addEventListener("touchcancel", onUp, true);
+    try {
+      document.body.style.userSelect = "none";
+      (document.body.style as any).webkitUserSelect = "none";
+      window.getSelection()?.removeAllRanges();
+    } catch {}
+    detachWeb.current = detach;
+  };
+  React.useEffect(() => () => detachWeb.current?.(), []);
+  return (
+    <View
+      style={style}
+      onStartShouldSetResponder={() => true}
+      onResponderTerminationRequest={() => !open.current}
+      onResponderGrant={e => {
+        open.current = false;
+        start.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+        clear();
+        timer.current = setTimeout(() => {
+          timer.current = null;
+          open.current = true;
+          peekApi?.open(post, actions);
+          followWindow();
+        }, 300);
+      }}
+      onResponderMove={e => {
+        const { pageX, pageY } = e.nativeEvent;
+        if (open.current) peekApi?.move(pageX, pageY);
+        else if (Math.hypot(pageX - start.current.x, pageY - start.current.y) > 8) clear();
+      }}
+      onResponderRelease={() => {
+        if (open.current) {
+          open.current = false;
+          detachWeb.current?.();
+          peekApi?.release();
+        } else if (timer.current) {
+          clear();
+          onPress();
+        }
+      }}
+      onResponderTerminate={() => {
+        clear();
+        // no site quem cuida a partir daqui são os eventos da janela
+        if (open.current && !detachWeb.current) {
+          open.current = false;
+          peekApi?.close();
+        }
+      }}
+    >
+      {children}
+    </View>
+  );
 }
 
 export function PeekHost() {
   const { useAppTheme } = require("../context/AppTheme");
   const { FastImage } = require("./FastImage");
-  const { Text } = require("react-native");
+  const { Text, Share } = require("react-native");
+  const { Heart, Send, UserRound } = require("lucide-react-native");
   const { colors } = useAppTheme();
   const [post, setPost] = React.useState<any>(null);
+  const [hover, setHover] = React.useState<number>(-1);
   const a = useRef(new Animated.Value(0)).current;
+  const rects = useRef<{ x: number; y: number; w: number; h: number }[]>([]);
+  const btnRefs = useRef<(View | null)[]>([]);
+  const actionsRef = useRef<PeekActions>({});
+  const hoverRef = useRef(-1);
+  const postRef = useRef<any>(null);
+
+  const hide = () => {
+    Animated.timing(a, { toValue: 0, duration: 120, useNativeDriver: ND }).start(() => {
+      setPost(null);
+      setHover(-1);
+      hoverRef.current = -1;
+    });
+  };
+
+  const buttons = [
+    {
+      key: "like",
+      label: "Curtir",
+      run: async (p: any) => {
+        try {
+          const { setPostLike } = require("../services/storage");
+          await setPostLike(p, !p.isLiked);
+          require("./motion").toast(p.isLiked ? "Curtida removida" : "Curtido");
+        } catch {}
+      }
+    },
+    { key: "profile", label: "Ver perfil", run: (p: any) => actionsRef.current.onProfile?.(p.creatorUsername || p.creatorName) },
+    {
+      key: "share",
+      label: "Enviar",
+      run: (p: any) => {
+        try {
+          const { postWebLink } = require("../utils/profileLink");
+          const link = postWebLink(p.id);
+          if (Platform.OS === "web") {
+            const nav: any = typeof navigator !== "undefined" ? navigator : null;
+            if (nav?.share) nav.share({ text: "Olha esse look no Guvio", url: link }).catch(() => {});
+            else {
+              nav?.clipboard?.writeText(link);
+              require("./motion").toast("Link copiado");
+            }
+          } else Share.share({ message: `Olha esse look no Guvio: ${link}` });
+        } catch {}
+      }
+    }
+  ];
+
   React.useEffect(() => {
-    showPeek = (p: any) => {
-      if (p) {
+    peekApi = {
+      open: (p, acts) => {
+        actionsRef.current = acts || {};
+        postRef.current = p;
+        rects.current = [];
         setPost(p);
+        setHover(-1);
+        hoverRef.current = -1;
         a.setValue(0);
-        Animated.spring(a, { toValue: 1, useNativeDriver: ND, friction: 7, tension: 120 }).start();
+        Animated.spring(a, { toValue: 1, useNativeDriver: ND, friction: 7, tension: 120 }).start(() => {
+          // mede onde ficaram os botões, para saber em qual o dedo está
+          btnRefs.current.forEach((r, i) => r?.measureInWindow((x, y, w, h) => (rects.current[i] = { x, y, w, h })));
+        });
         try {
           require("../utils/haptics").tapFeedback();
         } catch {}
-      } else {
-        Animated.timing(a, { toValue: 0, duration: 120, useNativeDriver: ND }).start(() => setPost(null));
-      }
+      },
+      move: (x, y) => {
+        if (!rects.current.length) btnRefs.current.forEach((r, k) => r?.measureInWindow((bx, by, w, h) => (rects.current[k] = { x: bx, y: by, w, h })));
+        const i = rects.current.findIndex(r => r && x >= r.x - 6 && x <= r.x + r.w + 6 && y >= r.y - 10 && y <= r.y + r.h + 10);
+        if (i !== hoverRef.current) {
+          hoverRef.current = i;
+          setHover(i);
+          if (i >= 0) {
+            try {
+              require("../utils/haptics").tapFeedback();
+            } catch {}
+          }
+        }
+      },
+      release: () => {
+        const i = hoverRef.current;
+        const p = postRef.current;
+        hide();
+        if (i >= 0 && p) setTimeout(() => buttons[i].run(p), 150);
+      },
+      close: hide
     };
     return () => {
-      showPeek = null;
+      peekApi = null;
     };
   }, []);
+
   if (!post) return null;
   const W = Math.min(Dimensions.get("window").width - 40, 420);
   const ratio = Math.min(1.91, Math.max(0.75, post.aspect || 1));
+  const icons = [
+    <Heart key="h" size={22} color={hover === 0 ? "#FF3B4A" : colors.text} fill={post.isLiked || hover === 0 ? "#FF3B4A" : "none"} />,
+    <UserRound key="u" size={22} color={colors.text} />,
+    <Send key="s" size={21} color={colors.text} />
+  ];
   return (
     <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, zIndex: 9997, elevation: 29, alignItems: "center", justifyContent: "center" }}>
       <Animated.View style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: "rgba(0,0,0,.55)", opacity: a }} />
@@ -310,12 +544,27 @@ export function PeekHost() {
           </Text>
         </View>
         <FastImage source={post.image} style={{ width: W, height: W / ratio, backgroundColor: colors.surface2 }} contentFit="cover" />
-        {post.caption ? (
-          <Text style={{ color: colors.text, padding: 12, fontSize: 13 }} numberOfLines={2}>
-            {post.caption}
-          </Text>
-        ) : null}
+        <View style={{ flexDirection: "row", justifyContent: "space-around", paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.border }}>
+          {buttons.map((b, i) => (
+            <View
+              key={b.key}
+              ref={r => {
+                btnRefs.current[i] = r;
+              }}
+              collapsable={false}
+              style={{ alignItems: "center", gap: 4, paddingHorizontal: 18, paddingVertical: 6, borderRadius: 12, backgroundColor: hover === i ? colors.surface : "transparent" }}
+            >
+              {icons[i]}
+              <Text style={{ color: colors.text, fontSize: 11, fontWeight: hover === i ? "700" : "500" }}>{b.label}</Text>
+            </View>
+          ))}
+        </View>
       </Animated.View>
+      {hover >= 0 ? (
+        <Animated.View style={{ position: "absolute", top: 70, backgroundColor: "rgba(0,0,0,.75)", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8, opacity: a }}>
+          <Text style={{ color: "#FFF", fontWeight: "600" }}>{buttons[hover].label}</Text>
+        </Animated.View>
+      ) : null}
     </View>
   );
 }

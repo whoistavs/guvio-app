@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { noSwipeBack } from "./gestures";
 import { topPad } from "../utils/insets";
 import { Check, X } from "lucide-react-native";
 import { WardrobeItem } from "../data/mockData";
@@ -90,7 +91,7 @@ export function MatchPiecesModal({
             groups.map(([slot, list]) => (
               <View key={slot} style={{ marginTop: 20 }}>
                 <Text style={[s.label, { color: colors.muted }]}>{SLOT_LABEL[slot] || slot}</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
                   {list.map(m => {
                     const on = picked.includes(m.item.id);
                     return (

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Alert, Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { noSwipeBack } from "./gestures";
 import {
   Bookmark,
   Check,
@@ -324,7 +325,7 @@ export function HomeFeed({
   return (
     <View style={[s.c, { backgroundColor: colors.bg }]}>
       {/* Instagram Stories Carousel */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.storiesScroll}>
+      <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.storiesScroll}>
         {stories.map((st, idx) => {
           const hasStories = st.stories && st.stories.length > 0;
           return (

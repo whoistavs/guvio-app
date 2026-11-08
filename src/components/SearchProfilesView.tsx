@@ -20,7 +20,7 @@ import {
 } from "../services/storage";
 import { weekStart } from "../data/challenges";
 import { COLOR_CHIPS } from "../utils/colorHarmony";
-import { peekPost } from "./gestures";
+import { PeekTile, noSwipeBack } from "./gestures";
 import { STYLES } from "../data/mockData";
 import { RankingGrid } from "./RankingGrid";
 import { FastImage } from "./FastImage";
@@ -163,15 +163,14 @@ export function SearchProfilesView({
   const renderGrid = (posts: FeedPost[]) => (
     <View style={s.grid}>
       {posts.map(p => (
-        <Pressable
+        <PeekTile
           key={p.id}
+          post={p}
           onPress={() => {
             if (q.trim()) remember();
             onOpenPost?.(p.id);
           }}
-          onLongPress={() => peekPost(p)}
-          onPressOut={() => peekPost(null)}
-          delayLongPress={280}
+          actions={{ onProfile: u => onOpenProfile({ id: p.userId || "", username: u, displayName: p.creatorName, avatar: p.creatorAvatar, location: "", followers: 0 } as unknown as UserProfile) }}
           style={{ width: TILE, height: TILE * 1.25 }}
         >
           <FastImage source={p.image} style={{ width: "100%", height: "100%" }} contentFit="cover" />
@@ -182,7 +181,7 @@ export function SearchProfilesView({
               </Text>
             </View>
           ) : null}
-        </Pressable>
+        </PeekTile>
       ))}
     </View>
   );
@@ -387,7 +386,7 @@ export function SearchProfilesView({
           {creators.length > 0 ? (
             <>
               <Text style={[s.label, { color: colors.muted }]}>Criadores da semana</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 4 }}>
+              <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 4 }}>
                 {creators.map((c, i) => (
                   <Pressable key={c.id || c.username} onPress={() => onOpenProfile(c)} style={{ width: 76, alignItems: "center" }}>
                     <View>
@@ -409,7 +408,7 @@ export function SearchProfilesView({
             </>
           ) : null}
           <Text style={[s.label, { color: colors.muted }]}>Looks por cor</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+          <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
             {COLOR_CHIPS.map(c => {
               const on = colorFilter === c.term;
               return (
@@ -438,7 +437,7 @@ export function SearchProfilesView({
             )
           ) : null}
           <Text style={[s.label, { color: colors.muted }]}>Em alta na comunidade</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 10 }}>
+          <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 10 }}>
             {[null, ...STYLES.map(st => st.title)].map(t => {
               const on = styleFilter === t;
               return (

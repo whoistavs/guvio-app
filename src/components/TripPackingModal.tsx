@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { noSwipeBack } from "./gestures";
 import { topPad } from "../utils/insets";
 import { MapPin, Search, X } from "lucide-react-native";
 import { WardrobeItem } from "../data/mockData";
@@ -176,7 +177,7 @@ export function TripPackingModal({
                       {d.forecast.min}°–{d.forecast.max}° · {d.forecast.rainChance}% chuva
                     </Text>
                   </View>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4 }}>
+                  <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4 }}>
                     {d.items.map(i => (
                       <FastImage key={i.id} source={i.image} style={{ width: 40, height: 48, borderRadius: 8 }} contentFit="cover" />
                     ))}

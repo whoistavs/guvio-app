@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { noSwipeBack } from "./gestures";
 import { BarChart2, Check, FileText, Film, ImagePlus, Shirt, Trash2, Upload, X } from "lucide-react-native";
 import { MediaPicker, PickerResult } from "./MediaPicker";
 import { Toggle } from "./Toggle";
@@ -280,7 +281,7 @@ export function CreateHubView({
       )}
 
       {images.length > 0 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.thumbs}>
+        <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.thumbs}>
           {images.map((uri, i) => (
             <Pressable key={uri + i} onPress={() => setCurrent(i)}>
               <Image
@@ -367,7 +368,7 @@ export function CreateHubView({
           </Text>
         </Pressable>
       ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
+        <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
           {wardrobe.map(it => {
             const on = tags.some(t => t.id === `tag-${it.id}`);
             return (

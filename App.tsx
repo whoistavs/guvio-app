@@ -619,7 +619,7 @@ function Guvio() {
     return (
       <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
         {/* arrastar da borda esquerda volta, como no iPhone */}
-        <EdgeSwipe side="left" onSwipe={back} under={colors.surface2}>
+        <EdgeSwipe side="left" anywhere onSwipe={back} under={colors.surface2}>
           <SlideInScreen key={`${stack.length}-${top.name}`} from={goingBack.current ? -60 : 60}>
             {screen}
           </SlideInScreen>
@@ -648,8 +648,8 @@ function Guvio() {
       {tab === "home" ? (
         <FadeIn key="home" from={0} duration={220} style={{ flex: 1 }}>
         {/* bordas: da direita abre o Direct, da esquerda abre Publicar */}
-        <EdgeSwipe side="left" interactive={false} onSwipe={() => setTab("add")}>
-        <EdgeSwipe side="right" interactive={false} onSwipe={() => push({ name: "direct" })}>
+        <EdgeSwipe side="left" anywhere interactive={false} onSwipe={() => setTab("add")}>
+        <EdgeSwipe side="right" anywhere interactive={false} onSwipe={() => push({ name: "direct" })}>
         <ScrollView
           ref={scroll}
           style={{ flex: 1, backgroundColor: colors.bg }}

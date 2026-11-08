@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
+  PanResponder,
   ActivityIndicator,
   Alert,
   Modal,
@@ -12,7 +14,7 @@ import {
   View
 } from "react-native";
 import { KeyboardSafeView } from "./KeyboardSafeView";
-import { SwipeToReply } from "./gestures";
+import { noSwipeBack, SwipeToReply } from "./gestures";
 import { ArrowLeft, Camera, CornerUpLeft, Image as ImageIcon, Search, Send, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { DirectThread, FeedPost } from "../data/mockData";
@@ -104,6 +106,24 @@ export function ChatView({
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
   const scrollRef = useRef<ScrollView>(null);
+  // arrastar a conversa para a esquerda mostra o horário de cada mensagem
+  const reveal = useRef(new Animated.Value(0)).current;
+  const revealPan = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponderCapture: (_e, g) => g.dx < -12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderMove: (_e, g) => reveal.setValue(Math.max(-72, Math.min(0, g.dx * 0.7))),
+        onPanResponderRelease: () => Animated.spring(reveal, { toValue: 0, useNativeDriver: Platform.OS !== "web", friction: 8 }).start(),
+        onPanResponderTerminate: () => Animated.spring(reveal, { toValue: 0, useNativeDriver: Platform.OS !== "web" }).start()
+      }),
+    []
+  );
+  const timeOf = (iso?: string) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  };
   const typingRef = useRef<ReturnType<typeof typingChannel> | null>(null);
   const lastTap = useRef<Record<string, number>>({});
   const messagesRef = useRef<ChatMessage[]>([]);
@@ -298,7 +318,8 @@ export function ChatView({
         </View>
       ) : null}
 
-      <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={s.chat} keyboardShouldPersistTaps="handled">
+      <View style={{ flex: 1 }} {...revealPan.panHandlers}>
+      <ScrollView {...noSwipeBack} ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={s.chat} keyboardShouldPersistTaps="handled">
         {loading ? (
           <View style={{ gap: 10 }}>
             {[150, 210, 120, 180, 90].map((w, i) => (
@@ -315,6 +336,15 @@ export function ChatView({
           const fg = isMe ? colors.bg : colors.text;
           return (
             <SwipeToReply key={m.id} enabled={!m.deleted} color={colors.muted} onReply={() => setReplyTo(m)}>
+            <Animated.View style={{ width: "100%", transform: [{ translateX: reveal }] }}>
+            <Animated.Text
+              style={[
+                s.time,
+                { color: colors.muted, opacity: reveal.interpolate({ inputRange: [-60, -10], outputRange: [1, 0], extrapolate: "clamp" }) }
+              ]}
+            >
+              {timeOf(m.createdAt)}
+            </Animated.Text>
             <View style={[isMe ? s.meWrap : s.otherWrap, m.reaction ? { marginBottom: 10 } : null]}>
               {/* a reação fica presa ao balão (não à linha do "Visto") */}
               <View style={{ position: "relative", maxWidth: "100%", alignItems: isMe ? "flex-end" : "flex-start" }}>
@@ -368,6 +398,7 @@ export function ChatView({
                 <Text style={[s.seen, { color: colors.muted }, m.reaction ? { marginTop: 14 } : null]}>Visto</Text>
               ) : null}
             </View>
+            </Animated.View>
             </SwipeToReply>
           );
         })}
@@ -379,6 +410,7 @@ export function ChatView({
           </View>
         ) : null}
       </ScrollView>
+      </View>
 
       <View style={[s.composer, { borderTopColor: colors.border, backgroundColor: colors.bg }]}>
         {replyTo ? (
@@ -469,6 +501,7 @@ const s = StyleSheet.create({
   onlineDot: { position: "absolute", right: -1, bottom: -1, width: 12, height: 12, borderRadius: 6, backgroundColor: "#22C55E", borderWidth: 2 },
   searchBar: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 14, marginTop: 8, height: 40, borderRadius: 12, paddingHorizontal: 12 },
   chat: { padding: 14, gap: 8, paddingBottom: 18 },
+  time: { position: "absolute", right: -64, top: 8, fontSize: 11, width: 52, textAlign: "left" },
   meWrap: { alignSelf: "flex-end", maxWidth: "80%", alignItems: "flex-end" },
   otherWrap: { alignSelf: "flex-start", maxWidth: "80%", alignItems: "flex-start" },
   bubble: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 20 },
