@@ -15,7 +15,7 @@ import { authConfigured, signInEmail, signUpEmail, startOAuth, ConfirmEmailError
 import { useAppTheme } from "../context/AppTheme";
 import { isUsernameTaken } from "../services/storage";
 
-export function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
+export function AuthScreen({ onAuthenticated, inviter }: { onAuthenticated: () => void; inviter?: string | null }) {
   const { colors } = useAppTheme();
   const [signup, setSignup] = useState(false);
   const [displayName, setDisplayName] = useState("");
@@ -113,6 +113,13 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void })
           </Text>
         </View>
 
+        {inviter ? (
+          <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 12 }}>
+            <Text style={{ color: colors.text, fontSize: 13, textAlign: "center" }}>
+              <Text style={{ fontWeight: "700" }}>@{inviter}</Text> te convidou para o beta do GUVIO
+            </Text>
+          </View>
+        ) : null}
         <Text style={[s.h, { color: colors.text }]}>{signup ? "Criar sua conta" : "Entrar"}</Text>
 
         {signup && (

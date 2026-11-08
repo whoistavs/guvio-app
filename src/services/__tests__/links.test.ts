@@ -42,3 +42,13 @@ describe("post links", () => {
   });
 });
 import { parseProfileLink as parseProfileLinkU } from "../../utils/profileLink";
+
+import { inviteLink, parseInviteLink } from "../../utils/profileLink";
+describe("convite", () => {
+  it("lê o convite do site e do app", () => {
+    expect(parseInviteLink(inviteLink("whoistavs"))).toBe("whoistavs");
+    expect(parseInviteLink("guvio://convite/@Ana.Moda")).toBe("ana.moda");
+    expect(parseInviteLink("https://x.com/?convite=<b>")).toBeNull();
+    expect(parseInviteLink("https://x.com/?p=abcd1234")).toBeNull();
+  });
+});

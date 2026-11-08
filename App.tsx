@@ -60,7 +60,9 @@ import { FollowListView } from "./src/components/FollowListView";
 import { fetchCityWeather, WeatherData } from "./src/services/weather";
 import { requestNotificationPermissions, sendLocalNotification } from "./src/services/notifications";
 import { getSavedAuthSession, signOut, handleAuthRedirect, deleteAccount } from "./src/services/auth";
-import { parsePostLink, parseProfileLink } from "./src/utils/profileLink";
+import { parseInviteLink, parsePostLink, parseProfileLink } from "./src/utils/profileLink";
+import { BetaWelcome } from "./src/components/BetaWelcome";
+import { shareInvite } from "./src/components/invite";
 import { FastStorage } from "./src/services/FastStorage";
 import { supabase, isCloud } from "./src/services/supabase";
 import { subscribeFeed, fetchPostCounts, subscribeMyAlerts, startPresence } from "./src/services/cloud";
@@ -84,6 +86,16 @@ function Guvio() {
   // perfil aberto por link/QR (guvio://u/<username>), abre depois do login
   const [pendingProfile, setPendingProfile] = useState<string | null>(null);
   const [pendingPost, setPendingPost] = useState<string | null>(null);
+  // convite (?convite=usuario): guarda até a pessoa criar a conta e depois abre o perfil de quem convidou
+  const [inviter, setInviter] = useState<string | null>(() => FastStorage.getItemSync<string | null>("guvio_invite_v1", null));
+  const takeInvite = (url?: string | null) => {
+    const who = parseInviteLink(url);
+    if (!who) return false;
+    FastStorage.setItemSync("guvio_invite_v1", who);
+    setInviter(who);
+    setPendingProfile(who);
+    return true;
+  };
   const openNameRef = useRef<((name: string) => void) | null>(null);
   const openPostRef = useRef<((id: string) => void) | null>(null);
   const myProfileRef = useRef<UserProfile | null>(null);
@@ -176,6 +188,14 @@ function Guvio() {
       if (linkedUser) setPendingProfile(linkedUser);
       const linkedPost = parsePostLink(initialUrl);
       if (linkedPost) setPendingPost(linkedPost);
+      if (!takeInvite(initialUrl)) {
+        // voltou do login (Google etc.) ou reabriu o app: o convite ficou guardado
+        const saved = FastStorage.getItemSync<string | null>("guvio_invite_v1", null);
+        if (saved) {
+          setInviter(saved);
+          setPendingProfile(saved);
+        }
+      }
       const session = await getSavedAuthSession();
       setAuthenticated(Boolean(session));
       setBooting(false);
@@ -185,6 +205,7 @@ function Guvio() {
     fetchCityWeather(41.5388, -8.6151).then(setWeather);
 
     const linkSub = Linking.addEventListener("url", ({ url }) => {
+      if (takeInvite(url)) return;
       const linkedUser = parseProfileLink(url);
       if (linkedUser) {
         setPendingProfile(linkedUser);
@@ -388,15 +409,17 @@ function Guvio() {
   };
 
   useEffect(() => {
-    if (!pendingProfile || booting || !authenticated) return;
+    if (!pendingProfile || booting || !authenticated || showOnboarding) return;
     const name = pendingProfile;
     // espera as telas montarem antes de abrir o perfil
     const t = setTimeout(() => {
       setPendingProfile(null);
+      // convite usado: não abre de novo nas próximas vezes
+      if (FastStorage.getItemSync<string | null>("guvio_invite_v1", null) === name) FastStorage.setItemSync("guvio_invite_v1", null);
       openNameRef.current?.(name);
     }, 300);
     return () => clearTimeout(t);
-  }, [pendingProfile, booting, authenticated]);
+  }, [pendingProfile, booting, authenticated, showOnboarding]);
 
   // link de post (guvio://p/<id> ou site ?p=<id>): abre o post depois do login
   useEffect(() => {
@@ -416,7 +439,7 @@ function Guvio() {
 
   if (booting) return <View style={[s.safe, { backgroundColor: colors.bg }]} />;
 
-  if (!authenticated) return <AuthScreen onAuthenticated={() => setAuthenticated(true)} />;
+  if (!authenticated) return <AuthScreen inviter={inviter} onAuthenticated={() => setAuthenticated(true)} />;
   if (showOnboarding)
     return (
       <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
@@ -489,6 +512,17 @@ function Guvio() {
   };
   const openFollows = (p: UserProfile, kind: "followers" | "following") => push({ name: "follows", profile: p, kind });
 
+  const betaWelcome = (
+    <BetaWelcome
+      onFeedback={() => push({ name: "settingsPage", kind: "feedback" })}
+      onInvite={() =>
+        loadSavedProfile()
+          .then(p => shareInvite(p.username))
+          .catch(() => {})
+      }
+    />
+  );
+
   if (top) {
     let screen: React.ReactNode = null;
     switch (top.name) {
@@ -543,6 +577,12 @@ function Guvio() {
           <SettingsView
             onBack={back}
             onOpen={x => {
+              if (x === "invite") {
+                loadSavedProfile()
+                  .then(p => shareInvite(p.username))
+                  .catch(() => {});
+                return;
+              }
               if (x === "tutorial") {
                 resetOnboarding();
                 setStack([]);
@@ -582,6 +622,7 @@ function Guvio() {
         </SlideInScreen>
         <ToastHost bottom={40} />
         <UpdateBanner />
+        {betaWelcome}
       </SafeAreaView>
     );
   }
@@ -620,6 +661,7 @@ function Guvio() {
               locationText={location}
               weatherText={weatherText}
               onOpenDirect={() => push({ name: "direct" })}
+              onOpenBeta={() => push({ name: "settingsPage", kind: "feedback" })}
               onOpenActivity={() => {
                 setUnread(false);
                 push({ name: "activity" });
@@ -732,6 +774,7 @@ function Guvio() {
       <ToastHost />
       <UpdateBanner />
       <InstallPrompt />
+      {betaWelcome}
     </SafeAreaView>
   );
 }

@@ -918,6 +918,7 @@ export function SettingsView({
     { id: "blocked", l: "Bloqueados", i: UserX },
     { id: "closeFriends", l: "Melhores amigos", i: Star },
     { id: "notifications", l: "Notificações", i: Bell },
+    { id: "invite", l: "Convidar amigos para o beta", i: UserPlus },
     { id: "feedback", l: "Enviar feedback / bug", i: MessageCircle },
     { id: "tutorial", l: "Ver tutorial de novo", i: HelpCircle },
     { id: "privacy", l: "Política de Privacidade", i: Shield },

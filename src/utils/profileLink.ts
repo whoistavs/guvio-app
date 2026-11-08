@@ -39,3 +39,20 @@ export function parsePostLink(url?: string | null): string | null {
     return null;
   }
 }
+
+/** link de convite: o site com ?convite=<usuário> */
+export function inviteLink(username: string): string {
+  return `${SITE_URL}?convite=${encodeURIComponent(username)}`;
+}
+/** lê o @ de quem convidou: ...?convite=ana ou guvio://convite/ana */
+export function parseInviteLink(url?: string | null): string | null {
+  if (!url) return null;
+  const m = url.match(/[?&]convite=([^&#]+)/i) || url.match(/^guvio:\/\/\/?convite\/([^/?#]+)/i);
+  if (!m) return null;
+  try {
+    const u = decodeURIComponent(m[1]).trim().replace(/^@/, "").toLowerCase();
+    return /^[a-z0-9._]{2,30}$/.test(u) ? u : null;
+  } catch {
+    return null;
+  }
+}

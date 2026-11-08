@@ -7,6 +7,7 @@ export function Header({
   locationText = "Campinas, SP",
   weatherText,
   onOpenDirect,
+  onOpenBeta,
   onOpenActivity,
   hasUnreadActivity = true,
   unreadMessages = 0
@@ -14,6 +15,8 @@ export function Header({
   locationText?: string;
   weatherText?: string;
   onOpenDirect?: () => void;
+  /** selo BETA: abre o feedback */
+  onOpenBeta?: () => void;
   onOpenActivity?: () => void;
   hasUnreadActivity?: boolean;
   unreadMessages?: number;
@@ -27,6 +30,11 @@ export function Header({
           style={styles.logoBadge}
         />
         <Text style={[styles.title, { color: colors.text }]}>GUVIO</Text>
+        {onOpenBeta ? (
+          <Pressable onPress={onOpenBeta} hitSlop={8} style={[styles.beta, { borderColor: colors.border }]}>
+            <Text style={[styles.betaText, { color: colors.muted }]}>BETA</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={styles.right}>
@@ -62,6 +70,8 @@ const styles = StyleSheet.create({
   left: { flexDirection: "row", alignItems: "center", gap: 10 },
   logoBadge: { width: 34, height: 34, borderRadius: 10 },
   title: { fontSize: 24, fontWeight: "700", letterSpacing: 2 },
+  beta: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1, marginLeft: 2 },
+  betaText: { fontSize: 9, fontWeight: "700", letterSpacing: 0.8 },
   right: { flexDirection: "row", alignItems: "center", gap: 14, flexShrink: 1, marginLeft: 12 },
   loc: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 },
   lt: { fontSize: 11, fontWeight: "600", flexShrink: 1 },
