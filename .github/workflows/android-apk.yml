@@ -1,0 +1,64 @@
+name: Gerar APK Android (beta)
+
+# Roda manualmente: Actions > "Gerar APK Android (beta)" > Run workflow
+# O APK fica num link público fixo:
+# https://github.com/whoistavs/guvio-app/releases/download/beta-android/GUVIO.apk
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    env:
+      CI: 1
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://kammkctketpkkdnukfme.supabase.co' }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_0B7Co6SegZB_VxJ61uHQCA_UgOuNOO5' }}
+      # cada build ganha um número maior, para o Android aceitar a atualização por cima
+      ANDROID_VERSION_CODE: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Gerar projeto Android nativo
+        run: npx expo prebuild --platform android --clean
+
+      - name: Compilar APK
+        run: |
+          cd android
+          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --no-daemon
+          ls -lh app/build/outputs/apk/release/
+
+      - name: Renomear
+        run: cp android/app/build/outputs/apk/release/app-release.apk GUVIO.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GUVIO-apk
+          path: GUVIO.apk
+
+      - name: Publicar no link fixo (release beta-android)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete beta-android --yes --cleanup-tag 2>/dev/null || true
+          gh release create beta-android GUVIO.apk \
+            --title "GUVIO beta (Android)" \
+            --notes "Versão beta do GUVIO para Android. Baixe o GUVIO.apk e instale (permita instalar de fontes desconhecidas). Build ${{ github.run_number }}." \
+            --prerelease
