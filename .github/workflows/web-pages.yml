@@ -33,6 +33,7 @@ jobs:
       - name: Ajustes do GitHub Pages
         run: |
           cp dist/index.html dist/404.html
+          node scripts/pwa.js dist /guvio-app
           touch dist/.nojekyll
           echo "{\"build\":\"${EXPO_PUBLIC_BUILD_ID}\"}" > dist/version.json
       - uses: actions/upload-pages-artifact@v3

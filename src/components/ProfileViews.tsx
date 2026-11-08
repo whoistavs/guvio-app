@@ -34,7 +34,7 @@ import {
   UserCheck,
   UserPlus,
   UserX,
-  X, BarChart2 } from "lucide-react-native";
+  X, BarChart2, Download } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { FeedPost, UserProfile, MOCK_FEED_POSTS, SavedCollection } from "../data/mockData";
 import { ScreenHeader } from "./ScreenHeader";
@@ -70,6 +70,7 @@ import { FastImage, preloadImages } from "./FastImage";
 import { ShareProfileModal } from "./ShareProfileModal";
 import { GridSkeleton, ProfileSkeleton } from "./SkeletonLoader";
 import { HighlightsRow } from "./HighlightsRow";
+import { canShowInstall, openInstallHelp } from "./InstallPrompt";
 import { CloseFriendsView } from "./CloseFriendsView";
 import { BioLink } from "./BioExtras";
 import { AchievementsRow } from "./AchievementsRow";
@@ -968,6 +969,12 @@ export function SettingsView({
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: 60 }}>
       <ScreenHeader title="Configurações" onBack={onBack} />
+      {canShowInstall() ? (
+        <Pressable onPress={openInstallHelp} style={[s.setting, { borderBottomColor: colors.border }]}>
+          <Download size={21} color={colors.icon} />
+          <Text style={[s.settingText, { color: colors.text }]}>Instalar o app na tela de início</Text>
+        </Pressable>
+      ) : null}
       {rows.map(r => {
         const I = r.i;
         return (

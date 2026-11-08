@@ -17,6 +17,7 @@ import {
 import { AppThemeProvider, useAppTheme } from "./src/context/AppTheme";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import { UpdateBanner } from "./src/components/UpdateBanner";
+import { InstallPrompt } from "./src/components/InstallPrompt";
 import { WebAlertHost, installWebAlert } from "./src/components/WebAlertHost";
 
 installWebAlert();
@@ -709,6 +710,7 @@ function Guvio() {
       />
       <ToastHost />
       <UpdateBanner />
+      <InstallPrompt />
     </SafeAreaView>
   );
 }
