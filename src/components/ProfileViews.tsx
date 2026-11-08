@@ -71,6 +71,7 @@ import { ShareProfileModal } from "./ShareProfileModal";
 import { GridSkeleton, ProfileSkeleton } from "./SkeletonLoader";
 import { HighlightsRow } from "./HighlightsRow";
 import { canShowInstall, openInstallHelp } from "./InstallPrompt";
+import { peekPost } from "./gestures";
 import { CloseFriendsView } from "./CloseFriendsView";
 import { BioLink } from "./BioExtras";
 import { AchievementsRow } from "./AchievementsRow";
@@ -110,7 +111,7 @@ function Grid({
   return (
     <View style={s.grid}>
       {posts.map(p => (
-        <Pressable key={p.id} onPress={() => onSelectPost?.(p)} style={s.tileWrap}>
+        <Pressable key={p.id} onPress={() => onSelectPost?.(p)} onLongPress={() => peekPost(p)} onPressOut={() => peekPost(null)} delayLongPress={280} style={s.tileWrap}>
           <FastImage source={p.image} style={s.tile} contentFit="cover" transition={100} />
           {p.pinned ? (
             <View style={s.tileIcon}>

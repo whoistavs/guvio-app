@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
   ActivityIndicator,
   Alert,
   Image,
@@ -13,6 +14,7 @@ import {
   View
 } from "react-native";
 import { KeyboardSafeView } from "./KeyboardSafeView";
+import { useDragToClose } from "./gestures";
 import { Heart, Send, Trash2, X } from "lucide-react-native";
 import { CommentItem, FeedPost } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
@@ -48,6 +50,8 @@ export function CommentsModal({
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  // puxar a folha para baixo pela alça/título fecha
+  const drag = useDragToClose(() => onClose());
   const [replyTo, setReplyTo] = useState<CommentItem | null>(null);
   const [pinnedId, setPinnedId] = useState<string | null>(post?.pinnedCommentId || null);
   useEffect(() => setPinnedId(post?.pinnedCommentId || null), [post?.id, post?.pinnedCommentId]);
@@ -215,12 +219,15 @@ export function CommentsModal({
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardSafeView style={s.back} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <Pressable style={s.dismiss} onPress={onClose} />
-        <View style={[s.sheet, { backgroundColor: colors.bg }]}>
+        <Animated.View style={[s.sheet, { backgroundColor: colors.bg, transform: [{ translateY: drag.y }] }]}>
+          <View {...drag.panHandlers}>
+            <View style={[s.grabber, { backgroundColor: colors.border }]} />
           <View style={s.head}>
             <Text style={[s.title, { color: colors.text }]}>Comentários</Text>
             <Pressable onPress={onClose}>
               <X size={23} color={colors.icon} />
             </Pressable>
+          </View>
           </View>
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: replyTo ? 130 : 90 }} keyboardShouldPersistTaps="handled">
             {loading ? (
@@ -291,7 +298,7 @@ export function CommentsModal({
             </Pressable>
             </View>
           </View>
-        </View>
+        </Animated.View>
       </KeyboardSafeView>
     </Modal>
   );
@@ -300,6 +307,7 @@ export function CommentsModal({
 const s = StyleSheet.create({
   back: { flex: 1, backgroundColor: "rgba(0,0,0,.26)", justifyContent: "flex-end" },
   dismiss: { flex: 1 },
+  grabber: { alignSelf: "center", width: 38, height: 4, borderRadius: 2, marginTop: 8 },
   sheet: { height: "72%", borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden" },
   head: { height: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18 },
   title: { fontSize: 16, fontWeight: "600" },

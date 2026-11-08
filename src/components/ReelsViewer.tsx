@@ -40,6 +40,7 @@ import { CommentsModal } from "./CommentsModal";
 import { SharePostModal } from "./SharePostModal";
 import { RepostModal } from "./RepostModal";
 import { askReport } from "./PostMenus";
+import { EdgeSwipe } from "./gestures";
 import { toast } from "./motion";
 import { likeFeedback, tapFeedback } from "../utils/haptics";
 import { markNotInterested } from "../services/storage";
@@ -125,6 +126,7 @@ function Viewer({ posts: livePosts, startId, onClose, actions }: ViewerProps & {
   return (
     <Modal visible animationType="slide" onRequestClose={close} statusBarTranslucent>
       <StatusBar barStyle="light-content" />
+      <EdgeSwipe side="left" onSwipe={close}>
       <View style={s.root} onLayout={e => setSize({ ...size, height: e.nativeEvent.layout.height, width: e.nativeEvent.layout.width })}>
         <FlatList
           ref={listRef}
@@ -212,6 +214,7 @@ function Viewer({ posts: livePosts, startId, onClose, actions }: ViewerProps & {
           }}
         />
       </View>
+      </EdgeSwipe>
     </Modal>
   );
 }

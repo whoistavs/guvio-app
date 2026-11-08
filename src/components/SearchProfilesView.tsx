@@ -20,6 +20,7 @@ import {
 } from "../services/storage";
 import { weekStart } from "../data/challenges";
 import { COLOR_CHIPS } from "../utils/colorHarmony";
+import { peekPost } from "./gestures";
 import { STYLES } from "../data/mockData";
 import { RankingGrid } from "./RankingGrid";
 import { FastImage } from "./FastImage";
@@ -168,6 +169,9 @@ export function SearchProfilesView({
             if (q.trim()) remember();
             onOpenPost?.(p.id);
           }}
+          onLongPress={() => peekPost(p)}
+          onPressOut={() => peekPost(null)}
+          delayLongPress={280}
           style={{ width: TILE, height: TILE * 1.25 }}
         >
           <FastImage source={p.image} style={{ width: "100%", height: "100%" }} contentFit="cover" />

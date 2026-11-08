@@ -12,6 +12,7 @@ import {
   View
 } from "react-native";
 import { KeyboardSafeView } from "./KeyboardSafeView";
+import { SwipeToReply } from "./gestures";
 import { ArrowLeft, Camera, CornerUpLeft, Image as ImageIcon, Search, Send, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { DirectThread, FeedPost } from "../data/mockData";
@@ -313,7 +314,8 @@ export function ChatView({
           const quoted = m.replyTo ? byId.get(m.replyTo) : undefined;
           const fg = isMe ? colors.bg : colors.text;
           return (
-            <View key={m.id} style={[isMe ? s.meWrap : s.otherWrap, m.reaction ? { marginBottom: 10 } : null]}>
+            <SwipeToReply key={m.id} enabled={!m.deleted} color={colors.muted} onReply={() => setReplyTo(m)}>
+            <View style={[isMe ? s.meWrap : s.otherWrap, m.reaction ? { marginBottom: 10 } : null]}>
               {/* a reação fica presa ao balão (não à linha do "Visto") */}
               <View style={{ position: "relative", maxWidth: "100%", alignItems: isMe ? "flex-end" : "flex-start" }}>
               <Pressable
@@ -366,6 +368,7 @@ export function ChatView({
                 <Text style={[s.seen, { color: colors.muted }, m.reaction ? { marginTop: 14 } : null]}>Visto</Text>
               ) : null}
             </View>
+            </SwipeToReply>
           );
         })}
         {typing ? (

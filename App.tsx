@@ -62,6 +62,7 @@ import { requestNotificationPermissions, sendLocalNotification } from "./src/ser
 import { getSavedAuthSession, signOut, handleAuthRedirect, deleteAccount } from "./src/services/auth";
 import { parseInviteLink, parsePostLink, parseProfileLink } from "./src/utils/profileLink";
 import { BetaWelcome } from "./src/components/BetaWelcome";
+import { EdgeSwipe, PeekHost, PinchHost } from "./src/components/gestures";
 import { shareInvite } from "./src/components/invite";
 import { FastStorage } from "./src/services/FastStorage";
 import { supabase, isCloud } from "./src/services/supabase";
@@ -617,12 +618,17 @@ function Guvio() {
     }
     return (
       <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
-        <SlideInScreen key={`${stack.length}-${top.name}`} from={goingBack.current ? -60 : 60}>
-          {screen}
-        </SlideInScreen>
+        {/* arrastar da borda esquerda volta, como no iPhone */}
+        <EdgeSwipe side="left" onSwipe={back} under={colors.surface2}>
+          <SlideInScreen key={`${stack.length}-${top.name}`} from={goingBack.current ? -60 : 60}>
+            {screen}
+          </SlideInScreen>
+        </EdgeSwipe>
         <ToastHost bottom={40} />
         <UpdateBanner />
         {betaWelcome}
+        <PinchHost />
+      <PeekHost />
       </SafeAreaView>
     );
   }
@@ -641,6 +647,9 @@ function Guvio() {
       ) : null}
       {tab === "home" ? (
         <FadeIn key="home" from={0} duration={220} style={{ flex: 1 }}>
+        {/* bordas: da direita abre o Direct, da esquerda abre Publicar */}
+        <EdgeSwipe side="left" interactive={false} onSwipe={() => setTab("add")}>
+        <EdgeSwipe side="right" interactive={false} onSwipe={() => push({ name: "direct" })}>
         <ScrollView
           ref={scroll}
           style={{ flex: 1, backgroundColor: colors.bg }}
@@ -692,6 +701,8 @@ function Guvio() {
           ) : null}
           <View style={{ height: 110 }} />
         </ScrollView>
+        </EdgeSwipe>
+        </EdgeSwipe>
         </FadeIn>
       ) : null}
       {tab === "home" && newLooks > 0 ? (
@@ -768,6 +779,12 @@ function Guvio() {
         activeTab={tab}
         onTabChange={t => {
           if (t !== tab) tapFeedback();
+          // tocar de novo na Home: sobe para o topo; se já estiver no topo, atualiza
+          if (t === tab && t === "home" && !stack.length) {
+            if (scrollY.current > 40) (scroll.current as any)?.scrollTo({ y: 0, animated: true });
+            else refreshFeed();
+            return;
+          }
           setTab(t);
         }}
       />
@@ -775,6 +792,8 @@ function Guvio() {
       <UpdateBanner />
       <InstallPrompt />
       {betaWelcome}
+      <PinchHost />
+      <PeekHost />
     </SafeAreaView>
   );
 }

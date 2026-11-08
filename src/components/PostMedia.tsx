@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Expand } from "lucide-react-native";
 import { FastImage } from "./FastImage";
 import { VideoMedia } from "./VideoMedia";
+import { usePinchZoom } from "./gestures";
 
 /**
  * Foto(s) do post: uma foto ou carrossel (arrastar para os lados), com bolinhas.
@@ -40,6 +41,8 @@ export function PostMedia({
   const shown = Math.min(1.91, Math.max(0.75, aspect || 1));
   const fit = Math.abs(shown - (aspect || 1)) < 0.01 ? "cover" : "contain";
   const imgStyle = [s.image, { aspectRatio: shown }];
+  // pinça com dois dedos dá zoom por cima de tudo
+  const pinch = usePinchZoom(() => <FastImage source={list[index] || list[0]} style={{ width: "100%", height: "100%" }} contentFit={fit} />);
 
   const handlePress = () => {
     const now = Date.now();
@@ -61,7 +64,8 @@ export function PostMedia({
   }
 
   return (
-    <View style={s.wrap} onLayout={e => setWidth(e.nativeEvent.layout.width)}>
+    <View style={s.wrap} onLayout={e => setWidth(e.nativeEvent.layout.width)} ref={pinch.ref} collapsable={false} {...pinch.panHandlers}>
+
       {list.length === 1 ? (
         <Pressable onPress={handlePress} onLongPress={() => onOpenZoom?.(0)} delayLongPress={350}>
           <FastImage source={list[0]} style={imgStyle} contentFit={fit} transition={120} />

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  Animated,
   ActivityIndicator,
   Alert,
   Modal,
@@ -13,6 +14,7 @@ import {
   View
 } from "react-native";
 import { KeyboardSafeView } from "./KeyboardSafeView";
+import { useDragToClose } from "./gestures";
 import { Check, Image as ImageIcon, Link2, Search, X } from "lucide-react-native";
 import { LookImageModal } from "./LookImageModal";
 import { postWebLink } from "../utils/profileLink";
@@ -49,6 +51,7 @@ export function SharePostModal({
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [asImage, setAsImage] = useState(false);
+  const drag = useDragToClose(() => onClose());
 
   useEffect(() => {
     if (!visible) return;
@@ -139,8 +142,8 @@ export function SharePostModal({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardSafeView style={s.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <Pressable style={{ flex: 1 }} onPress={onClose} />
-        <View style={[s.sheet, { backgroundColor: colors.bg, borderTopColor: colors.border }]}>
-          <View style={s.header}>
+        <Animated.View style={[s.sheet, { backgroundColor: colors.bg, borderTopColor: colors.border, transform: [{ translateY: drag.y }] }]}>
+          <View style={s.header} {...drag.panHandlers}>
             <View style={s.dragHandle} />
             <View style={s.titleRow}>
               <Text style={[s.title, { color: colors.text }]}>Enviar look</Text>
@@ -232,7 +235,7 @@ export function SharePostModal({
               </Pressable>
             </View>
           ) : null}
-        </View>
+        </Animated.View>
       </KeyboardSafeView>
       {asImage ? <LookImageModal post={post} onClose={() => setAsImage(false)} /> : null}
     </Modal>

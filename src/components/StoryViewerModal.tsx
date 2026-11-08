@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Dimensions,
   Modal,
@@ -10,6 +10,8 @@ import {
   View,
   Alert,
   Animated,
+  Platform,
+  PanResponder,
   ScrollView
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -118,6 +120,82 @@ export function StoryViewerModal({
     }
   };
 
+  // ---- gestos: arrastar para baixo fecha; para o lado troca de pessoa ----
+  const dragY = useRef(new Animated.Value(0)).current;
+  const dragX = useRef(new Animated.Value(0)).current;
+  const navRef = useRef({ next: () => {}, prev: () => {}, close: () => {} });
+  navRef.current = {
+    next: () => {
+      if (groupIndex < activeGroups.length - 1) {
+        setGroupIndex(g => g + 1);
+        setStoryIndex(0);
+      } else onClose();
+    },
+    prev: () => {
+      if (groupIndex > 0) {
+        setGroupIndex(g => g - 1);
+        setStoryIndex(0);
+      }
+    },
+    close: onClose
+  };
+  const swipe = useMemo(() => {
+    const ND = Platform.OS !== "web";
+    let axis: "x" | "y" | null = null;
+    const reset = () =>
+      Animated.parallel([
+        Animated.spring(dragY, { toValue: 0, useNativeDriver: ND }),
+        Animated.spring(dragX, { toValue: 0, useNativeDriver: ND })
+      ]).start();
+    return PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_e, g) => {
+        if (Math.abs(g.dy) > 12 && g.dy > 0 && Math.abs(g.dy) > Math.abs(g.dx) * 1.3) {
+          axis = "y";
+          return true;
+        }
+        if (Math.abs(g.dx) > 14 && Math.abs(g.dx) > Math.abs(g.dy) * 1.3) {
+          axis = "x";
+          return true;
+        }
+        return false;
+      },
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => setIsPaused(true),
+      onPanResponderMove: (_e, g) => {
+        if (axis === "y") dragY.setValue(Math.max(0, g.dy));
+        else dragX.setValue(g.dx);
+      },
+      onPanResponderRelease: (_e, g) => {
+        const W = Dimensions.get("window").width;
+        const H = Dimensions.get("window").height;
+        if (axis === "y" && (g.dy > H * 0.18 || g.vy > 0.8)) {
+          Animated.timing(dragY, { toValue: H, duration: 180, useNativeDriver: ND }).start(() => {
+            dragY.setValue(0);
+            setIsPaused(false);
+            navRef.current.close();
+          });
+          return;
+        }
+        if (axis === "x" && (Math.abs(g.dx) > W * 0.25 || Math.abs(g.vx) > 0.6)) {
+          const left = g.dx < 0;
+          Animated.timing(dragX, { toValue: left ? -W : W, duration: 170, useNativeDriver: ND }).start(() => {
+            dragX.setValue(0);
+            setIsPaused(false);
+            if (left) navRef.current.next();
+            else navRef.current.prev();
+          });
+          return;
+        }
+        reset();
+        setIsPaused(false);
+      },
+      onPanResponderTerminate: () => {
+        reset();
+        setIsPaused(false);
+      }
+    });
+  }, []);
+
   // marca como visto quando o story aparece na tela
   useEffect(() => {
     if (!visible || !currentStory || !currentGroup || currentGroup.isMe || currentStory.seen) return;
@@ -205,7 +283,21 @@ export function StoryViewerModal({
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
-      <View style={s.container}>
+      <Animated.View
+        style={[
+          s.container,
+          {
+            transform: [
+              { translateY: dragY },
+              { translateX: dragX },
+              { scale: dragY.interpolate({ inputRange: [0, 600], outputRange: [1, 0.85], extrapolate: "clamp" }) }
+            ],
+            borderRadius: 18,
+            overflow: "hidden"
+          }
+        ]}
+        {...swipe.panHandlers}
+      >
         {/* Story Background Image */}
         <FastImage source={currentStory.image} style={s.storyImage} contentFit="cover" transition={150} />
         <StoryOverlayText overlay={currentStory.overlay} />
@@ -396,7 +488,7 @@ export function StoryViewerModal({
             </View>
           ) : null}
         </SafeAreaView>
-      </View>
+      </Animated.View>
     </Modal>
   );
 }
