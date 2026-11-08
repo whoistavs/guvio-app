@@ -1,15 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, LayoutChangeEvent, PanResponder, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { BlurView } from "expo-blur";
-import { Home, Search, Shirt, SquarePlus, User } from "lucide-react-native";
+import { Home, Plus, Search, Shirt, User } from "lucide-react-native";
+import { PressableScale } from "./motion";
 import { useAppTheme } from "../context/AppTheme";
 
-const ITEMS = [
+// barra de vidro flutuante com 4 abas; o "publicar" é um botão redondo separado, à direita
+const ITEMS: { id: string; label: string; icon: any; center?: boolean }[] = [
   { id: "home", label: "Home", icon: Home },
-  { id: "wardrobe", label: "Guarda-roupa", icon: Shirt },
-  { id: "add", label: "", icon: SquarePlus, center: true },
   { id: "search", label: "Buscar", icon: Search },
-  { id: "profile", label: "Perfil", icon: User },
+  { id: "wardrobe", label: "Guarda-roupa", icon: Shirt },
+  { id: "profile", label: "Perfil", icon: User }
 ];
 
 export function BottomNavLiquid({ activeTab, onTabChange }: { activeTab: string; onTabChange: (tab: string) => void }) {
@@ -19,7 +20,8 @@ export function BottomNavLiquid({ activeTab, onTabChange }: { activeTab: string;
   const scaleX = useRef(new Animated.Value(1)).current;
   const scaleY = useRef(new Animated.Value(1)).current;
 
-  const activeIndex = Math.max(0, ITEMS.findIndex(i => i.id === activeTab));
+  const found = ITEMS.findIndex(i => i.id === activeTab);
+  const activeIndex = Math.max(0, found);
   const itemWidth = width / ITEMS.length;
   const startXRef = useRef(0);
 
@@ -78,6 +80,7 @@ export function BottomNavLiquid({ activeTab, onTabChange }: { activeTab: string;
 
   return (
     <View style={styles.fixed} pointerEvents="box-none">
+      <View style={styles.bar} pointerEvents="box-none">
       <View
         style={[
           styles.shell,
@@ -96,6 +99,7 @@ export function BottomNavLiquid({ activeTab, onTabChange }: { activeTab: string;
               styles.bubbleSlot,
               {
                 width: itemWidth,
+                opacity: found < 0 ? 0 : 1,
                 transform: [{ translateX: bubbleX }, { scaleX }, { scaleY }]
               }
             ]}
@@ -127,23 +131,32 @@ export function BottomNavLiquid({ activeTab, onTabChange }: { activeTab: string;
                   onPressOut={() => squeeze(false)}
                   style={[styles.item, { width: itemWidth }]}
                 >
-                  {it.center ? (
-                    <View style={[styles.center, { backgroundColor: colors.text }]}>
-                      <SquarePlus size={22} color={colors.bg} />
-                    </View>
-                  ) : (
-                    <>
-                      <Icon size={20} color={active ? colors.text : colors.muted} fill={active && it.id === "home" ? colors.text : "none"} />
-                      <Text style={[styles.label, { color: active ? colors.text : colors.muted, fontWeight: active ? "600" : "600" }]}>
-                        {it.label}
-                      </Text>
-                    </>
-                  )}
+                  <Icon size={21} color={active && found >= 0 ? colors.text : colors.muted} strokeWidth={active && found >= 0 ? 2.2 : 1.8} />
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.label, { color: active && found >= 0 ? colors.text : colors.muted, fontWeight: active && found >= 0 ? "700" : "500" }]}
+                  >
+                    {it.label}
+                  </Text>
                 </Pressable>
               );
             })}
           </View>
         </BlurView>
+      </View>
+      {/* publicar: botão redondo separado */}
+      <PressableScale
+        onPress={() => onTabChange("add")}
+        style={[
+          styles.plus,
+          {
+            backgroundColor: colors.text,
+            borderColor: activeTab === "add" ? (dark ? "rgba(255,255,255,.5)" : "rgba(0,0,0,.25)") : "transparent"
+          }
+        ]}
+      >
+        <Plus size={26} color={colors.bg} strokeWidth={2.2} />
+      </PressableScale>
       </View>
     </View>
   );
@@ -158,9 +171,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 999
   },
+  bar: { flexDirection: "row", alignItems: "center", gap: 10, width: "100%", maxWidth: 480, paddingHorizontal: 14 },
+  plus: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    borderWidth: 3,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 22,
+    elevation: 14
+  },
   shell: {
-    width: "92%",
-    maxWidth: 440,
+    flex: 1,
     borderRadius: 36,
     overflow: "hidden",
     borderWidth: StyleSheet.hairlineWidth,
@@ -202,6 +228,6 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: "row", alignItems: "center", zIndex: 2 },
   item: { minHeight: 54, alignItems: "center", justifyContent: "center", gap: 3 },
-  label: { fontSize: 9.5 },
+  label: { fontSize: 10, letterSpacing: -0.1 },
   center: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" }
 });
