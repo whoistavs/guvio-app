@@ -1,6 +1,10 @@
+export type WeatherKind = "sol" | "nublado" | "chuva" | "neve";
+
 export interface WeatherData {
   temperature: number;
   condition: string;
+  /** tipo do tempo, para guardar no post e filtrar o feed */
+  kind?: WeatherKind;
   isCold: boolean;
   isWarm: boolean;
 }
@@ -30,6 +34,13 @@ const WEATHER_CODES: Record<number, string> = {
 
 const cache: Record<string, WeatherData> = {};
 
+export function weatherKind(code: number): WeatherKind {
+  if (code >= 71 && code <= 77) return "neve";
+  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 99)) return "chuva";
+  if (code >= 2) return "nublado";
+  return "sol";
+}
+
 export async function fetchCityWeather(lat: number, lon: number): Promise<WeatherData> {
   const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
   if (cache[key]) return cache[key];
@@ -47,6 +58,7 @@ export async function fetchCityWeather(lat: number, lon: number): Promise<Weathe
     const weather: WeatherData = {
       temperature: temp,
       condition,
+      kind: weatherKind(code),
       isCold: temp < 18,
       isWarm: temp >= 22
     };

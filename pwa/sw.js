@@ -46,3 +46,42 @@ self.addEventListener("fetch", e => {
     );
   }
 });
+
+// ---------------------------------------------------------------------
+// Avisos no celular (push): o servidor manda {title, body, url, tag}
+// ---------------------------------------------------------------------
+self.addEventListener("push", e => {
+  let d = {};
+  try {
+    d = e.data ? e.data.json() : {};
+  } catch (err) {
+    d = { title: "GUVIO", body: e.data ? e.data.text() : "" };
+  }
+  const scope = self.registration.scope;
+  e.waitUntil(
+    self.registration.showNotification(d.title || "GUVIO", {
+      body: d.body || "",
+      icon: scope + "icon-192.png",
+      badge: scope + "icon-192.png",
+      tag: d.tag || undefined,
+      renotify: !!d.tag,
+      data: { url: d.url || scope }
+    })
+  );
+});
+
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || self.registration.scope;
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+      for (const c of list) {
+        if (c.url.startsWith(self.registration.scope) && "focus" in c) {
+          c.navigate(url).catch(() => {});
+          return c.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    })
+  );
+});

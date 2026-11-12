@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import {
   Bookmark,
   Camera,
@@ -64,10 +64,13 @@ import {
   loadFollowRequests,
   answerFollowRequest,
   loadArchivedPosts,
-  loadMyActivity
+  loadMyActivity,
+  setCollectionPublic
 } from "../services/storage";
 import { usageLastDays, formatMinutes } from "../services/usage";
-import { timeAgo, MyComment } from "../services/cloud";
+import { timeAgo, MyComment, isAdmin } from "../services/cloud";
+import { isCloud } from "../services/supabase";
+import { disableWebPush, enableWebPush, PushState, registerAndroidPush, syncPushPrefs, webPushState } from "../services/push";
 import { getSavedAuthSession } from "../services/auth";
 import { FastImage, preloadImages } from "./FastImage";
 import { ShareProfileModal } from "./ShareProfileModal";
@@ -76,6 +79,7 @@ import { HighlightsRow } from "./HighlightsRow";
 import { canShowInstall, openInstallHelp } from "./InstallPrompt";
 import { PeekTile, noSwipeBack } from "./gestures";
 import { CloseFriendsView } from "./CloseFriendsView";
+import { PublicCollectionsRow } from "./PublicCollectionsRow";
 import { BioLink } from "./BioExtras";
 import { AchievementsRow } from "./AchievementsRow";
 import { LEGAL_TEXTS } from "../data/legal";
@@ -354,6 +358,7 @@ export function PublicProfileView({
         ) : (
           <>
             <HighlightsRow userId={profile.id} username={profile.username} avatar={profile.avatar} />
+            <PublicCollectionsRow userId={profile.id} onOpenPost={onOpenPost} />
             <View style={[s.profileTabsBar, { borderTopColor: colors.border, borderBottomColor: colors.border, marginTop: 14 }]}>
               <Pressable onPress={() => setTab("posts")} style={[s.tabItem, tab === "posts" && { borderBottomColor: colors.text, borderBottomWidth: 2 }]}>
                 <Grid3X3 size={20} color={tab === "posts" ? colors.text : colors.muted} />
@@ -683,6 +688,7 @@ export function MyProfileView({
         </View>
 
         <HighlightsRow userId={profile.id} username={profile.username} avatar={profile.avatar} isMe />
+        <PublicCollectionsRow userId={profile.id} onOpenPost={onOpenPost} reloadKey={postsVersion} />
 
         {/* Instagram Profile Tabs: Posts | Saved | Tagged */}
         <View style={[s.profileTabsBar, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
@@ -1046,7 +1052,15 @@ export function SettingsView({
   const { colors, pref, setPref } = useAppTheme();
   const [saver, setSaver] = useState(() => getSettings().dataSaver);
   const toggleSaver = () => setSaver(updateSettings({ dataSaver: !saver }).dataSaver);
+  const [admin, setAdmin] = useState(false);
+  useEffect(() => {
+    isCloud()
+      .then(c => (c ? isAdmin() : false))
+      .then(setAdmin)
+      .catch(() => {});
+  }, []);
   const rows = [
+    ...(admin ? [{ id: "admin", l: "Painel do criador", i: Gauge }] : []),
     { id: "saved", l: "Salvos", i: Bookmark },
     { id: "archived", l: "Arquivados", i: Archive },
     { id: "activity", l: "Sua atividade", i: Clock3 },
@@ -1202,7 +1216,18 @@ export function SimpleSettingsPage({
   }, [activeCol]);
 
   const manageCollection = (c: SavedCollection) => {
-    Alert.alert(c.name, undefined, [
+    Alert.alert(c.name, c.isPublic ? "Pública: aparece no seu perfil." : "Privada: só você vê.", [
+      {
+        text: c.isPublic ? "Tornar privada" : "Tornar pública (aparece no perfil)",
+        onPress: async () => {
+          try {
+            await setCollectionPublic(c.id, !c.isPublic);
+            setCols(prev => prev.map(x => (x.id === c.id ? { ...x, isPublic: !c.isPublic } : x)));
+          } catch (e: any) {
+            Alert.alert("Erro", e?.message || "Não foi possível mudar agora.");
+          }
+        }
+      },
       {
         text: "Apagar coleção",
         style: "destructive",
@@ -1306,7 +1331,10 @@ export function SimpleSettingsPage({
                   <Text style={{ color: colors.text, fontSize: 11, fontWeight: on ? "700" : "600" }} numberOfLines={1}>
                     {c.name}
                   </Text>
-                  <Text style={{ color: colors.muted, fontSize: 10 }}>{c.count}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 10 }}>
+                    {c.count}
+                    {c.isPublic ? " · pública" : ""}
+                  </Text>
                 </Pressable>
               );
             })}
@@ -1315,7 +1343,11 @@ export function SimpleSettingsPage({
             <Text style={{ color: colors.muted, fontSize: 12, paddingHorizontal: 20, marginBottom: 10 }}>
               Dica: segure o botão de salvar de um look para guardar numa coleção.
             </Text>
-          ) : null}
+          ) : (
+            <Text style={{ color: colors.muted, fontSize: 12, paddingHorizontal: 20, marginBottom: 10 }}>
+              Segure uma coleção para torná-la pública: ela aparece no seu perfil.
+            </Text>
+          )}
           <Grid posts={activeCol ? colPosts : savedPosts} colors={colors} onSelectPost={p => onOpenPost?.(p.id)} />
         </>
       ) : kind === "activity" ? (
@@ -1347,7 +1379,54 @@ export function SimpleSettingsPage({
 
 function NotificationSettings({ onBack }: { onBack: () => void }) {
   const { colors } = useAppTheme();
-  const [st, setSt] = useState(() => getSettings());
+  const [st, setStRaw] = useState(() => getSettings());
+  const setSt = (v: ReturnType<typeof getSettings>) => {
+    setStRaw(v);
+    syncPushPrefs().catch(() => {});
+  };
+  const [push, setPush] = useState<PushState | "android" | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
+  useEffect(() => {
+    if (Platform.OS === "android") setPush("android");
+    else webPushState().then(setPush);
+  }, []);
+  const pushText =
+    push === "on"
+      ? "Ligados neste aparelho"
+      : push === "denied"
+      ? "Bloqueados nas configurações do navegador/celular"
+      : push === "needs-install"
+      ? "No iPhone, instale o site na tela de início (Compartilhar > Adicionar à Tela de Início) e abra por lá"
+      : push === "unsupported"
+      ? Platform.OS === "ios"
+        ? "Neste app do iPhone não dá. Use o site instalado na tela de início"
+        : "Este navegador não suporta"
+      : push === "android"
+      ? "Toque para permitir os avisos do GUVIO"
+      : "Desligados neste aparelho";
+  const togglePush = async () => {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      if (push === "android") {
+        const ok = await registerAndroidPush();
+        Alert.alert(ok ? "Avisos ligados" : "Ainda não disponível", ok ? "Você vai receber avisos mesmo com o app fechado." : "Os avisos do app Android chegam numa próxima versão. Enquanto isso, eles aparecem com o app aberto.");
+      } else if (push === "on") {
+        await disableWebPush();
+        setPush("off");
+      } else if (push === "off") {
+        setPush(await enableWebPush());
+      } else if (push === "denied") {
+        Alert.alert("Avisos bloqueados", "Libere as notificações deste site nas configurações do navegador ou do celular e volte aqui.");
+      } else if (push === "needs-install") {
+        openInstallHelp();
+      }
+    } catch (e: any) {
+      Alert.alert("Não deu certo", e?.message || "Tente de novo.");
+    } finally {
+      setPushBusy(false);
+    }
+  };
   const rows: { k: NotifKind; l: string; d: string }[] = [
     { k: "like", l: "Curtidas", d: "Em looks e comentários seus" },
     { k: "comment", l: "Comentários e respostas", d: "Quando comentam ou respondem você" },
@@ -1357,6 +1436,20 @@ function NotificationSettings({ onBack }: { onBack: () => void }) {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScreenHeader title="Notificações" onBack={onBack} />
+      {push !== null ? (
+        <Pressable onPress={togglePush} style={[s.setting, { borderBottomColor: colors.border }]}>
+          <Bell size={21} color={colors.icon} />
+          <View style={{ flex: 1 }}>
+            <Text style={[s.settingText, { color: colors.text }]}>Avisos com o app fechado</Text>
+            <Text style={{ color: colors.muted, fontSize: 11 }}>{pushText}</Text>
+          </View>
+          {push === "on" || push === "off" ? (
+            <Toggle value={push === "on"} onValueChange={togglePush} />
+          ) : pushBusy ? (
+            <ActivityIndicator color={colors.muted} />
+          ) : null}
+        </Pressable>
+      ) : null}
       <Pressable onPress={() => setSt(updateSettings({ pauseAll: !st.pauseAll }))} style={[s.setting, { borderBottomColor: colors.border }]}>
         <BellOff size={21} color={colors.icon} />
         <View style={{ flex: 1 }}>

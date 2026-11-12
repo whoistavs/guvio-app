@@ -53,10 +53,12 @@ function SharedPostCard({
   const [post, setPost] = useState<FeedPost | null | undefined>(postCache.get(postId));
   useEffect(() => {
     if (postCache.has(postId)) return;
-    loadPost(postId).then(p => {
-      postCache.set(postId, p);
-      setPost(p);
-    });
+    loadPost(postId)
+      .then(p => {
+        postCache.set(postId, p);
+        setPost(p);
+      })
+      .catch(() => setPost(null));
   }, [postId]);
 
   if (post === undefined) return <Skeleton width={220} height={300} borderRadius={14} />;

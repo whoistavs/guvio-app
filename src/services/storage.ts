@@ -65,7 +65,12 @@ const KEYS = {
 
 /** último feed salvo no aparelho, para abrir na hora (mesmo sem internet) */
 export function getCachedFeed(): FeedPost[] {
-  return FastStorage.getItemSync(KEYS.POSTS, []);
+  return cleanCached(FastStorage.getItemSync(KEYS.POSTS, []));
+}
+
+/** posts antigos guardados no aparelho com "Sua cidade" (texto provisório) ficam sem cidade */
+function cleanCached(list: FeedPost[]): FeedPost[] {
+  return list.map(p => (/^sua cidade,?$/i.test((p.city || "").trim()) ? { ...p, city: "" } : p));
 }
 
 /** true quando a última tentativa de falar com o servidor falhou */
@@ -107,7 +112,7 @@ export async function loadSavedPosts(): Promise<FeedPost[]> {
       return posts;
     } catch (e) {
       setOffline(true);
-      const cached: FeedPost[] = FastStorage.getItemSync(KEYS.POSTS, []);
+      const cached: FeedPost[] = cleanCached(FastStorage.getItemSync(KEYS.POSTS, []));
       snapshotPosts(cached);
       return cached;
     }
@@ -148,6 +153,8 @@ export async function publishPost(input: {
   video?: string;
   pollOptions?: string[];
   aspect?: number;
+  tempC?: number | null;
+  weather?: FeedPost["weather"];
 }): Promise<FeedPost> {
   if (await isCloud()) {
     const post = await cloud.createPost(input);
@@ -171,6 +178,8 @@ export async function publishPost(input: {
     kind: input.video ? "video" : input.pollOptions && (input.images || []).length >= 2 ? "poll" : "photo",
     videoUrl: input.video,
     aspect: input.aspect || 1,
+    tempC: input.tempC ?? null,
+    weather: input.weather ?? null,
     poll:
       input.pollOptions && (input.images || []).length >= 2
         ? { options: input.pollOptions.map((o, i) => o.trim() || `Look ${i + 1}`), votes: input.pollOptions.map(() => 0), myVote: null }
@@ -199,7 +208,8 @@ function localPosts(): FeedPost[] {
 }
 
 export async function loadPost(id: string): Promise<FeedPost | null> {
-  if (await isCloud()) return cloud.fetchPost(id).catch(() => null);
+  // sem .catch: erro de rede aparece como "tente de novo"; look apagado volta null
+  if (await isCloud()) return cloud.fetchPost(id);
   return localPosts().find(p => p.id === id) || null;
 }
 
@@ -708,7 +718,7 @@ export async function setCommentLike(comment: CommentItem, on: boolean): Promise
 // ---------------------------------------------------------------------
 // Coleções de salvos
 // ---------------------------------------------------------------------
-type LocalCollection = { id: string; name: string; postIds: string[] };
+type LocalCollection = { id: string; name: string; postIds: string[]; isPublic?: boolean };
 const localCollections = (): LocalCollection[] => FastStorage.getItemSync(KEYS.COLLECTIONS, []);
 
 export async function loadCollections(): Promise<SavedCollection[]> {
@@ -718,8 +728,23 @@ export async function loadCollections(): Promise<SavedCollection[]> {
     id: c.id,
     name: c.name,
     count: c.postIds.length,
-    cover: posts.find(p => p.id === c.postIds[0])?.image
+    cover: posts.find(p => p.id === c.postIds[0])?.image,
+    isPublic: !!c.isPublic
   }));
+}
+
+/** Tornar uma coleção pública (aparece no perfil) ou privada */
+export async function setCollectionPublic(id: string, on: boolean): Promise<void> {
+  if (await isCloud()) return cloud.setCollectionPublic(id, on);
+  FastStorage.setItemSync(KEYS.COLLECTIONS, localCollections().map(c => (c.id === id ? { ...c, isPublic: on } : c)));
+}
+
+/** Coleções públicas de um perfil */
+export async function loadPublicCollections(userId: string): Promise<SavedCollection[]> {
+  if (await isCloud()) return cloud.fetchPublicCollections(userId).catch(() => []);
+  const me = await loadSavedProfile();
+  if (userId !== me.id) return [];
+  return (await loadCollections()).filter(c => c.isPublic && c.count > 0);
 }
 
 export async function createCollection(name: string): Promise<SavedCollection> {

@@ -72,6 +72,9 @@ export interface FeedPost {
   videoUrl?: string;
   /** largura/altura da foto (1 = quadrada, 0.8 = 4:5, 1.78 = 16:9) */
   aspect?: number;
+  /** clima de quando o look foi publicado */
+  tempC?: number | null;
+  weather?: "sol" | "nublado" | "chuva" | "neve" | null;
   /** enquete "Qual look?": uma opção por foto */
   poll?: { options: string[]; votes: number[]; myVote: number | null };
   /** repost: id do post original e quem publicou */
@@ -545,7 +548,7 @@ export interface CommentItem {
   isLiked?: boolean;
 }
 
-export interface SavedCollection { id: string; name: string; cover?: string; count: number; }
+export interface SavedCollection { id: string; name: string; cover?: string; count: number; isPublic?: boolean; }
 export interface DirectThread { id: string; profileId: string; username: string; avatar: string; lastMessage: string; time: string; unread?: number; pinned?: boolean; }
 
 export const MOCK_COMMENTS: CommentItem[] = [];

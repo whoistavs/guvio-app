@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { noSwipeBack } from "./gestures";
-import { BarChart3, CalendarDays, Camera, Check, Heart, ImagePlus, Layers, Luggage, Plus, Send, Tag, Trash2, X } from "lucide-react-native";
+import { BarChart3, Camera, Check, Heart, ImagePlus, Layers, MoreHorizontal, Plus, Send, Tag, Trash2, X } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { ClothingTag, Outfit, OutfitStyle, STYLES, WardrobeItem } from "../data/mockData";
 import { StyleCard } from "./OutfitCard";
@@ -342,12 +342,25 @@ export function WardrobeView({
         <View style={s.tools}>
           {[
             { id: "wish" as const, label: "Desejos", icon: Heart },
-            { id: "calendar" as const, label: "Calendário", icon: CalendarDays },
-            { id: "trip" as const, label: "Mala de viagem", icon: Luggage }
+            { id: "more" as const, label: "Mais", icon: MoreHorizontal }
           ].map(t => {
             const I = t.icon;
             return (
-              <PressableScale haptic key={t.id} onPress={() => setTool(t.id)} style={[s.toolBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <PressableScale
+                haptic
+                key={t.id}
+                onPress={() =>
+                  t.id === "more"
+                    ? Alert.alert("Mais do guarda-roupa", undefined, [
+                        { text: "Calendário de looks", onPress: () => setTool("calendar") },
+                        { text: "Mala de viagem", onPress: () => setTool("trip") },
+                        ...(items.length > 0 ? [{ text: "Estatísticas das peças", onPress: () => setShowStats(true) }] : []),
+                        { text: "Cancelar", style: "cancel" as const }
+                      ])
+                    : setTool(t.id)
+                }
+                style={[s.toolBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              >
                 <I size={18} color={colors.text} />
                 <Text style={{ color: colors.text, fontWeight: "600", fontSize: 11 }} numberOfLines={1}>
                   {t.label}

@@ -23,6 +23,7 @@ import { COLOR_CHIPS } from "../utils/colorHarmony";
 import { PeekTile, noSwipeBack } from "./gestures";
 import { STYLES } from "../data/mockData";
 import { RankingGrid } from "./RankingGrid";
+import { CityWeekCard } from "./CityWeekCard";
 import { FastImage } from "./FastImage";
 import { SuggestionsRow } from "./SuggestionsRow";
 
@@ -44,8 +45,11 @@ export function SearchProfilesView({
   cityFocus,
   onClearCityFocus,
   scrollEnabled = true,
-  searchRequest
+  searchRequest,
+  myCity
 }: {
+  /** cidade de quem está usando (para o "Look da semana") */
+  myCity?: string;
   onOpenProfile: (p: UserProfile) => void;
   onOpenPost?: (postId: string) => void;
   /** globo mostrado acima de "Em alta na comunidade" */
@@ -357,7 +361,10 @@ export function SearchProfilesView({
                   <RankingGrid posts={ranked} onOpenPost={onOpenPost} />
                 );
               })()}
+              {cityFocus.city ? <CityWeekCard city={cityFocus.city} onOpenPost={onOpenPost} /> : null}
             </>
+          ) : myCity ? (
+            <CityWeekCard city={myCity} onOpenPost={onOpenPost} />
           ) : null}
           {trending.length > 0 ? (
             <>

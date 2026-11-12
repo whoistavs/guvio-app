@@ -255,6 +255,8 @@ function toPost(r: any, liked: Set<string>, saved: Set<string>): FeedPost {
     kind: r.kind || "photo",
     videoUrl: r.video_url || undefined,
     aspect: typeof r.aspect === "number" && r.aspect > 0 ? r.aspect : 1,
+    tempC: typeof r.temp_c === "number" ? r.temp_c : null,
+    weather: r.weather || null,
     repostOf: r.repost_of || undefined,
     originalUsername: r.original_username || undefined,
     originalAvatar: r.original_avatar_url || undefined,
@@ -410,6 +412,8 @@ export async function reportPost(postId: string, reason: string) {
 }
 
 export async function fetchPost(id: string): Promise<FeedPost | null> {
+  // link quebrado/incompleto: não é um id válido
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return null;
   const row = check(await db().from("feed_posts").select("*").eq("id", id).maybeSingle());
   return row ? (await mapPosts([row]))[0] : null;
 }
@@ -609,6 +613,8 @@ export async function createPost(input: {
   /** enquete: uma legenda por foto */
   pollOptions?: string[];
   aspect?: number;
+  tempC?: number | null;
+  weather?: string | null;
 }): Promise<FeedPost> {
   const uid = await me();
   const video_url = input.video ? await uploadVideo(input.video) : null;
@@ -617,10 +623,7 @@ export async function createPost(input: {
   const uploaded: string[] = [];
   for (const uri of all) uploaded.push(await uploadImage(uri, "posts"));
   const image_url = uploaded[0];
-  const row = check(
-    await db()
-      .from("posts")
-      .insert({
+  const base = {
         user_id: uid,
         image_url,
         caption: input.caption,
@@ -635,10 +638,18 @@ export async function createPost(input: {
         video_url,
         aspect: clampAspect(input.aspect),
         poll: input.pollOptions && uploaded.length >= 2 ? { options: input.pollOptions.slice(0, uploaded.length).map((o, i) => o.trim() || `Look ${i + 1}`) } : null
-      })
-      .select("id")
-      .single()
-  ) as any;
+  };
+  const withWeather = {
+    ...base,
+    temp_c: typeof input.tempC === "number" ? Math.round(input.tempC) : null,
+    weather: input.weather || null
+  };
+  let res = await db().from("posts").insert(withWeather).select("id").single();
+  // banco ainda sem as colunas de clima (migração 012 não rodou): publica sem elas
+  if (res.error && /temp_c|weather/i.test(res.error.message || "")) {
+    res = await db().from("posts").insert(base).select("id").single();
+  }
+  const row = check(res) as any;
   const post = await fetchPost(row.id);
   if (!post) throw new Error("Post criado, mas não foi possível carregá-lo.");
   return post;
@@ -724,19 +735,36 @@ export async function setCommentLike(commentId: string, on: boolean) {
 // ---------------------------------------------------------------------
 // Coleções de salvos
 // ---------------------------------------------------------------------
-export async function fetchCollections(): Promise<SavedCollection[]> {
-  const uid = await me();
-  const rows = check(
-    await db()
-      .from("collections")
-      .select("id, name, created_at, collection_items(post_id, created_at, posts(image_url))")
-      .eq("user_id", uid)
-      .order("created_at", { ascending: false })
-  ) as any[];
+async function collectionsOf(userId: string, onlyPublic: boolean): Promise<SavedCollection[]> {
+  const q = (cols: string) => {
+    let b = db().from("collections").select(cols).eq("user_id", userId);
+    if (onlyPublic) b = b.eq("is_public", true);
+    return b.order("created_at", { ascending: false });
+  };
+  let res: any = await q("id, name, is_public, created_at, collection_items(post_id, created_at, posts(image_url))");
+  // banco sem a coluna is_public (migração 012 não rodou)
+  if (res.error && /is_public/.test(res.error.message || "")) {
+    if (onlyPublic) return [];
+    res = await q("id, name, created_at, collection_items(post_id, created_at, posts(image_url))");
+  }
+  const rows = check(res) as any[];
   return (rows || []).map(r => {
     const items = (r.collection_items || []).sort((a: any, b: any) => (a.created_at < b.created_at ? 1 : -1));
-    return { id: r.id, name: r.name, count: items.length, cover: items[0]?.posts?.image_url || undefined };
+    return { id: r.id, name: r.name, count: items.length, cover: items[0]?.posts?.image_url || undefined, isPublic: !!r.is_public };
   });
+}
+
+export async function fetchCollections(): Promise<SavedCollection[]> {
+  return collectionsOf(await me(), false);
+}
+
+/** Coleções públicas de alguém (aparecem no perfil) */
+export async function fetchPublicCollections(userId: string): Promise<SavedCollection[]> {
+  return (await collectionsOf(userId, true)).filter(c => c.count > 0);
+}
+
+export async function setCollectionPublic(id: string, on: boolean) {
+  check(await db().from("collections").update({ is_public: on }).eq("id", id));
 }
 
 export async function createCollection(name: string): Promise<SavedCollection> {
@@ -825,6 +853,86 @@ export async function fetchCityRanking(city: string, limit = 30): Promise<FeedPo
     hiddenSets()
   ]);
   return mapPosts(visible(check(res) || [], hidden));
+}
+
+// ---------------------------------------------------------------------
+// Painel do criador (só administradores — conferido no banco)
+// ---------------------------------------------------------------------
+export async function isAdmin(): Promise<boolean> {
+  const { data, error } = await db().rpc("is_admin");
+  return !error && data === true;
+}
+
+export interface AdminOverview {
+  users: number;
+  users_7d: number;
+  posts: number;
+  posts_7d: number;
+  comments_7d: number;
+  messages_7d: number;
+  reports_open: number;
+  feedback_7d: number;
+  new_users: { id: string; username: string; display_name: string; avatar_url: string; created_at: string; posts: number }[];
+  recent_posts: { id: string; image_url: string; caption: string; created_at: string; username: string }[];
+  reports: { post_id: string; total: number; last_at: string; reasons: string; image_url: string; caption: string; username: string }[];
+  feedback: { id: string; kind: string; text: string; screenshot_url?: string; platform?: string; app_version?: string; created_at: string; username?: string }[];
+}
+
+export async function adminOverview(): Promise<AdminOverview> {
+  const { data, error } = await db().rpc("admin_overview");
+  if (error) throw new Error(error.message);
+  return data as AdminOverview;
+}
+
+export async function adminDeletePost(postId: string) {
+  const { error } = await db().rpc("admin_delete_post", { p_post: postId });
+  if (error) throw new Error(error.message);
+}
+
+export async function adminDismissReports(postId: string) {
+  const { error } = await db().rpc("admin_dismiss_reports", { p_post: postId });
+  if (error) throw new Error(error.message);
+}
+
+// ---------------------------------------------------------------------
+// Look da semana da cidade (votação)
+// ---------------------------------------------------------------------
+/** segunda-feira desta semana (UTC), igual ao date_trunc('week', now()) do banco */
+export function weekStartUtc(d = new Date()): string {
+  const day = (d.getUTCDay() + 6) % 7; // 0 = segunda
+  const m = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day));
+  return m.toISOString().slice(0, 10);
+}
+
+export interface CityWeek {
+  posts: (FeedPost & { votes: number })[];
+  myVote: string | null;
+}
+
+/** looks da cidade publicados nos últimos 7 dias, com os votos desta semana */
+export async function fetchCityWeek(city: string): Promise<CityWeek> {
+  const clean = city.replace(/[%,()]/g, "").trim();
+  const since = new Date(Date.now() - 7 * 864e5).toISOString();
+  const [res, votes, hidden] = await Promise.all([
+    db().from("feed_posts").select("*").ilike("city", clean).eq("archived", false).gte("created_at", since).limit(40),
+    db().rpc("city_week_votes", { p_city: clean }),
+    hiddenSets()
+  ]);
+  const list = await mapPosts(visible(check(res) || [], hidden));
+  const v = (votes.data || []) as { post_id: string; votes: number; mine: boolean }[];
+  const posts = list
+    .map(p => ({ ...p, votes: v.find(x => x.post_id === p.id)?.votes || 0 }))
+    .sort((a, b) => b.votes - a.votes || (b.likes || 0) - (a.likes || 0));
+  return { posts, myVote: v.find(x => x.mine)?.post_id || null };
+}
+
+export async function voteCityWeek(city: string, postId: string) {
+  const uid = await me();
+  check(
+    await db()
+      .from("city_votes")
+      .upsert({ user_id: uid, week: weekStartUtc(), city: city.trim(), post_id: postId }, { onConflict: "user_id,week,city" })
+  );
 }
 
 // ---------------------------------------------------------------------

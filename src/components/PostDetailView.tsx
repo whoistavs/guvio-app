@@ -3,7 +3,7 @@ import { ReelsViewer } from "./ReelsViewer";
 import { loadFollowedUsers as loadFollowedIds, saveFollowedUsers as saveFollowedIds } from "../services/storage";
 import { ActivityIndicator, Alert, Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { noSwipeBack } from "./gestures";
-import { Bookmark, Heart, MapPin, MessageCircle, MoreHorizontal, Send, Shirt } from "lucide-react-native";
+import { Bookmark, Heart, MapPin, MessageCircle, MoreHorizontal, Send, Shirt, ImageOff, WifiOff } from "lucide-react-native";
 import { FeedPost } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
 import { PostDetailSkeleton } from "./SkeletonLoader";
@@ -13,7 +13,7 @@ import { CommentsModal } from "./CommentsModal";
 import { askReport, EditPostModal, openOwnPostMenu } from "./PostMenus";
 import { LikersModal } from "./LikersModal";
 import { PopOnActive } from "./motion";
-import { PollBar, RatingBar, RepostLine } from "./PostExtras";
+import { PollBar, RepostLine } from "./PostExtras";
 import { RepostModal } from "./RepostModal";
 import { openBioLink } from "./BioExtras";
 import { PostMedia } from "./PostMedia";
@@ -41,6 +41,8 @@ export function PostDetailView({
 }) {
   const { colors } = useAppTheme();
   const [post, setPost] = useState<FeedPost | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [retry, setRetry] = useState(0);
   const [loading, setLoading] = useState(true);
   const [myId, setMyId] = useState<string | null>(null);
   const [showComments, setShowComments] = useState(false);
@@ -58,11 +60,13 @@ export function PostDetailView({
 
   useEffect(() => {
     setLoading(true);
+    setFailed(false);
     loadPost(postId)
       .then(setPost)
+      .catch(() => setFailed(true))
       .finally(() => setLoading(false));
     loadSavedProfile().then(p => setMyId(p.id));
-  }, [postId]);
+  }, [postId, retry]);
 
   if (loading) {
     return (
@@ -77,9 +81,25 @@ export function PostDetailView({
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <ScreenHeader title="Look" onBack={onBack} />
-        <Text style={{ color: colors.muted, textAlign: "center", marginTop: 60 }}>
-          Este look não existe mais.
-        </Text>
+        <View style={{ alignItems: "center", paddingHorizontal: 36, marginTop: 80, gap: 10 }}>
+          <View style={{ width: 72, height: 72, borderRadius: 36, borderWidth: 2, borderColor: colors.text, alignItems: "center", justifyContent: "center" }}>
+            {failed ? <WifiOff size={30} color={colors.icon} /> : <ImageOff size={30} color={colors.icon} />}
+          </View>
+          <Text style={{ color: colors.text, fontSize: 18, fontWeight: "700", textAlign: "center" }}>
+            {failed ? "Não foi possível carregar" : "Este look não está disponível"}
+          </Text>
+          <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center" }}>
+            {failed
+              ? "Confira sua internet e tente de novo."
+              : "O link pode estar quebrado, ou o look foi apagado, arquivado ou é de uma conta privada."}
+          </Text>
+          <Pressable
+            onPress={failed ? () => setRetry(r => r + 1) : onBack}
+            style={{ marginTop: 10, backgroundColor: colors.text, paddingHorizontal: 22, paddingVertical: 11, borderRadius: 12 }}
+          >
+            <Text style={{ color: colors.bg, fontWeight: "700" }}>{failed ? "Tentar de novo" : "Voltar"}</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -214,7 +234,6 @@ export function PostDetailView({
               </Text>
             </Pressable>
           )}
-          <RatingBar post={post} onChange={u => setPost(u)} />
           {post.caption ? (
             <RichCaption
               text={post.caption}
@@ -257,7 +276,7 @@ export function PostDetailView({
             </Pressable>
           ) : null}
           <Text style={{ color: colors.muted, fontSize: 11 }}>
-            {post.styleTag} · {post.timeAgo}
+            {[post.styleTag !== "Novo look" ? post.styleTag : "", post.timeAgo].filter(Boolean).join(" · ")}
           </Text>
         </View>
       </ScrollView>

@@ -14,7 +14,10 @@ import {
   Trash2,
   MoreHorizontal,
   X,
-  UserPlus
+  UserPlus,
+  CloudRain,
+  Snowflake,
+  Sun
 } from "lucide-react-native";
 import { FeedPost, UserStoryGroup, MOCK_PROFILES, UserProfile, ClothingTag, StoryOverlay, StorySticker } from "../data/mockData";
 import { loadAllRegisteredProfiles, loadSavedProfile } from "../services/storage";
@@ -29,7 +32,8 @@ import { StoryViewerModal, CreateStoryModal } from "./StoryViewerModal";
 import { CollectionPickerModal } from "./CollectionPickerModal";
 import { SuggestionsRow } from "./SuggestionsRow";
 import { LikersModal } from "./LikersModal";
-import { PollBar, RatingBar, RepostLine } from "./PostExtras";
+import { PollBar, RepostLine } from "./PostExtras";
+import { matchesWeather, WeatherFilter } from "../utils/weatherFilter";
 import { RepostModal } from "./RepostModal";
 import { ReelsViewer } from "./ReelsViewer";
 import { FastStorage } from "../services/FastStorage";
@@ -65,6 +69,7 @@ export function HomeFeed({
   posts,
   setPosts,
   onAssembleWithWardrobe,
+  todayWeather,
   countryFilter,
   cityFilter,
   onClearFilter,
@@ -77,6 +82,8 @@ export function HomeFeed({
   posts: FeedPost[];
   setPosts: React.Dispatch<React.SetStateAction<FeedPost[]>>;
   onAssembleWithWardrobe?: (p: FeedPost) => void;
+  /** clima de hoje, para marcar o filtro "· hoje" */
+  todayWeather?: WeatherFilter | null;
   countryFilter?: string | null;
   cityFilter?: string | null;
   onClearFilter?: () => void;
@@ -94,6 +101,7 @@ export function HomeFeed({
 
   // Social feed states
   const [feedTab, setFeedTab] = useState<"forYou" | "following" | "nearby">("forYou");
+  const [wf, setWf] = useState<WeatherFilter | null>(null);
   const [commentPost, setCommentPost] = useState<FeedPost | null>(null);
   const [sharePost, setSharePost] = useState<FeedPost | null>(null);
   const [collectionPost, setCollectionPost] = useState<FeedPost | null>(null);
@@ -316,6 +324,7 @@ export function HomeFeed({
   } else {
     visiblePosts = applyNotInterested(visiblePosts, ni);
   }
+  if (wf) visiblePosts = visiblePosts.filter(p => matchesWeather(p, wf));
   // "Você está em dia": aparece antes do primeiro post que você já tinha visto
   const caughtUpAt =
     feedTab === "forYou" && seenUntil && visiblePosts[0]?.createdAt && visiblePosts[0].createdAt > seenUntil
@@ -423,6 +432,35 @@ export function HomeFeed({
         </View>
       )}
 
+      {/* Filtro por clima: looks para dias de chuva, frio ou calor */}
+      {!cityFilter && !countryFilter ? (
+        <ScrollView {...noSwipeBack} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.wfRow}>
+          {(
+            [
+              ["chuva", "Dia de chuva", CloudRain],
+              ["frio", "Frio", Snowflake],
+              ["calor", "Calor", Sun]
+            ] as const
+          ).map(([id, label, Icon]) => {
+            const on = wf === id;
+            const today = todayWeather === id;
+            return (
+              <Pressable
+                key={id}
+                onPress={() => setWf(on ? null : id)}
+                style={[s.wfChip, { borderColor: on ? colors.text : colors.border, backgroundColor: on ? colors.text : "transparent" }]}
+              >
+                <Icon size={14} color={on ? colors.bg : colors.text} />
+                <Text style={{ color: on ? colors.bg : colors.text, fontSize: 12, fontWeight: "600" }}>
+                  {label}
+                  {today ? " · hoje" : ""}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : null}
+
       {/* Location Filter Header (when globe active) */}
       {(cityFilter || countryFilter) && (
         <View style={[s.heading, { flexDirection: "row", alignItems: "center" }]}>
@@ -456,7 +494,9 @@ export function HomeFeed({
       ) : visiblePosts.length === 0 ? (
         <View style={[s.empty, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text style={{ color: colors.text, fontWeight: "700", fontSize: 16 }}>
-            {feedTab === "following"
+            {wf
+              ? `Nenhum look para ${wf === "chuva" ? "dias de chuva" : wf === "frio" ? "o frio" : "o calor"} aqui ainda`
+              : feedTab === "following"
               ? "Nenhum look de quem você segue"
               : feedTab === "nearby"
               ? nearbyPosts === null
@@ -465,7 +505,9 @@ export function HomeFeed({
               : "Novos looks chegando"}
           </Text>
           <Text style={{ color: colors.muted, textAlign: "center", marginTop: 6, fontSize: 12, lineHeight: 18 }}>
-            {feedTab === "nearby"
+            {wf
+              ? "Os looks novos guardam o clima do dia em que foram publicados. Toque no filtro de novo para ver todos."
+              : feedTab === "nearby"
               ? "Mostramos looks publicados a até 60 km de você. Publique o primeiro da sua região!"
               : feedTab === "following"
               ? "Siga criadores de moda no feed ou na busca para ver publicações deles aqui."
@@ -525,9 +567,11 @@ export function HomeFeed({
                   </Pressable>
 
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <View style={[s.styleTag, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                      <Text style={{ color: colors.text, fontSize: 10, fontWeight: "600" }}>{p.styleTag}</Text>
-                    </View>
+                    {p.styleTag && p.styleTag !== "Novo look" ? (
+                      <View style={[s.styleTag, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <Text style={{ color: colors.text, fontSize: 10, fontWeight: "600" }}>{p.styleTag}</Text>
+                      </View>
+                    ) : null}
                     <Pressable onPress={() => openPostMenu(p)} hitSlop={10}>
                       <MoreHorizontal size={18} color={colors.muted} />
                     </Pressable>
@@ -617,6 +661,15 @@ export function HomeFeed({
             <Send size={23} color={colors.icon} />
           </View>
                     </Pressable>
+                    {onAssembleWithWardrobe ? (
+                      <Pressable
+                        onPress={() => onAssembleWithWardrobe(p)}
+                        hitSlop={8}
+                        accessibilityLabel="Montar com meu guarda-roupa"
+                      >
+                        <Shirt size={23} color={colors.icon} />
+                      </Pressable>
+                    ) : null}
                   </View>
                   <Pressable
                     onPress={() => toggleLikeOrSave(p.id, "isSaved")}
@@ -638,7 +691,6 @@ export function HomeFeed({
                 {/* Post Body (Likes, Caption, Comments, Wardrobe CTA) */}
                 <View style={s.body}>
                   <View style={{ marginBottom: 6 }}>
-                    <RatingBar post={p} onChange={u => setPostsSilently(u)} />
                   </View>
                   {p.hideLikes && !isMine(p) ? (
                     <Text style={[s.likes, { color: colors.text }]}>
@@ -659,22 +711,15 @@ export function HomeFeed({
                     onTag={onOpenTag}
                     onMention={u => onOpenProfile?.(u)}
                   />
-                  <Pressable onPress={() => setCommentPost(p)}>
-                    <Text style={{ color: colors.muted, fontSize: 12, marginTop: 6, fontWeight: "500" }}>
-                      Ver todos os {p.commentsCount} comentários
-                    </Text>
-                  </Pressable>
+                  {p.commentsCount > 0 ? (
+                    <Pressable onPress={() => setCommentPost(p)}>
+                      <Text style={{ color: colors.muted, fontSize: 12, marginTop: 6, fontWeight: "500" }}>
+                        {p.commentsCount === 1 ? "Ver 1 comentário" : `Ver todos os ${p.commentsCount} comentários`}
+                      </Text>
+                    </Pressable>
+                  ) : null}
                   <Text style={{ color: colors.muted, fontSize: 10, marginTop: 4 }}>{p.timeAgo}</Text>
 
-                  <Pressable
-                    onPress={() => onAssembleWithWardrobe?.(p)}
-                    style={[s.cta, { backgroundColor: colors.text }]}
-                  >
-                    <Shirt size={17} color={colors.bg} />
-                    <Text style={{ color: colors.bg, fontWeight: "700", fontSize: 12 }}>
-                      Montar com meu guarda-roupa
-                    </Text>
-                  </Pressable>
                 </View>
               </View>
 
@@ -774,6 +819,8 @@ export function HomeFeed({
 
 const s = StyleSheet.create({
   c: { width: "100%", paddingTop: 6, paddingBottom: 110 },
+  wfRow: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4, gap: 8 },
+  wfChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 18, borderWidth: 1 },
   storiesScroll: { paddingHorizontal: 16, paddingBottom: 12, gap: 14 },
   storyItem: { alignItems: "center", width: 68 },
   storyRing: {

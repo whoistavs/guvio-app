@@ -57,6 +57,9 @@ import { PostDetailView } from "./src/components/PostDetailView";
 import { ChallengeCard } from "./src/components/ChallengeCard";
 import { OnboardingView, onboardingDone, resetOnboarding } from "./src/components/OnboardingView";
 import { FeedbackView } from "./src/components/FeedbackView";
+import { AdminView } from "./src/components/AdminView";
+import { PushPrompt } from "./src/components/PushPrompt";
+import { forgetPushDevice, refreshPushRegistration } from "./src/services/push";
 import { ChallengeView } from "./src/components/ChallengeView";
 import { FollowListView } from "./src/components/FollowListView";
 import { fetchCityWeather, WeatherData } from "./src/services/weather";
@@ -311,6 +314,8 @@ function Guvio() {
 
     isCloud().then(cloud => {
       if (!cloud) return;
+      // avisos com o app fechado: confirma a inscrição deste aparelho na conta atual
+      refreshPushRegistration();
       stopPresence = startPresence();
       // junta várias curtidas seguidas do mesmo post numa consulta só, e só para posts que estão na tela
       const pending = new Map<string, ReturnType<typeof setTimeout>>();
@@ -382,6 +387,8 @@ function Guvio() {
   };
 
   const handleSignOut = async () => {
+    // este aparelho para de receber avisos da conta que saiu
+    await forgetPushDevice().catch(() => {});
     await signOut();
     setAuthenticated(false);
     setPosts([]);
@@ -447,7 +454,10 @@ function Guvio() {
         lng: place?.lng,
         video: x.video,
         pollOptions: x.pollOptions,
-        aspect: x.aspect
+        aspect: x.aspect,
+        // clima de agora, para o filtro "looks para dias de chuva/frio/calor"
+        tempC: weather?.kind && place ? weather.temperature : null,
+        weather: weather?.kind && place ? weather.kind : null
       });
       setPosts(prev => {
         const updated = prev.some(v => v.id === p.id) ? prev : [p, ...prev];
@@ -502,7 +512,12 @@ function Guvio() {
   if (showOnboarding)
     return (
       <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
-        <OnboardingView onDone={() => setShowOnboarding(false)} />
+        <OnboardingView
+          onDone={action => {
+            setShowOnboarding(false);
+            if (action === "publish") setTab("add");
+          }}
+        />
       </SafeAreaView>
     );
 
@@ -670,6 +685,8 @@ function Guvio() {
         screen =
           top.kind === "feedback" ? (
             <FeedbackView onBack={back} />
+          ) : top.kind === "admin" ? (
+            <AdminView onBack={back} onOpenPost={openPost} onOpenProfile={openName} />
           ) : (
             <SimpleSettingsPage kind={top.kind} onBack={back} onOpenPost={openPost} />
           );
@@ -743,6 +760,7 @@ function Guvio() {
               unreadMessages={unreadDm}
             />
             <GlobeLocationSearch onSelect={search} />
+            {Platform.OS === "web" ? <PushPrompt /> : null}
           </View>
           <HomeFeed
             posts={posts}
@@ -751,6 +769,17 @@ function Guvio() {
             cityFilter={filterCity}
             onClearFilter={clearGlobeSelection}
             onAssembleWithWardrobe={() => setTab("wardrobe")}
+            todayWeather={
+              weather?.kind
+                ? weather.kind === "chuva" || weather.kind === "neve"
+                  ? "chuva"
+                  : weather.temperature <= 15
+                  ? "frio"
+                  : weather.temperature >= 24
+                  ? "calor"
+                  : null
+                : null
+            }
             onOpenProfile={openName}
             onOpenTag={openTag}
             refreshKey={refreshKey}
@@ -797,6 +826,7 @@ function Guvio() {
           onOpenProfile={openProfileObj}
           onOpenPost={openPost}
           scrollEnabled={!globeTouching}
+          myCity={place?.city || undefined}
           searchRequest={searchRequest}
           globe={
             <Globe3D
