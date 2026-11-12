@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, BackHandler, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { topPad } from "../utils/insets";
 import { MessageCircle, Search, SquarePen, X } from "lucide-react-native";
 import { ChatView } from "./ChatView";
@@ -12,11 +12,14 @@ import { isCloud } from "../services/supabase";
 import { subscribeOnline } from "../services/cloud";
 
 export function DirectView({
+  active = true,
   onBack,
   initialThread,
   onOpenProfile,
   onOpenPost
 }: {
+  /** é a tela de cima? (o voltar do Android só age nela) */
+  active?: boolean;
   onBack: () => void;
   initialThread?: DirectThread | null;
   onOpenProfile?: (username: string) => void;
@@ -80,6 +83,21 @@ export function DirectView({
       },
       { text: "Cancelar", style: "cancel" }
     ]);
+
+  // Android: o botão voltar fecha a conversa e volta para a lista (não sai do Direct)
+  const activeRef = React.useRef(active);
+  activeRef.current = active;
+  const closeChatRef = React.useRef<() => boolean>(() => false);
+  closeChatRef.current = () => {
+    if (!activeRef.current || !open || (initialThread && open.id === initialThread.id)) return false;
+    setOpen(null);
+    return true;
+  };
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => closeChatRef.current());
+    return () => sub.remove();
+  }, []);
 
   const filteredThreads = threads.filter(d => 
     d.username.toLowerCase().includes(query.toLowerCase()) || 

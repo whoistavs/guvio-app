@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Dimensions,
   Linking,
   Platform,
@@ -117,6 +118,24 @@ function Guvio() {
     setStack(prev => prev.slice(0, -1));
   };
   const top = stack[stack.length - 1];
+  // botão "voltar" do Android: fecha a tela de cima; depois volta para a Home; só então sai do app
+  const backNavRef = useRef<() => boolean>(() => false);
+  backNavRef.current = () => {
+    if (stack.length) {
+      back();
+      return true;
+    }
+    if (tab !== "home") {
+      setTab("home");
+      return true;
+    }
+    return false;
+  };
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => backNavRef.current());
+    return () => sub.remove();
+  }, []);
   const [place, setPlace] = useState<CurrentPlace | null>(null);
   const [unreadDm, setUnreadDm] = useState(0);
   const [posts, setPosts] = useState<FeedPost[]>([]);
@@ -550,12 +569,13 @@ function Guvio() {
     />
   );
 
-  const renderScreen = (top: NonNullable<typeof stack[number]>): React.ReactNode => {
+  const renderScreen = (top: NonNullable<typeof stack[number]>, isTop: boolean): React.ReactNode => {
     let screen: React.ReactNode = null;
     switch (top.name) {
       case "direct":
         screen = (
           <DirectView
+            active={isTop}
             onOpenPost={openPost}
             initialThread={top.thread || null}
             onBack={() => {
@@ -656,7 +676,7 @@ function Guvio() {
         pointerEvents={isTop ? "auto" : "none"}
       >
         <EdgeSwipe side="left" anywhere onSwipe={back} under={colors.surface2} enabled={isTop}>
-          <SlideInScreen from={goingBack.current ? -60 : 60}>{renderScreen(entry)}</SlideInScreen>
+          <SlideInScreen from={goingBack.current ? -60 : 60}>{renderScreen(entry, isTop)}</SlideInScreen>
         </EdgeSwipe>
       </SafeAreaView>
     );
