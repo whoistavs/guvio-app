@@ -5,8 +5,19 @@ import { ActivityItem, MOCK_ACTIVITIES } from "../data/mockData";
 import { ScreenHeader } from "./ScreenHeader";
 import { useAppTheme } from "../context/AppTheme";
 import { FastImage } from "./FastImage";
-import { loadActivities, saveActivities, loadFollowedUsers, saveFollowedUsers, answerFollowRequest } from "../services/storage";
+import {
+  loadActivities,
+  loadFollowedUsers,
+  saveFollowedUsers,
+  answerFollowRequest,
+  loadRequestedIds,
+  loadFollowRequests,
+  loadFollowList,
+  loadSavedProfile,
+  cancelFollowRequest
+} from "../services/storage";
 import { ActivityGroup, groupActivities, groupMessage } from "../utils/groupActivities";
+import { tapFeedback } from "../utils/haptics";
 
 export function ActivityView({
   onBack,
@@ -21,17 +32,58 @@ export function ActivityView({
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [followedIds, setFollowedIds] = useState<string[]>([]);
 
+  const [requestedIds, setRequestedIds] = useState<string[]>([]);
+  // pedidos para seguir: quem ainda espera resposta e quem já me segue (aceitos)
+  const [pendingIds, setPendingIds] = useState<string[] | null>(null);
+  const [followerIds, setFollowerIds] = useState<string[]>([]);
+
   useEffect(() => {
     loadActivities().then(setActivities);
     loadFollowedUsers().then(setFollowedIds);
+    loadRequestedIds().then(setRequestedIds).catch(() => {});
+    loadFollowRequests()
+      .then(l => setPendingIds(l.map(p => p.id)))
+      .catch(() => setPendingIds([]));
+    loadSavedProfile()
+      .then(me => loadFollowList(me, "followers"))
+      .then(l => setFollowerIds(l.map(p => p.id)))
+      .catch(() => {});
   }, []);
 
   const toggleFollow = async (userId: string) => {
-    const updated = followedIds.includes(userId)
-      ? followedIds.filter(id => id !== userId)
-      : [...followedIds, userId];
+    tapFeedback();
+    if (requestedIds.includes(userId)) {
+      // cancelar o pedido (perfil privado)
+      setRequestedIds(prev => prev.filter(id => id !== userId));
+      await cancelFollowRequest(userId).catch(() => setRequestedIds(prev => [...prev, userId]));
+      return;
+    }
+    const on = !followedIds.includes(userId);
+    const updated = on ? [...followedIds, userId] : followedIds.filter(id => id !== userId);
     setFollowedIds(updated);
-    await saveFollowedUsers(updated);
+    try {
+      const requested = await saveFollowedUsers(updated);
+      if (requested.includes(userId)) {
+        setFollowedIds(prev => prev.filter(id => id !== userId));
+        setRequestedIds(prev => [...prev, userId]);
+      }
+    } catch {
+      setFollowedIds(followedIds);
+    }
+  };
+
+  /** botão "Seguir de volta" / "Seguindo" / "Solicitado" */
+  const followBackButton = (userId: string) => {
+    const following = followedIds.includes(userId);
+    const requested = requestedIds.includes(userId);
+    const filled = !following && !requested;
+    return (
+      <Pressable onPress={() => toggleFollow(userId)} style={[s.followButton, { backgroundColor: filled ? "#0095F6" : colors.surface }]}>
+        <Text style={[s.followButtonText, { color: filled ? "#FFF" : colors.text }]}>
+          {following ? "Seguindo" : requested ? "Solicitado" : "Seguir de volta"}
+        </Text>
+      </Pressable>
+    );
   };
 
   const [answered, setAnswered] = useState<Record<string, "ok" | "no">>({});
@@ -53,7 +105,12 @@ export function ActivityView({
 
   const renderActivityRow = (g: ActivityGroup) => {
     const item = g.lead;
-    const isFollowing = followedIds.includes(item.userId);
+    // pedido para seguir: respondido agora, ainda esperando, ou já aceito antes
+    const reqState: "ok" | "no" | "pending" | null =
+      item.type !== "follow_request"
+        ? null
+        : answered[item.id] ||
+          (pendingIds === null || pendingIds.includes(item.userId) ? "pending" : followerIds.includes(item.userId) ? "ok" : null);
 
     const openItem = () => {
       if (item.type !== "follow" && item.postId) onOpenPost?.(item.postId);
@@ -100,18 +157,18 @@ export function ActivityView({
             >
               @{item.username}{" "}
             </Text>
-            {groupMessage(g)}
+            {reqState === "ok" ? "agora segue você." : groupMessage(g)}
           </Text>
           <Text style={[s.timeAgo, { color: colors.muted }]}>{item.timeAgo}</Text>
         </View>
 
         {/* Right side: Follow button OR Post thumbnail */}
         {item.type === "follow_request" ? (
-          answered[item.id] ? (
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-              {answered[item.id] === "ok" ? "Aceito" : "Recusado"}
-            </Text>
-          ) : (
+          reqState === "ok" ? (
+            followBackButton(item.userId)
+          ) : reqState === "no" ? (
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Recusado</Text>
+          ) : reqState === null ? null : (
             <View style={{ flexDirection: "row", gap: 6 }}>
               <Pressable onPress={() => answer(item, true)} style={[s.followButton, { backgroundColor: "#0095F6", minWidth: 0 }]}>
                 <Text style={[s.followButtonText, { color: "#FFF" }]}>Aceitar</Text>
@@ -122,24 +179,7 @@ export function ActivityView({
             </View>
           )
         ) : item.type === "follow" && !g.others.length ? (
-          <Pressable
-            onPress={() => toggleFollow(item.userId)}
-            style={[
-              s.followButton,
-              {
-                backgroundColor: isFollowing ? colors.surface : "#0095F6"
-              }
-            ]}
-          >
-            <Text
-              style={[
-                s.followButtonText,
-                { color: isFollowing ? colors.text : "#FFF" }
-              ]}
-            >
-              {isFollowing ? "Seguindo" : "Seguir de volta"}
-            </Text>
-          </Pressable>
+          followBackButton(item.userId)
         ) : item.postImage ? (
           <FastImage source={item.postImage} style={s.postThumb} contentFit="cover" />
         ) : null}

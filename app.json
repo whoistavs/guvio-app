@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.guvio.ios",
-      "buildNumber": "26"
+      "buildNumber": "27"
     },
     "android": {
       "package": "app.guvio.android",
