@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "676151504951",
+    "project_id": "guvio-2cf48",
+    "storage_bucket": "guvio-2cf48.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:676151504951:android:309b8827252a70f5274fb2",
+        "android_client_info": {
+          "package_name": "app.guvio.android"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwQJ9cg7YTtUBElf5L1WV0ehejPBlKnq4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

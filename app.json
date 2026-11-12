@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.guvio.ios",
-      "buildNumber": "30"
+      "buildNumber": "31"
     },
     "android": {
       "package": "app.guvio.android",
@@ -25,7 +25,8 @@
         "backgroundColor": "#050608"
       },
       "edgeToEdgeEnabled": true,
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "pan",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",
@@ -75,6 +76,13 @@
           "photosPermission": "O Guvio acessa suas fotos e vídeos para você publicar looks, stories e peças do guarda-roupa.",
           "savePhotosPermission": "O Guvio salva imagens dos seus looks na galeria quando você pede.",
           "isAccessMediaLocationEnabled": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#111111",
+          "defaultChannel": "default"
         }
       ]
     ],
