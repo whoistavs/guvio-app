@@ -12,8 +12,9 @@ import {
   View
 } from "react-native";
 import { Apple, AtSign, Check, User, X } from "lucide-react-native";
-import { authConfigured, signInEmail, signUpEmail, startOAuth, ConfirmEmailError, getEnabledProviders, sendPasswordReset, setNewPassword } from "../services/auth";
+import { authConfigured, signInEmail, signUpEmail, startOAuth, ConfirmEmailError, getEnabledProviders, setNewPassword } from "../services/auth";
 import { useAppTheme } from "../context/AppTheme";
+import { openRecoverFlow } from "./RecoverFlow";
 import { isUsernameTaken } from "../services/storage";
 
 export function AuthScreen({ onAuthenticated, inviter }: { onAuthenticated: () => void; inviter?: string | null }) {
@@ -182,19 +183,7 @@ export function AuthScreen({ onAuthenticated, inviter }: { onAuthenticated: () =
           <Pressable
             hitSlop={8}
             style={{ alignSelf: "flex-end", marginBottom: 6 }}
-            onPress={async () => {
-              const em = email.trim();
-              if (!/^\S+@\S+\.\S+$/.test(em)) {
-                Alert.alert("Esqueci minha senha", "Digite seu e-mail no campo acima e toque aqui de novo.");
-                return;
-              }
-              try {
-                await sendPasswordReset(em);
-                Alert.alert("Confira seu e-mail", `Mandamos um link para ${em}. Abra o link para criar uma senha nova (veja também o spam).`);
-              } catch (e: any) {
-                Alert.alert("Esqueci minha senha", e?.message || "Não foi possível enviar agora. Tente de novo.");
-              }
-            }}
+            onPress={() => openRecoverFlow()}
           >
             <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}>Esqueci minha senha</Text>
           </Pressable>

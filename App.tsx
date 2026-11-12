@@ -35,6 +35,7 @@ import { DirectView } from "./src/components/DirectView";
 import { ActivityView } from "./src/components/ActivityView";
 import { CreateHubView } from "./src/components/CreateHubView";
 import { AuthScreen, NewPasswordModal } from "./src/components/AuthScreen";
+import { RecoverHost } from "./src/components/RecoverFlow";
 import {
   loadSavedPosts,
   savePosts,
@@ -64,7 +65,7 @@ import { ChallengeView } from "./src/components/ChallengeView";
 import { FollowListView } from "./src/components/FollowListView";
 import { fetchCityWeather, WeatherData } from "./src/services/weather";
 import { requestNotificationPermissions, sendLocalNotification } from "./src/services/notifications";
-import { getSavedAuthSession, signOut, handleAuthRedirect, deleteAccount } from "./src/services/auth";
+import { getSavedAuthSession, signOut, handleAuthRedirect, deleteAccount, recoverFlowActive } from "./src/services/auth";
 import { parseInviteLink, parsePostLink, parseProfileLink } from "./src/utils/profileLink";
 import { BetaWelcome } from "./src/components/BetaWelcome";
 import { EdgeSwipe, PeekHost, PinchHost } from "./src/components/gestures";
@@ -285,7 +286,8 @@ function Guvio() {
       if (event === "SIGNED_IN" && session) setAuthenticated(true);
       if (event === "PASSWORD_RECOVERY") {
         setAuthenticated(true);
-        setRecovery(true);
+        // pelo código do "Esqueci minha senha" a senha nova é criada no próprio fluxo
+        if (!recoverFlowActive()) setRecovery(true);
       }
       if (event === "SIGNED_OUT") setAuthenticated(false);
     });
@@ -921,6 +923,7 @@ export default function App() {
       <ErrorBoundary>
         <SafeAreaProvider>
           <Guvio />
+          <RecoverHost />
           <WebAlertHost />
         </SafeAreaProvider>
       </ErrorBoundary>

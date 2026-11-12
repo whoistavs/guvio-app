@@ -349,6 +349,92 @@ export async function sendPasswordReset(email: string): Promise<void> {
   if (error) throw new Error(translateAuthError(error.message));
 }
 
+// ---------------------------------------------------------------------
+// "Esqueci minha senha" em etapas (achar conta → mandar código → conferir código)
+// Usa a função "recover" do Supabase; se ela não existir e a pessoa digitou
+// um e-mail, faz tudo direto pelo Supabase Auth.
+// ---------------------------------------------------------------------
+/** o fluxo "Esqueci minha senha" está aberto? (aí o app não abre a outra tela de senha nova) */
+let recoverActive = false;
+export function setRecoverFlowActive(v: boolean) {
+  recoverActive = v;
+}
+export function recoverFlowActive() {
+  return recoverActive;
+}
+
+export interface RecoverAccount {
+  username: string;
+  displayName: string;
+  avatar: string;
+  maskedEmail: string;
+  /** sem a função no servidor: só o e-mail digitado, sem foto */
+  direct?: boolean;
+}
+
+export class RecoverError extends Error {
+  constructor(public code: "not_found" | "wait" | "bad_code" | "offline" | "no_function", msg: string) {
+    super(msg);
+  }
+}
+
+async function callRecover(body: Record<string, string>): Promise<any> {
+  if (!supabase) throw new RecoverError("offline", "Servidor não configurado.");
+  const { data, error } = await supabase.functions.invoke("recover", { body });
+  if (!error) return data;
+  const status = (error as any)?.context?.status;
+  let payload: any = null;
+  try {
+    payload = await (error as any)?.context?.json?.();
+  } catch {}
+  if (payload?.error === "not_found") throw new RecoverError("not_found", "Não encontramos nenhuma conta com esses dados.");
+  if (payload?.error === "wait") throw new RecoverError("wait", "Aguarde um minuto antes de pedir outro código.");
+  if (payload?.error === "bad_code") throw new RecoverError("bad_code", "Código errado ou vencido. Confira o e-mail ou peça outro.");
+  if (status === 404 || /Failed to send|not found/i.test(error.message)) throw new RecoverError("no_function", "Função de recuperação indisponível.");
+  throw new RecoverError("offline", "Sem conexão. Tente de novo.");
+}
+
+const isEmail = (q: string) => /^\S+@\S+\.\S+$/.test(q.trim());
+const maskLocal = (email: string) => {
+  const [u, d] = email.trim().split("@");
+  const keep = u.length <= 2 ? u.slice(0, 1) : u.slice(0, 2);
+  return `${keep}${"•".repeat(Math.max(3, Math.min(8, u.length - keep.length)))}@${d}`;
+};
+
+export async function recoverFind(query: string): Promise<RecoverAccount> {
+  try {
+    return await callRecover({ action: "find", query });
+  } catch (e: any) {
+    if (e?.code === "no_function" && isEmail(query)) {
+      return { username: "", displayName: "", avatar: "", maskedEmail: maskLocal(query), direct: true };
+    }
+    throw e;
+  }
+}
+
+export async function recoverSend(query: string, direct?: boolean): Promise<void> {
+  if (direct) {
+    if (!supabase) throw new RecoverError("offline", "Servidor não configurado.");
+    const { error } = await supabase.auth.resetPasswordForEmail(query.trim(), { redirectTo: "https://whoistavs.github.io/guvio-app/" });
+    if (error) throw new RecoverError(/rate|seconds/i.test(error.message) ? "wait" : "offline", translateAuthError(error.message));
+    return;
+  }
+  await callRecover({ action: "send", query });
+}
+
+/** confere o código; dá certo = já entra na conta (para criar a senha nova) */
+export async function recoverVerify(query: string, code: string, direct?: boolean): Promise<void> {
+  if (!supabase) throw new RecoverError("offline", "Servidor não configurado.");
+  if (direct) {
+    const { error } = await supabase.auth.verifyOtp({ email: query.trim(), token: code, type: "recovery" });
+    if (error) throw new RecoverError("bad_code", "Código errado ou vencido. Confira o e-mail ou peça outro.");
+    return;
+  }
+  const s = await callRecover({ action: "verify", query, code });
+  const { error } = await supabase.auth.setSession({ access_token: s.access_token, refresh_token: s.refresh_token });
+  if (error) throw new RecoverError("offline", "Não foi possível entrar. Tente de novo.");
+}
+
 /** Define a senha nova depois de abrir o link de recuperação */
 export async function setNewPassword(password: string): Promise<void> {
   if (!supabase) throw new Error("Servidor não configurado.");
