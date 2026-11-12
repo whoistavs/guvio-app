@@ -54,6 +54,11 @@ for (const page of ["index.html", "404.html"]) {
   let html = fs.readFileSync(file, "utf8");
   html = html.replace('<html lang="en">', '<html lang="pt-BR">');
   html = html.replace(/<title>.*?<\/title>/, "<title>GUVIO</title>");
+  // a tela do app não dá zoom (só as fotos, com o gesto de pinça do próprio app);
+  // isso também evita o iPhone dar zoom sozinho ao tocar num campo de texto
+  const vp = '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, shrink-to-fit=no" />';
+  if (/<meta name="viewport"[^>]*>/.test(html)) html = html.replace(/<meta name="viewport"[^>]*>/, vp);
+  else html = html.replace("</head>", "  " + vp + "\n  </head>");
   if (!html.includes("manifest.webmanifest")) html = html.replace("</head>", tags + "  </head>");
   fs.writeFileSync(file, html);
 }

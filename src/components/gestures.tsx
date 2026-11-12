@@ -8,8 +8,21 @@ const ND = Platform.OS !== "web";
 if (Platform.OS === "web" && typeof document !== "undefined" && !document.getElementById("guvio-gestures-css")) {
   const st = document.createElement("style");
   st.id = "guvio-gestures-css";
-  st.textContent = "img{-webkit-user-drag:none;user-drag:none;-webkit-touch-callout:none}";
+  // html/body: sem zoom de pinça nem de toque duplo na página inteira (o app cuida do zoom das fotos)
+  st.textContent =
+    "img{-webkit-user-drag:none;user-drag:none;-webkit-touch-callout:none}html,body{touch-action:pan-x pan-y;overscroll-behavior:none}";
   document.head.appendChild(st);
+  // iPhone (Safari): bloqueia o zoom de pinça da página; os gestos de pinça do app continuam funcionando
+  const stop = (e: Event) => e.preventDefault();
+  document.addEventListener("gesturestart", stop, { passive: false } as any);
+  document.addEventListener("gesturechange", stop, { passive: false } as any);
+  document.addEventListener(
+    "touchmove",
+    (e: TouchEvent) => {
+      if (e.touches.length > 1) e.preventDefault();
+    },
+    { passive: false }
+  );
   document.addEventListener("dragstart", e => {
     if ((e.target as any)?.tagName === "IMG") e.preventDefault();
   }, true);
