@@ -66,8 +66,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # o app Android lê este arquivo para avisar que saiu versão nova
+          git log -1 --pretty=%s > /tmp/notes.txt
+          python3 -c "import json; n=open('/tmp/notes.txt',encoding='utf-8').read().strip()[:120]; json.dump({'versionCode': 100 + ${{ github.run_number }}, 'build': ${{ github.run_number }}, 'notes': n}, open('android-version.json','w',encoding='utf-8'), ensure_ascii=False)"
+          cat android-version.json
           gh release delete beta-android --yes --cleanup-tag 2>/dev/null || true
-          gh release create beta-android GUVIO.apk \
+          gh release create beta-android GUVIO.apk android-version.json \
             --title "GUVIO beta (Android)" \
             --notes "Versão beta do GUVIO para Android. Baixe o GUVIO.apk e instale (permita instalar de fontes desconhecidas). Build ${{ github.run_number }}." \
             --prerelease
