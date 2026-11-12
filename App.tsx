@@ -34,7 +34,7 @@ import { MyProfileView, PublicProfileView, SettingsView, SimpleSettingsPage } fr
 import { DirectView } from "./src/components/DirectView";
 import { ActivityView } from "./src/components/ActivityView";
 import { CreateHubView } from "./src/components/CreateHubView";
-import { AuthScreen } from "./src/components/AuthScreen";
+import { AuthScreen, NewPasswordModal } from "./src/components/AuthScreen";
 import {
   loadSavedPosts,
   savePosts,
@@ -67,7 +67,7 @@ import { BetaWelcome } from "./src/components/BetaWelcome";
 import { EdgeSwipe, PeekHost, PinchHost } from "./src/components/gestures";
 import { shareInvite } from "./src/components/invite";
 import { FastStorage } from "./src/services/FastStorage";
-import { supabase, isCloud } from "./src/services/supabase";
+import { supabase, isCloud, openedFromRecoveryLink } from "./src/services/supabase";
 import { subscribeFeed, fetchPostCounts, subscribeMyAlerts, startPresence, fixMyPlaceholderCity } from "./src/services/cloud";
 
 type Screen =
@@ -144,6 +144,7 @@ function Guvio() {
   const [unreadDm, setUnreadDm] = useState(0);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [location, setLocation] = useState("Sua cidade");
+  const [recovery, setRecovery] = useState(false);
   const applyPlaceRef = useRef<(force: boolean, explain?: boolean) => void>(() => {});
   applyPlaceRef.current = (force, explain) => {
     getCurrentPlace(force).then(pl => {
@@ -238,6 +239,10 @@ function Guvio() {
   useEffect(() => {
     FastStorage.init().then(async () => {
       const initialUrl = await Linking.getInitialURL().catch(() => null);
+      // abriu o link de "Esqueci minha senha"
+      if (openedFromRecoveryLink) {
+        setRecovery(true);
+      }
       await handleAuthRedirect(initialUrl).catch(() => false);
       const linkedUser = parseProfileLink(initialUrl);
       if (linkedUser) setPendingProfile(linkedUser);
@@ -275,6 +280,10 @@ function Guvio() {
     });
     const authSub = supabase?.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session) setAuthenticated(true);
+      if (event === "PASSWORD_RECOVERY") {
+        setAuthenticated(true);
+        setRecovery(true);
+      }
       if (event === "SIGNED_OUT") setAuthenticated(false);
     });
 
@@ -847,6 +856,7 @@ function Guvio() {
       <ToastHost bottom={top ? 40 : undefined} />
       <UpdateBanner />
       {top ? null : <InstallPrompt />}
+      <NewPasswordModal visible={recovery} onDone={() => setRecovery(false)} />
       {betaWelcome}
       <PinchHost />
       <PeekHost />

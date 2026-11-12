@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  Modal,
   ActivityIndicator,
   Alert,
   Image,
@@ -11,7 +12,7 @@ import {
   View
 } from "react-native";
 import { Apple, AtSign, Check, User, X } from "lucide-react-native";
-import { authConfigured, signInEmail, signUpEmail, startOAuth, ConfirmEmailError, getEnabledProviders } from "../services/auth";
+import { authConfigured, signInEmail, signUpEmail, startOAuth, ConfirmEmailError, getEnabledProviders, sendPasswordReset, setNewPassword } from "../services/auth";
 import { useAppTheme } from "../context/AppTheme";
 import { isUsernameTaken } from "../services/storage";
 
@@ -177,6 +178,28 @@ export function AuthScreen({ onAuthenticated, inviter }: { onAuthenticated: () =
           style={[s.plainInput, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
         />
 
+        {!signup && authConfigured ? (
+          <Pressable
+            hitSlop={8}
+            style={{ alignSelf: "flex-end", marginBottom: 6 }}
+            onPress={async () => {
+              const em = email.trim();
+              if (!/^\S+@\S+\.\S+$/.test(em)) {
+                Alert.alert("Esqueci minha senha", "Digite seu e-mail no campo acima e toque aqui de novo.");
+                return;
+              }
+              try {
+                await sendPasswordReset(em);
+                Alert.alert("Confira seu e-mail", `Mandamos um link para ${em}. Abra o link para criar uma senha nova (veja também o spam).`);
+              } catch (e: any) {
+                Alert.alert("Esqueci minha senha", e?.message || "Não foi possível enviar agora. Tente de novo.");
+              }
+            }}
+          >
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}>Esqueci minha senha</Text>
+          </Pressable>
+        ) : null}
+
         <Pressable onPress={submit} disabled={busy} style={[s.main, { backgroundColor: colors.text }]}>
           {busy ? (
             <ActivityIndicator color={colors.bg} />
@@ -222,6 +245,55 @@ export function AuthScreen({ onAuthenticated, inviter }: { onAuthenticated: () =
         </Pressable>
       </View>
     </ScrollView>
+  );
+}
+
+/** Aparece quando a pessoa abre o link de "Esqueci minha senha" */
+export function NewPasswordModal({ visible, onDone }: { visible: boolean; onDone: () => void }) {
+  const { colors } = useAppTheme();
+  const [pw, setPw] = useState("");
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    if (pw.length < 6) {
+      Alert.alert("Senha curta", "Use pelo menos 6 caracteres.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await setNewPassword(pw);
+      setPw("");
+      Alert.alert("Pronto", "Sua senha foi trocada.");
+      onDone();
+    } catch (e: any) {
+      Alert.alert("Não deu certo", e?.message || "Tente de novo.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDone}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", padding: 24 }}>
+        <View style={{ backgroundColor: colors.bg, borderRadius: 20, padding: 20, maxWidth: 420, width: "100%", alignSelf: "center" }}>
+          <Text style={{ color: colors.text, fontSize: 18, fontWeight: "700", marginBottom: 6 }}>Criar senha nova</Text>
+          <Text style={{ color: colors.muted, fontSize: 13, marginBottom: 14 }}>Digite a senha nova da sua conta.</Text>
+          <TextInput
+            value={pw}
+            onChangeText={setPw}
+            secureTextEntry
+            autoFocus
+            placeholder="Senha nova (mínimo 6)"
+            placeholderTextColor={colors.muted}
+            style={[s.plainInput, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
+          />
+          <Pressable onPress={save} disabled={busy} style={[s.main, { backgroundColor: colors.text }]}>
+            {busy ? <ActivityIndicator color={colors.bg} /> : <Text style={{ color: colors.bg, fontWeight: "700" }}>Salvar senha</Text>}
+          </Pressable>
+          <Pressable onPress={onDone} hitSlop={8} style={{ alignSelf: "center", marginTop: 12 }}>
+            <Text style={{ color: colors.muted, fontSize: 12 }}>Agora não</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
   );
 }
 

@@ -340,6 +340,22 @@ export async function startOAuth(provider: "google" | "apple") {
   }
 }
 
+/** "Esqueci minha senha": manda o e-mail com o link (o link abre o site, onde se cria a senha nova) */
+export async function sendPasswordReset(email: string): Promise<void> {
+  if (!supabase) throw new Error("Recuperar senha precisa do servidor configurado.");
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: "https://whoistavs.github.io/guvio-app/"
+  });
+  if (error) throw new Error(translateAuthError(error.message));
+}
+
+/** Define a senha nova depois de abrir o link de recuperação */
+export async function setNewPassword(password: string): Promise<void> {
+  if (!supabase) throw new Error("Servidor não configurado.");
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw new Error(translateAuthError(error.message));
+}
+
 /** Apaga a conta logada e tudo dela, depois sai */
 export async function deleteAccount(): Promise<void> {
   if (supabase) {

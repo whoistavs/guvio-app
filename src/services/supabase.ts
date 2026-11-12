@@ -6,6 +6,10 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 const URL = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
 const KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
+/** o site foi aberto pelo link de "Esqueci minha senha"? (lido antes do Supabase limpar o endereço) */
+export const openedFromRecoveryLink =
+  Platform.OS === "web" && typeof window !== "undefined" && /type=recovery/.test(window.location.hash || "");
+
 /** true quando as chaves do Supabase foram configuradas no build */
 export const supabaseConfigured = Boolean(URL && KEY);
 
