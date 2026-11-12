@@ -113,7 +113,6 @@ export function BottomNavLiquid({ activeTab, onTabChange }: { activeTab: string;
                 }
               ]}
             >
-              <View style={styles.highlight} />
               <View style={styles.refraction} />
             </View>
           </Animated.View>
