@@ -127,6 +127,23 @@ function Guvio() {
   useEffect(() => {
     startUsageTracking();
   }, []);
+  // Android: tocar no aviso (curtida, comentário...) abre o look direto no app
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    let sub: { remove: () => void } | null = null;
+    import("expo-notifications")
+      .then(N => {
+        const open = (r: any) => {
+          const url = r?.notification?.request?.content?.data?.url;
+          const id = typeof url === "string" && !url.endsWith(".apk") ? parsePostLink(url) : null;
+          if (id) setPendingPost(id);
+        };
+        N.getLastNotificationResponseAsync().then(open).catch(() => {});
+        sub = N.addNotificationResponseReceivedListener(open);
+      })
+      .catch(() => {});
+    return () => sub?.remove();
+  }, []);
   const backNavRef = useRef<() => boolean>(() => false);
   backNavRef.current = () => {
     if (stack.length) {

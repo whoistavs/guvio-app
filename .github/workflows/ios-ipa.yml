@@ -12,6 +12,8 @@ jobs:
     runs-on: macos-15
     env:
       CI: 1
+      # sem permissão de push no IPA (Apple ID grátis não aceita)
+      GUVIO_IOS_UNSIGNED: 1
       # Projeto Supabase do GUVIO. A chave "publishable" é pública por natureza (vai dentro do app);
       # a segurança vem das regras RLS do supabase/schema.sql. Secrets com o mesmo nome têm prioridade.
       EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://kammkctketpkkdnukfme.supabase.co' }}

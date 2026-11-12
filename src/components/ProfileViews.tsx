@@ -1387,8 +1387,13 @@ function NotificationSettings({ onBack }: { onBack: () => void }) {
   const [push, setPush] = useState<PushState | "android" | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
   useEffect(() => {
-    if (Platform.OS === "android") setPush("android");
-    else webPushState().then(setPush);
+    if (Platform.OS === "android") {
+      // já tem permissão: mostra como ligado (o aparelho se inscreve sozinho ao abrir o app)
+      import("expo-notifications")
+        .then(N => N.getPermissionsAsync())
+        .then(p => setPush(p.status === "granted" ? "on" : "android"))
+        .catch(() => setPush("android"));
+    } else webPushState().then(setPush);
   }, []);
   const pushText =
     push === "on"
@@ -1408,7 +1413,7 @@ function NotificationSettings({ onBack }: { onBack: () => void }) {
     if (pushBusy) return;
     setPushBusy(true);
     try {
-      if (push === "android") {
+      if (push === "android" || (Platform.OS === "android" && push === "on")) {
         const ok = await registerAndroidPush();
         Alert.alert(ok ? "Avisos ligados" : "Ainda não disponível", ok ? "Você vai receber avisos mesmo com o app fechado." : "Os avisos do app Android chegam numa próxima versão. Enquanto isso, eles aparecem com o app aberto.");
       } else if (push === "on") {
