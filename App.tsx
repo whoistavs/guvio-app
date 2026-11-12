@@ -66,7 +66,7 @@ import { EdgeSwipe, PeekHost, PinchHost } from "./src/components/gestures";
 import { shareInvite } from "./src/components/invite";
 import { FastStorage } from "./src/services/FastStorage";
 import { supabase, isCloud } from "./src/services/supabase";
-import { subscribeFeed, fetchPostCounts, subscribeMyAlerts, startPresence } from "./src/services/cloud";
+import { subscribeFeed, fetchPostCounts, subscribeMyAlerts, startPresence, fixMyPlaceholderCity } from "./src/services/cloud";
 
 type Screen =
   | { name: "direct"; thread?: DirectThread | null }
@@ -139,7 +139,16 @@ function Guvio() {
         return;
       }
       setPlace(pl);
-      if (pl.city) setLocation([pl.city, pl.region || pl.country].filter(Boolean).join(", "));
+      if (pl.city) {
+        setLocation([pl.city, pl.region || pl.country].filter(Boolean).join(", "));
+        // posts antigos que saíram com "Sua cidade" passam a mostrar a cidade certa
+        fixMyPlaceholderCity(pl.city, pl.country).then(n => {
+          if (!n) return;
+          setPosts(prev =>
+            prev.map(x => (x.userId === myProfileRef.current?.id && !x.city ? { ...x, city: pl.city, country: pl.country } : x))
+          );
+        });
+      }
       fetchCityWeather(pl.lat, pl.lng).then(setWeather);
     });
   };
@@ -399,7 +408,7 @@ function Guvio() {
         images: x.images,
         clothingTags: x.clothingTags,
         caption: x.caption,
-        city: place?.city || location.split(",")[0] || "",
+        city: place?.city || (location === "Sua cidade" ? "" : location.split(",")[0]) || "",
         country: place?.country || filterCountry || "",
         styleTag: "Novo look",
         lat: place?.lat,

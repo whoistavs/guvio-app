@@ -234,7 +234,7 @@ function toPost(r: any, liked: Set<string>, saved: Set<string>): FeedPost {
     creatorName: r.display_name || r.username,
     creatorUsername: r.username,
     creatorAvatar: r.avatar_url || DEFAULT_AVATAR,
-    city: r.city || "",
+    city: cleanCity(r.city),
     country: r.country || "",
     styleTag: r.style_tag || "Novo look",
     image: r.image_url,
@@ -461,6 +461,27 @@ export async function setPostFlags(postId: string, flags: { archived?: boolean; 
   if (flags.pinned !== undefined) patch.pinned_at = flags.pinned ? new Date().toISOString() : null;
   if (flags.hideLikes !== undefined) patch.hide_likes = flags.hideLikes;
   check(await db().from("posts").update(patch).eq("id", postId));
+}
+
+/** "Sua cidade" era o texto provisório do topo; não é uma cidade de verdade. */
+function cleanCity(c: any): string {
+  const v = String(c || "").trim();
+  return /^sua cidade,?$/i.test(v) ? "" : v;
+}
+
+/** Corrige meus posts antigos que ficaram com "Sua cidade" quando a localização chega. */
+export async function fixMyPlaceholderCity(city: string, country: string): Promise<number> {
+  if (!city) return 0;
+  const uid = await me().catch(() => null);
+  if (!uid) return 0;
+  const { data, error } = await db()
+    .from("posts")
+    .update({ city, country })
+    .eq("user_id", uid)
+    .in("city", ["Sua cidade", "Sua cidade,"])
+    .select("id");
+  if (error) return 0;
+  return data?.length || 0;
 }
 
 export async function updatePost(

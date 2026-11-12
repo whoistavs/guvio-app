@@ -513,12 +513,14 @@ export function HomeFeed({
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={[s.creator, { color: colors.text }]}>{p.creatorName}</Text>
-                      <View style={s.loc}>
-                        <MapPin size={11} color={colors.muted} />
-                        <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "500" }}>
-                          {p.city}, {p.country}
-                        </Text>
-                      </View>
+                      {p.city || p.country ? (
+                        <View style={s.loc}>
+                          <MapPin size={11} color={colors.muted} />
+                          <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "500" }}>
+                            {[p.city, p.country].filter(Boolean).join(", ")}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
                   </Pressable>
 

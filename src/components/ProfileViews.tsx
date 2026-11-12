@@ -388,7 +388,7 @@ export function PublicProfileView({
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
                     <MapPin size={11} color={colors.muted} />
                     <Text style={{ color: colors.muted, fontSize: 11 }}>
-                      {selectedPost.city}, {selectedPost.country}
+                      {[selectedPost.city, selectedPost.country].filter(Boolean).join(", ")}
                     </Text>
                   </View>
                 ) : null}
@@ -753,7 +753,7 @@ export function MyProfileView({
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
                     <MapPin size={11} color={colors.muted} />
                     <Text style={{ color: colors.muted, fontSize: 11 }}>
-                      {selectedPost.city}, {selectedPost.country}
+                      {[selectedPost.city, selectedPost.country].filter(Boolean).join(", ")}
                     </Text>
                   </View>
                 ) : null}
