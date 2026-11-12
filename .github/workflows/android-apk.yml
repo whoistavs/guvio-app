@@ -2,7 +2,7 @@ name: Gerar APK Android (beta)
 
 # Roda manualmente: Actions > "Gerar APK Android (beta)" > Run workflow
 # O APK fica num link público fixo:
-# https://github.com/whoistavs/guvio-app/releases/download/beta-android/GUVIO.apk
+# https://github.com/guvioapp/guvio-app/releases/download/beta-android/GUVIO.apk
 on:
   workflow_dispatch:
 

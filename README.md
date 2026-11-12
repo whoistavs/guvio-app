@@ -1,6 +1,6 @@
 # GUVIO
 
-[![CI](https://github.com/whoistavs/guvio-app/actions/workflows/ci.yml/badge.svg)](https://github.com/whoistavs/guvio-app/actions/workflows/ci.yml)
+[![CI](https://github.com/guvioapp/guvio-app/actions/workflows/ci.yml/badge.svg)](https://github.com/guvioapp/guvio-app/actions/workflows/ci.yml)
 
 **Social fashion app with an interactive 3D globe.** Explore looks from cities around the world, build outfits from your wardrobe and share them with the community.
 
@@ -56,7 +56,7 @@ docs/             # Sprint notes and demo GIF
 **Requirements:** Node.js 18+ and the [Expo Go](https://expo.dev/go) app on your phone.
 
 ```bash
-git clone https://github.com/whoistavs/guvio-app.git
+git clone https://github.com/guvioapp/guvio-app.git
 cd guvio-app
 npm install
 cp .env.example .env   # optional: add your Supabase URL and anon key
@@ -101,5 +101,8 @@ The **Gerar IPA iOS (sem assinatura)** workflow builds an unsigned `GUVIO.ipa` o
 
 ## 👥 Authors
 
-- **Octavio Rodrigues Schwab** · mobile developer · [GitHub](https://github.com/whoistavs) · [LinkedIn](https://www.linkedin.com/in/octavio-schwab)
+- **Octavio Rodrigues Schwab** · cofundador · mobile developer · [GitHub](https://github.com/whoistavs) · [LinkedIn](https://www.linkedin.com/in/octavio-schwab)
+- **Gustavo Reis** · cofundador · [GitHub](https://github.com/gustavogreis)
+
+GUVIO = **GU**stavo + Octa**VIO**.
 - **Gustavo Reis** · [GitHub](https://github.com/gustavogreis)

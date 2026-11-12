@@ -24,7 +24,7 @@ export function isInstalledApp(): boolean {
   if (Platform.OS !== "web" || typeof window === "undefined") return true;
   return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || (navigator as any).standalone === true;
 }
-export const APK_URL = "https://github.com/whoistavs/guvio-app/releases/download/beta-android/GUVIO.apk";
+export const APK_URL = "https://github.com/guvioapp/guvio-app/releases/download/beta-android/GUVIO.apk";
 const isAndroid = () => Platform.OS === "web" && typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
 const isIOS = () =>
   Platform.OS === "web" &&

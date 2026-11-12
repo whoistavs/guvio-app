@@ -344,7 +344,7 @@ export async function startOAuth(provider: "google" | "apple") {
 export async function sendPasswordReset(email: string): Promise<void> {
   if (!supabase) throw new Error("Recuperar senha precisa do servidor configurado.");
   const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-    redirectTo: "https://whoistavs.github.io/guvio-app/"
+    redirectTo: "https://guvioapp.github.io/guvio-app/"
   });
   if (error) throw new Error(translateAuthError(error.message));
 }
@@ -415,7 +415,7 @@ export async function recoverFind(query: string): Promise<RecoverAccount> {
 export async function recoverSend(query: string, direct?: boolean): Promise<void> {
   if (direct) {
     if (!supabase) throw new RecoverError("offline", "Servidor não configurado.");
-    const { error } = await supabase.auth.resetPasswordForEmail(query.trim(), { redirectTo: "https://whoistavs.github.io/guvio-app/" });
+    const { error } = await supabase.auth.resetPasswordForEmail(query.trim(), { redirectTo: "https://guvioapp.github.io/guvio-app/" });
     if (error) throw new RecoverError(/rate|seconds/i.test(error.message) ? "wait" : "offline", translateAuthError(error.message));
     return;
   }

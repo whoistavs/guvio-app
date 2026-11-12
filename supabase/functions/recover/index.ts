@@ -7,7 +7,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
-const SITE = "https://whoistavs.github.io/guvio-app/";
+const SITE = "https://guvioapp.github.io/guvio-app/";
 const URL = Deno.env.get("SUPABASE_URL")!;
 const admin = createClient(URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const anon = () => createClient(URL, Deno.env.get("SUPABASE_ANON_KEY")!, { auth: { persistSession: false } });

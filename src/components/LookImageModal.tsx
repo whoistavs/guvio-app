@@ -59,7 +59,7 @@ async function renderWebCard(post: FeedPost, bg: string): Promise<string> {
   const pieces = (post.clothingTags || []).slice(0, 3).map(t => t.name).join(" + ");
   if (pieces) g.fillText(pieces.length > 48 ? pieces.slice(0, 46) + "…" : pieces, cw / 2, py + ph + 230);
   g.font = "600 32px system-ui, -apple-system, sans-serif";
-  g.fillText("whoistavs.github.io/guvio-app", cw / 2, ch - 80);
+  g.fillText("guvioapp.github.io/guvio-app", cw / 2, ch - 80);
   g.globalAlpha = 1;
   return c.toDataURL("image/jpeg", 0.92);
 }
@@ -130,7 +130,7 @@ export function LookImageModal({ post, onClose }: { post: FeedPost | null; onClo
               {pieces}
             </Text>
           ) : null}
-          <Text style={[s.site, { color: fg }]}>whoistavs.github.io/guvio-app</Text>
+          <Text style={[s.site, { color: fg }]}>guvioapp.github.io/guvio-app</Text>
         </View>
         <View style={s.bgs}>
           {BGS.map(c => (

@@ -17,7 +17,7 @@ export function parseProfileLink(url?: string | null): string | null {
 }
 
 /** endereço do site (GitHub Pages) */
-export const SITE_URL = "https://whoistavs.github.io/guvio-app/";
+export const SITE_URL = "https://guvioapp.github.io/guvio-app/";
 
 /** link de um post: abre no site e, com ?p=, já mostra o post */
 export function postWebLink(postId: string): string {
