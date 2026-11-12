@@ -7,6 +7,7 @@ export function Header({
   locationText = "Campinas, SP",
   weatherText,
   onOpenDirect,
+  onPressLocation,
   onOpenBeta,
   onOpenActivity,
   hasUnreadActivity = true,
@@ -15,6 +16,8 @@ export function Header({
   locationText?: string;
   weatherText?: string;
   onOpenDirect?: () => void;
+  /** toque na cidade: pede a localização de novo */
+  onPressLocation?: () => void;
   /** selo BETA: abre o feedback */
   onOpenBeta?: () => void;
   onOpenActivity?: () => void;
@@ -38,12 +41,12 @@ export function Header({
       </View>
 
       <View style={styles.right}>
-        <View style={styles.loc}>
+        <Pressable onPress={onPressLocation} hitSlop={8} style={styles.loc}>
           <MapPin size={13} color={colors.icon} />
           <Text numberOfLines={1} style={[styles.lt, { color: colors.muted }]}>
             {locationText} {weatherText ? `· ${weatherText}` : ""}
           </Text>
-        </View>
+        </Pressable>
 
         <Pressable onPress={onOpenActivity} hitSlop={10} style={styles.iconBtn}>
           <Heart size={22} color={colors.icon} />

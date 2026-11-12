@@ -50,7 +50,7 @@ import {
 import { successFeedback, tapFeedback } from "./src/utils/haptics";
 import { FadeIn, SlideInScreen, ToastHost, toast } from "./src/components/motion";
 import { shouldNotify } from "./src/services/settings";
-import { getCurrentPlace, CurrentPlace } from "./src/services/location";
+import { getCurrentPlace, CurrentPlace, lastLocationError } from "./src/services/location";
 import { PostDetailView } from "./src/components/PostDetailView";
 import { ChallengeCard } from "./src/components/ChallengeCard";
 import { OnboardingView, onboardingDone, resetOnboarding } from "./src/components/OnboardingView";
@@ -121,6 +121,28 @@ function Guvio() {
   const [unreadDm, setUnreadDm] = useState(0);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [location, setLocation] = useState("Sua cidade");
+  const applyPlaceRef = useRef<(force: boolean, explain?: boolean) => void>(() => {});
+  applyPlaceRef.current = (force, explain) => {
+    getCurrentPlace(force).then(pl => {
+      if (!pl) {
+        if (!explain) return;
+        const err = lastLocationError();
+        const iosWeb = Platform.OS === "web" && typeof navigator !== "undefined" && /iPhone|iPad/.test(navigator.userAgent);
+        Alert.alert(
+          "Localização desativada",
+          err === "denied"
+            ? iosWeb
+              ? "Libere no iPhone:\n1. Ajustes > Privacidade e Segurança > Serviços de Localização: ativado.\n2. Na mesma tela, Sites do Safari > Ao Usar o App.\n3. Volte ao GUVIO e toque na cidade de novo."
+              : "Libere a localização para este site/app nas configurações e toque na cidade de novo."
+            : "Não consegui achar sua localização agora. Verifique se a localização do aparelho está ligada e tente de novo."
+        );
+        return;
+      }
+      setPlace(pl);
+      if (pl.city) setLocation([pl.city, pl.region || pl.country].filter(Boolean).join(", "));
+      fetchCityWeather(pl.lat, pl.lng).then(setWeather);
+    });
+  };
   const [filterCity, setFilterCity] = useState<string | null>(null);
   const [filterCountry, setFilterCountry] = useState<string | null>(null);
   const [weather, setWeather] = useState<WeatherData | null>(null);
@@ -244,12 +266,7 @@ function Guvio() {
     loadSavedPosts().then(setPosts);
     hasUnreadActivity().then(setUnread);
     unreadMessages().then(setUnreadDm);
-    getCurrentPlace().then(pl => {
-      if (!pl) return;
-      setPlace(pl);
-      if (pl.city) setLocation([pl.city, pl.region || pl.country].filter(Boolean).join(", "));
-      fetchCityWeather(pl.lat, pl.lng).then(setWeather);
-    });
+    applyPlaceRef.current(false);
 
     isCloud().then(cloud => {
       if (!cloud) return;
@@ -668,6 +685,7 @@ function Guvio() {
           <View style={{ backgroundColor: colors.bg }}>
             <Header
               locationText={location}
+              onPressLocation={() => applyPlaceRef.current(true, true)}
               weatherText={weatherText}
               onOpenDirect={() => push({ name: "direct" })}
               onOpenBeta={() => push({ name: "settingsPage", kind: "feedback" })}
