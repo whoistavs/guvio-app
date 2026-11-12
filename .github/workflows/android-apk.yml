@@ -5,9 +5,9 @@ name: Gerar APK Android (beta)
 # https://github.com/guvioapp/guvio-app/releases/download/beta-android/GUVIO.apk
 on:
   workflow_dispatch:
-  # ou ao enviar uma tag "build-NN" (git tag build-28 && git push origin build-28)
+  # ou ao atualizar o branch "release-build" (git push -f origin main:release-build)
   push:
-    tags: ["build-*"]
+    branches: [release-build]
 
 permissions:
   contents: write
