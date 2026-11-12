@@ -501,7 +501,7 @@ function Guvio() {
         username: cleanName,
         displayName: name,
         avatar: "",
-        location: location || "Brasil",
+        location: "",
         followers: 0,
         following: 0,
         bio: ""
@@ -550,7 +550,7 @@ function Guvio() {
     />
   );
 
-  if (top) {
+  const renderScreen = (top: NonNullable<typeof stack[number]>): React.ReactNode => {
     let screen: React.ReactNode = null;
     switch (top.name) {
       case "direct":
@@ -642,27 +642,31 @@ function Guvio() {
           );
         break;
     }
+    return screen;
+  };
+
+  // telas abertas por cima (direct, notificações, perfis...) ficam em camadas:
+  // a Home e as telas de baixo continuam montadas, então ao voltar nada recarrega
+  const stackLayer = stack.map((entry, i) => {
+    const isTop = i === stack.length - 1;
     return (
-      <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
-        {/* arrastar da borda esquerda volta, como no iPhone */}
-        <EdgeSwipe side="left" anywhere onSwipe={back} under={colors.surface2}>
-          <SlideInScreen key={`${stack.length}-${top.name}`} from={goingBack.current ? -60 : 60}>
-            {screen}
-          </SlideInScreen>
+      <SafeAreaView
+        key={`${i}-${entry.name}`}
+        style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg, zIndex: 200 + i }]}
+        pointerEvents={isTop ? "auto" : "none"}
+      >
+        <EdgeSwipe side="left" anywhere onSwipe={back} under={colors.surface2} enabled={isTop}>
+          <SlideInScreen from={goingBack.current ? -60 : 60}>{renderScreen(entry)}</SlideInScreen>
         </EdgeSwipe>
-        <ToastHost bottom={40} />
-        <UpdateBanner />
-        {betaWelcome}
-        <PinchHost />
-      <PeekHost />
       </SafeAreaView>
     );
-  }
+  });
 
   const weatherText = weather ? `${weather.condition} ${weather.temperature}°C` : undefined;
 
   return (
-    <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
+    <View style={[s.safe, { backgroundColor: colors.bg }]}>
+    <SafeAreaView style={s.safe} pointerEvents={top ? "none" : "auto"}>
       <StatusBar barStyle={dark ? "light-content" : "dark-content"} backgroundColor={colors.bg} />
       {offline ? (
         <Pressable onPress={refreshFeed} style={[s.offline, { backgroundColor: colors.surface }]}>
@@ -671,8 +675,8 @@ function Guvio() {
           </Text>
         </Pressable>
       ) : null}
-      {tab === "home" ? (
-        <FadeIn key="home" from={0} duration={220} style={{ flex: 1 }}>
+      {/* a Home fica sempre montada (só escondida), para manter a posição do feed */}
+      <View style={tab === "home" ? s.safe : s.hidden} pointerEvents={tab === "home" ? "auto" : "none"}>
         {/* bordas: da direita abre o Direct, da esquerda abre Publicar */}
         <EdgeSwipe side="left" anywhere interactive={false} onSwipe={() => setTab("add")}>
         <EdgeSwipe side="right" anywhere interactive={false} onSwipe={() => push({ name: "direct" })}>
@@ -730,8 +734,7 @@ function Guvio() {
         </ScrollView>
         </EdgeSwipe>
         </EdgeSwipe>
-        </FadeIn>
-      ) : null}
+      </View>
       {tab === "home" && newLooks > 0 ? (
         <Pressable
           onPress={() => {
@@ -815,13 +818,15 @@ function Guvio() {
           setTab(t);
         }}
       />
-      <ToastHost />
+    </SafeAreaView>
+      {stackLayer}
+      <ToastHost bottom={top ? 40 : undefined} />
       <UpdateBanner />
-      <InstallPrompt />
+      {top ? null : <InstallPrompt />}
       {betaWelcome}
       <PinchHost />
       <PeekHost />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -861,6 +866,7 @@ export default function App() {
 
 const s = StyleSheet.create({
   safe: { flex: 1 },
+  hidden: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, opacity: 0, zIndex: -1 },
   offline: { paddingHorizontal: 16, paddingVertical: 8, alignItems: "center" },
   newPill: {
     position: "absolute",
