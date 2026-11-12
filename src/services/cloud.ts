@@ -536,6 +536,64 @@ export async function fetchSavedPosts(): Promise<FeedPost[]> {
   return ids.map((id: string) => posts.find(p => p.id === id)).filter(Boolean) as FeedPost[];
 }
 
+/** Looks que eu curti (mais recentes primeiro) — para "Sua atividade". */
+export async function fetchMyLikedPosts(limit = 60): Promise<FeedPost[]> {
+  const uid = await me();
+  const l = check(
+    await db().from("likes").select("post_id").eq("user_id", uid).order("created_at", { ascending: false }).limit(limit)
+  );
+  const ids = (l || []).map((x: any) => x.post_id);
+  if (ids.length === 0) return [];
+  const [res, hidden] = await Promise.all([db().from("feed_posts").select("*").in("id", ids), hiddenSets()]);
+  const posts = await mapPosts(visible(check(res) || [], hidden));
+  return ids.map((id: string) => posts.find(p => p.id === id)).filter(Boolean) as FeedPost[];
+}
+
+export interface MyComment {
+  id: string;
+  text: string;
+  createdAt: string;
+  postId: string;
+  postImage?: string;
+  postAuthor?: string;
+}
+
+/** Meus comentários (mais recentes primeiro), com a foto do look. */
+export async function fetchMyComments(limit = 60): Promise<MyComment[]> {
+  const uid = await me();
+  const rows = check(
+    await db()
+      .from("comments")
+      .select("id, text, created_at, post_id")
+      .eq("user_id", uid)
+      .order("created_at", { ascending: false })
+      .limit(limit)
+  ) as any[];
+  if (!rows?.length) return [];
+  const ids = [...new Set(rows.map(r => r.post_id))];
+  const posts = (check(await db().from("feed_posts").select("id, image_url, username").in("id", ids)) || []) as any[];
+  return rows
+    .map(r => {
+      const p = posts.find(x => x.id === r.post_id);
+      if (!p) return null;
+      return { id: r.id, text: r.text, createdAt: r.created_at, postId: r.post_id, postImage: p.image_url, postAuthor: p.username };
+    })
+    .filter(Boolean) as MyComment[];
+}
+
+/** Totais da minha conta: posts, curtidas dadas e comentários feitos. */
+export async function fetchMyActivityCounts(): Promise<{ posts: number; likes: number; comments: number; since?: string }> {
+  const uid = await me();
+  const head = { count: "exact" as const, head: true };
+  const [p, l, c, prof] = await Promise.all([
+    db().from("posts").select("id", head).eq("user_id", uid),
+    db().from("likes").select("post_id", head).eq("user_id", uid),
+    db().from("comments").select("id", head).eq("user_id", uid),
+    db().from("profiles").select("created_at").eq("id", uid).maybeSingle()
+  ]);
+  return { posts: p.count || 0, likes: l.count || 0, comments: c.count || 0, since: (prof.data as any)?.created_at };
+}
+
 export async function createPost(input: {
   image: string;
   caption: string;

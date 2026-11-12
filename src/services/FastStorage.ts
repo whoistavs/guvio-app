@@ -8,6 +8,11 @@ class FastStorageService {
   private cache = new Map<string, string>();
   private initialized = false;
 
+  /** já carregou o que estava salvo? (antes disso, escrever poderia apagar dados) */
+  get ready(): boolean {
+    return this.initialized;
+  }
+
   async init(): Promise<void> {
     if (this.initialized) return;
     try {

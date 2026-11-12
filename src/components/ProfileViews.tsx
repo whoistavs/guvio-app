@@ -63,8 +63,11 @@ import {
   loadTaggedPosts,
   loadFollowRequests,
   answerFollowRequest,
-  loadArchivedPosts
+  loadArchivedPosts,
+  loadMyActivity
 } from "../services/storage";
+import { usageLastDays, formatMinutes } from "../services/usage";
+import { timeAgo, MyComment } from "../services/cloud";
 import { getSavedAuthSession } from "../services/auth";
 import { FastImage, preloadImages } from "./FastImage";
 import { ShareProfileModal } from "./ShareProfileModal";
@@ -898,6 +901,137 @@ export function MyProfileView({
   );
 }
 
+/** "Sua atividade": tempo no app (7 dias), totais e o que você curtiu e comentou */
+function ActivityStats({ colors, onOpenPost }: { colors: any; onOpenPost?: (id: string) => void }) {
+  const [days] = useState(() => usageLastDays(7));
+  const [data, setData] = useState<Awaited<ReturnType<typeof loadMyActivity>> | null>(null);
+  const [tab, setTab] = useState<"likes" | "comments">("likes");
+  useEffect(() => {
+    let alive = true;
+    loadMyActivity()
+      .then(d => alive && setData(d))
+      .catch(() => alive && setData({ liked: [], comments: [], counts: { posts: 0, likes: 0, comments: 0 } }));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const used = days.filter(d => d.minutes > 0);
+  const avg = used.length ? Math.round(used.reduce((a, d) => a + d.minutes, 0) / used.length) : 0;
+  const max = Math.max(1, ...days.map(d => d.minutes));
+  const today = days[days.length - 1]?.minutes || 0;
+  const since = data?.counts.since
+    ? new Date(data.counts.since).toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })
+    : null;
+
+  return (
+    <View style={{ paddingBottom: 40 }}>
+      <View style={[as.card, { borderColor: colors.border }]}>
+        <Text style={[as.label, { color: colors.muted }]}>Tempo no Guvio</Text>
+        <Text style={[as.big, { color: colors.text }]}>{formatMinutes(avg)}</Text>
+        <Text style={{ color: colors.muted, fontSize: 12 }}>média diária nos últimos 7 dias · hoje {formatMinutes(today)}</Text>
+        <View style={as.chart}>
+          {days.map(d => (
+            <View key={d.day} style={as.barCol}>
+              <View style={as.barTrack}>
+                <View
+                  style={[
+                    as.bar,
+                    {
+                      height: `${Math.max(d.minutes ? 6 : 2, (d.minutes / max) * 100)}%`,
+                      backgroundColor: d.label === "Hoje" ? colors.text : colors.border
+                    }
+                  ]}
+                />
+              </View>
+              <Text style={{ color: d.label === "Hoje" ? colors.text : colors.muted, fontSize: 10, fontWeight: d.label === "Hoje" ? "700" : "500" }}>
+                {d.label}
+              </Text>
+            </View>
+          ))}
+        </View>
+        <Text style={{ color: colors.muted, fontSize: 11 }}>Contado neste aparelho, só enquanto o app está aberto.</Text>
+      </View>
+
+      <View style={as.stats}>
+        {[
+          { n: data?.counts.posts, l: "looks" },
+          { n: data?.counts.likes, l: "curtidas dadas" },
+          { n: data?.counts.comments, l: "comentários" }
+        ].map(x => (
+          <View key={x.l} style={[as.stat, { backgroundColor: colors.surface }]}>
+            <Text style={[as.statN, { color: colors.text }]}>{x.n ?? "–"}</Text>
+            <Text style={{ color: colors.muted, fontSize: 11 }}>{x.l}</Text>
+          </View>
+        ))}
+      </View>
+      {since ? <Text style={{ color: colors.muted, fontSize: 12, textAlign: "center", marginBottom: 6 }}>No Guvio desde {since}</Text> : null}
+
+      <View style={[as.tabs, { borderBottomColor: colors.border }]}>
+        {(
+          [
+            ["likes", "Curtidas", Heart],
+            ["comments", "Comentários", MessageCircle]
+          ] as const
+        ).map(([id, l, Icon]) => (
+          <Pressable key={id} onPress={() => setTab(id)} style={[as.tab, tab === id && { borderBottomColor: colors.text }]}>
+            <Icon size={16} color={tab === id ? colors.text : colors.muted} />
+            <Text style={{ color: tab === id ? colors.text : colors.muted, fontWeight: "600", fontSize: 13 }}>{l}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {!data ? (
+        <GridSkeleton count={6} />
+      ) : tab === "likes" ? (
+        <Grid
+          posts={data.liked}
+          colors={colors}
+          onSelectPost={p => onOpenPost?.(p.id)}
+          emptyTitle="Nenhuma curtida ainda"
+          emptySubtitle="Os looks que você curtir aparecem aqui."
+        />
+      ) : data.comments.length === 0 ? (
+        <View style={s.info}>
+          <MessageCircle size={32} color={colors.icon} />
+          <Text style={{ color: colors.muted, textAlign: "center" }}>Seus comentários aparecem aqui.</Text>
+        </View>
+      ) : (
+        data.comments.map((c: MyComment) => (
+          <Pressable key={c.id} onPress={() => onOpenPost?.(c.postId)} style={[as.row, { borderBottomColor: colors.border }]}>
+            {c.postImage ? <FastImage source={c.postImage} style={as.thumb} contentFit="cover" /> : <View style={[as.thumb, { backgroundColor: colors.surface }]} />}
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.muted, fontSize: 11 }}>
+                {c.postAuthor ? `No look de @${c.postAuthor}` : "Em um look"} · {timeAgo(c.createdAt)}
+              </Text>
+              <Text style={{ color: colors.text, fontSize: 14, marginTop: 2 }} numberOfLines={2}>
+                {c.text}
+              </Text>
+            </View>
+          </Pressable>
+        ))
+      )}
+    </View>
+  );
+}
+
+const as = StyleSheet.create({
+  card: { margin: 16, padding: 16, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, gap: 4 },
+  label: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.4 },
+  big: { fontSize: 30, fontWeight: "700", letterSpacing: -0.5 },
+  chart: { flexDirection: "row", height: 120, gap: 8, marginTop: 14, marginBottom: 8 },
+  barCol: { flex: 1, alignItems: "center", gap: 6 },
+  barTrack: { flex: 1, width: "100%", justifyContent: "flex-end" },
+  bar: { width: "100%", borderRadius: 6 },
+  stats: { flexDirection: "row", gap: 8, paddingHorizontal: 16, marginBottom: 12 },
+  stat: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: "center", gap: 2 },
+  statN: { fontSize: 18, fontWeight: "700" },
+  tabs: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, marginTop: 8 },
+  tab: { flex: 1, flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center", paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: "transparent" },
+  row: { flexDirection: "row", gap: 12, alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  thumb: { width: 48, height: 60, borderRadius: 6 }
+});
+
 export function SettingsView({
   onBack,
   onOpen,
@@ -1185,11 +1319,7 @@ export function SimpleSettingsPage({
           <Grid posts={activeCol ? colPosts : savedPosts} colors={colors} onSelectPost={p => onOpenPost?.(p.id)} />
         </>
       ) : kind === "activity" ? (
-        <View style={s.info}>
-          <Clock3 size={38} color={colors.icon} />
-          <Text style={[s.infoBig, { color: colors.text }]}>0 min</Text>
-          <Text style={{ color: colors.muted, textAlign: "center" }}>Sua atividade no Guvio iniciou agora</Text>
-        </View>
+        <ActivityStats colors={colors} onOpenPost={onOpenPost} />
       ) : blocked.length > 0 ? (
         <View style={{ paddingVertical: 8 }}>
           {blocked.map(p => (

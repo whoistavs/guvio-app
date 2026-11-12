@@ -51,6 +51,7 @@ import {
 import { successFeedback, tapFeedback } from "./src/utils/haptics";
 import { FadeIn, SlideInScreen, ToastHost, toast } from "./src/components/motion";
 import { shouldNotify } from "./src/services/settings";
+import { startUsageTracking } from "./src/services/usage";
 import { getCurrentPlace, CurrentPlace, lastLocationError } from "./src/services/location";
 import { PostDetailView } from "./src/components/PostDetailView";
 import { ChallengeCard } from "./src/components/ChallengeCard";
@@ -119,6 +120,9 @@ function Guvio() {
   };
   const top = stack[stack.length - 1];
   // botão "voltar" do Android: fecha a tela de cima; depois volta para a Home; só então sai do app
+  useEffect(() => {
+    startUsageTracking();
+  }, []);
   const backNavRef = useRef<() => boolean>(() => false);
   backNavRef.current = () => {
     if (stack.length) {

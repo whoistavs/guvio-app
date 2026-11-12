@@ -300,6 +300,26 @@ export async function loadMyPosts(): Promise<FeedPost[]> {
   return pinnedFirst(all.filter(p => !p.archived && (p.creatorName === "Você" || p.userId === "my-profile" || p.userId?.startsWith("user-"))));
 }
 
+/** "Sua atividade": looks curtidos, comentários feitos e totais da conta */
+export async function loadMyActivity(): Promise<{
+  liked: FeedPost[];
+  comments: cloud.MyComment[];
+  counts: { posts: number; likes: number; comments: number; since?: string };
+}> {
+  if (await isCloud()) {
+    const [liked, comments, counts] = await Promise.all([
+      cloud.fetchMyLikedPosts().catch(() => [] as FeedPost[]),
+      cloud.fetchMyComments().catch(() => [] as cloud.MyComment[]),
+      cloud.fetchMyActivityCounts().catch(() => ({ posts: 0, likes: 0, comments: 0 }))
+    ]);
+    return { liked, comments, counts };
+  }
+  const all: FeedPost[] = FastStorage.getItemSync(KEYS.POSTS, []);
+  const liked = all.filter(p => p.isLiked);
+  const mine = await loadMyPosts();
+  return { liked, comments: [], counts: { posts: mine.length, likes: liked.length, comments: 0 } };
+}
+
 /** Posts que eu salvei */
 export async function loadSavedOnlyPosts(): Promise<FeedPost[]> {
   if (await isCloud()) return cloud.fetchSavedPosts().catch(() => []);
