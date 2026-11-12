@@ -469,10 +469,11 @@ export function MediaPicker({
         const whole = cx <= 1 && cy <= 1 && cw >= real.width - 2 && ch >= real.height - 2;
         if (!whole) actions.push({ crop: { originX: cx, originY: cy, width: cw, height: ch } });
         const longSide = Math.max(whole ? real.width : cw, whole ? real.height : ch);
-        if (longSide > 1600) actions.push({ resize: (whole ? real.width : cw) >= (whole ? real.height : ch) ? { width: 1600 } : { height: 1600 } });
-        const r = await manipulateAsync(file, actions, { compress: 0.9, format: SaveFormat.JPEG }).catch(() =>
+        // 1920px no lado maior: nítida até nos iPhones Pro Max (a foto é comprimida uma vez só)
+        if (longSide > 1920) actions.push({ resize: (whole ? real.width : cw) >= (whole ? real.height : ch) ? { width: 1920 } : { height: 1920 } });
+        const r = await manipulateAsync(file, actions, { compress: 0.88, format: SaveFormat.JPEG }).catch(() =>
           // se o arquivo não abrir, pede a foto direto para a galeria
-          manipulateAsync(it.uri, actions, { compress: 0.9, format: SaveFormat.JPEG })
+          manipulateAsync(it.uri, actions, { compress: 0.88, format: SaveFormat.JPEG })
         );
         out.push(r.uri);
       }

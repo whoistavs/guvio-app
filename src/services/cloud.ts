@@ -68,7 +68,7 @@ function isRemote(uri: string) {
   return /^https?:\/\//i.test(uri);
 }
 
-const MAX_SIDE = 1440;
+const MAX_SIDE = 1920;
 
 function imageSize(uri: string): Promise<{ width: number; height: number } | null> {
   return new Promise(resolve =>
@@ -76,7 +76,7 @@ function imageSize(uri: string): Promise<{ width: number; height: number } | nul
   );
 }
 
-/** Reduz a foto para no máximo 1440px e JPEG 80% antes de enviar (bem mais rápido no 4G) */
+/** Reduz a foto para no máximo 1920px (JPEG 88%) antes de enviar. Foto que já saiu pronta do corte não é comprimida de novo. */
 // tamanho máximo (lado maior) por tipo de foto: avatar aparece pequeno, não precisa de 1440px
 const SIDE_BY_FOLDER: Record<string, number> = { avatar: 480, wardrobe: 1000, wishlist: 800, feedback: 1280 };
 
@@ -94,10 +94,11 @@ async function compress(uri: string, folder = ""): Promise<string> {
     // economia de dados: fotos menores e mais comprimidas
     const saver = require("./settings").isDataSaver() as boolean;
     const side = Math.min(saver ? 1080 : MAX_SIDE, SIDE_BY_FOLDER[folder] || MAX_SIDE);
-    if (size && Math.max(size.width, size.height) > side) {
-      actions.push({ resize: size.width >= size.height ? { width: side } : { height: side } });
-    }
-    const out = await manipulateAsync(uri, actions, { compress: saver ? 0.62 : 0.8, format: SaveFormat.JPEG });
+    const big = !!size && Math.max(size.width, size.height) > side;
+    // a foto do post já vem cortada e em JPEG de alta qualidade: comprimir de novo só piora
+    if (!big && !saver && /ImageManipulator/i.test(uri) && /\.jpe?g$/i.test(uri.split("?")[0])) return uri;
+    if (big) actions.push({ resize: size!.width >= size!.height ? { width: side } : { height: side } });
+    const out = await manipulateAsync(uri, actions, { compress: saver ? 0.62 : 0.88, format: SaveFormat.JPEG });
     return out.uri;
   } catch (e) {
     return uri;
