@@ -54,6 +54,9 @@ for (const page of ["index.html", "404.html"]) {
   let html = fs.readFileSync(file, "utf8");
   html = html.replace('<html lang="en">', '<html lang="pt-BR">');
   html = html.replace(/<title>.*?<\/title>/, "<title>GUVIO</title>");
+  // abertura com o cabide, já no HTML: aparece antes do app carregar (sem tela preta vazia)
+  const splash = `<div id="guvio-splash" style="position:fixed;inset:0;background:#050608;display:flex;align-items:center;justify-content:center;z-index:2147483000"><img src="${base}/splash.png" width="180" height="180" alt="" style="animation:guvioPulse 1.04s ease-in-out infinite"/><div style="position:absolute;bottom:54px;left:0;right:0;text-align:center;color:#9AA4B2;font:700 13px -apple-system,system-ui,sans-serif;letter-spacing:5px">GUVIO</div><style>@keyframes guvioPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}</style></div>`;
+  if (!html.includes('id="guvio-splash"')) html = html.replace(/<body([^>]*)>/, `<body$1>${splash}`);
   // a tela do app não dá zoom (só as fotos, com o gesto de pinça do próprio app);
   // isso também evita o iPhone dar zoom sozinho ao tocar num campo de texto
   const vp = '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, shrink-to-fit=no" />';

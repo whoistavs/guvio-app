@@ -3,6 +3,7 @@ import { Animated, LayoutChangeEvent, PanResponder, Platform, Pressable, StyleSh
 import { BlurView } from "expo-blur";
 import { Home, Plus, Search, Shirt, User } from "lucide-react-native";
 import { PressableScale } from "./motion";
+import { openAccountSwitcher } from "./AccountSwitcher";
 import { useAppTheme } from "../context/AppTheme";
 
 // barra de vidro flutuante com 4 abas; o "publicar" é um botão redondo separado, à direita
@@ -126,6 +127,9 @@ export function BottomNavLiquid({ activeTab, onTabChange }: { activeTab: string;
                 <Pressable
                   key={it.id}
                   onPress={() => onTabChange(it.id)}
+                  // segurar "Perfil": trocar de conta
+                  onLongPress={it.id === "profile" ? () => openAccountSwitcher() : undefined}
+                  delayLongPress={350}
                   onPressIn={() => squeeze(true)}
                   onPressOut={() => squeeze(false)}
                   style={[styles.item, { width: itemWidth }]}

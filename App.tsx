@@ -59,6 +59,10 @@ import { ChallengeCard } from "./src/components/ChallengeCard";
 import { OnboardingView, onboardingDone, resetOnboarding } from "./src/components/OnboardingView";
 import { FeedbackView } from "./src/components/FeedbackView";
 import { AdminView } from "./src/components/AdminView";
+import { PostListView } from "./src/components/PostListView";
+import { AccountSwitcherHost, setAppRestarter } from "./src/components/AccountSwitcher";
+import { IntroSplash, markAppReady } from "./src/components/IntroSplash";
+import { currentUserId, forgetAccount, rememberCurrentAccount, updateStoredToken } from "./src/services/accounts";
 import { PushPrompt } from "./src/components/PushPrompt";
 import { forgetPushDevice, refreshPushRegistration } from "./src/services/push";
 import { ChallengeView } from "./src/components/ChallengeView";
@@ -81,6 +85,7 @@ type Screen =
   | { name: "settings" }
   | { name: "settingsPage"; kind: string }
   | { name: "post"; postId: string }
+  | { name: "postList"; posts: FeedPost[]; startId: string; title?: string }
   | { name: "challenge" }
   | { name: "follows"; profile: UserProfile; kind: "followers" | "following" };
 
@@ -127,6 +132,10 @@ function Guvio() {
   useEffect(() => {
     startUsageTracking();
   }, []);
+  // abertura com o logo: sai quando já sabemos se a pessoa está logada
+  useEffect(() => {
+    if (!booting) markAppReady();
+  }, [booting]);
   // Android: tocar no aviso (curtida, comentário...) abre o look direto no app
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -300,7 +309,12 @@ function Guvio() {
       handleAuthRedirect(url).then(ok => ok && setAuthenticated(true));
     });
     const authSub = supabase?.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session) setAuthenticated(true);
+      if (event === "SIGNED_IN" && session) {
+        setAuthenticated(true);
+        // guarda esta conta na lista "trocar de conta"
+        setTimeout(() => rememberCurrentAccount().catch(() => {}), 1500);
+      }
+      if (event === "TOKEN_REFRESHED" && session) updateStoredToken(session.user.id, session.refresh_token).catch(() => {});
       if (event === "PASSWORD_RECOVERY") {
         setAuthenticated(true);
         // pelo código do "Esqueci minha senha" a senha nova é criada no próprio fluxo
@@ -335,6 +349,7 @@ function Guvio() {
       if (!cloud) return;
       // avisos com o app fechado: confirma a inscrição deste aparelho na conta atual
       refreshPushRegistration();
+      rememberCurrentAccount().catch(() => {});
       stopPresence = startPresence();
       // junta várias curtidas seguidas do mesmo post numa consulta só, e só para posts que estão na tela
       const pending = new Map<string, ReturnType<typeof setTimeout>>();
@@ -408,6 +423,9 @@ function Guvio() {
   const handleSignOut = async () => {
     // este aparelho para de receber avisos da conta que saiu
     await forgetPushDevice().catch(() => {});
+    // e ela sai da lista de contas salvas
+    const uid = await currentUserId().catch(() => null);
+    if (uid) await forgetAccount(uid);
     await signOut();
     setAuthenticated(false);
     setPosts([]);
@@ -595,6 +613,9 @@ function Guvio() {
     push({ name: "publicProfile", profile: p });
   };
   const openPost = (postId: string) => push({ name: "post", postId });
+  // tocar numa foto da grade: abre a lista daquele perfil já no look tocado
+  const openPostList = (list: FeedPost[], startId: string, title?: string) =>
+    list.length > 1 ? push({ name: "postList", posts: list, startId, title }) : openPost(startId);
   openPostRef.current = openPost;
 
   /** abre "Nova publicação" já com a #hashtag do desafio na legenda */
@@ -643,6 +664,7 @@ function Guvio() {
             onBack={back}
             onMessage={() => push({ name: "direct", thread: threadForProfile(top.profile) })}
             onOpenPost={openPost}
+            onOpenPostList={openPostList}
             onOpenFollows={kind => openFollows(top.profile, kind)}
           />
         );
@@ -658,6 +680,19 @@ function Guvio() {
               setPosts(prev => prev.filter(p => p.id !== id));
               back();
             }}
+          />
+        );
+        break;
+      case "postList":
+        screen = (
+          <PostListView
+            posts={top.posts}
+            startId={top.startId}
+            title={top.title}
+            onBack={back}
+            onOpenProfile={openName}
+            onOpenTag={openTag}
+            onDeleted={id => setPosts(prev => prev.filter(p => p.id !== id))}
           />
         );
         break;
@@ -707,7 +742,7 @@ function Guvio() {
           ) : top.kind === "admin" ? (
             <AdminView onBack={back} onOpenPost={openPost} onOpenProfile={openName} />
           ) : (
-            <SimpleSettingsPage kind={top.kind} onBack={back} onOpenPost={openPost} />
+            <SimpleSettingsPage kind={top.kind} onBack={back} onOpenPost={openPost} onOpenPostList={openPostList} />
           );
         break;
     }
@@ -875,6 +910,7 @@ function Guvio() {
           onSettings={() => push({ name: "settings" })}
           postsVersion={posts.length}
           onOpenPost={openPost}
+          onOpenPostList={openPostList}
           onOpenFollows={openFollows}
         />
       ) : (
@@ -935,12 +971,17 @@ if (errorUtils && !__DEV__) {
 }
 
 export default function App() {
+  // trocar de conta: remonta o app inteiro na conta nova
+  const [appKey, setAppKey] = useState(0);
+  useEffect(() => setAppRestarter(() => setAppKey(k => k + 1)), []);
   return (
     <AppThemeProvider>
       <ErrorBoundary>
         <SafeAreaProvider>
-          <Guvio />
+          <Guvio key={appKey} />
           <RecoverHost />
+          <AccountSwitcherHost />
+          <IntroSplash />
           <WebAlertHost />
         </SafeAreaProvider>
       </ErrorBoundary>

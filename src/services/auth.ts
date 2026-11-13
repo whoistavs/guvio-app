@@ -136,7 +136,7 @@ export interface AuthSession {
 }
 
 // Utilitários de Armazenamento Seguro (Expo SecureStore no iOS/Android + Fallback Web)
-async function setSecureItem(key: string, value: string): Promise<void> {
+export async function setSecureItem(key: string, value: string): Promise<void> {
   try {
     if (Platform.OS !== "web" && (await SecureStore.isAvailableAsync())) {
       await SecureStore.setItemAsync(key, value);
@@ -146,7 +146,7 @@ async function setSecureItem(key: string, value: string): Promise<void> {
   await AsyncStorage.setItem(key, value);
 }
 
-async function getSecureItem(key: string): Promise<string | null> {
+export async function getSecureItem(key: string): Promise<string | null> {
   try {
     if (Platform.OS !== "web" && (await SecureStore.isAvailableAsync())) {
       const val = await SecureStore.getItemAsync(key);
@@ -156,7 +156,7 @@ async function getSecureItem(key: string): Promise<string | null> {
   return await AsyncStorage.getItem(key);
 }
 
-async function deleteSecureItem(key: string): Promise<void> {
+export async function deleteSecureItem(key: string): Promise<void> {
   try {
     if (Platform.OS !== "web" && (await SecureStore.isAvailableAsync())) {
       await SecureStore.deleteItemAsync(key);

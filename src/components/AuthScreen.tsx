@@ -15,11 +15,16 @@ import { Apple, AtSign, Check, User, X } from "lucide-react-native";
 import { authConfigured, signInEmail, signUpEmail, startOAuth, ConfirmEmailError, getEnabledProviders, setNewPassword } from "../services/auth";
 import { useAppTheme } from "../context/AppTheme";
 import { openRecoverFlow } from "./RecoverFlow";
+import { restartApp } from "./AccountSwitcher";
+import { savedAccounts, switchToAccount } from "../services/accounts";
 import { isUsernameTaken } from "../services/storage";
 
 export function AuthScreen({ onAuthenticated, inviter }: { onAuthenticated: () => void; inviter?: string | null }) {
   const { colors } = useAppTheme();
   const [signup, setSignup] = useState(false);
+  // contas que já entraram neste aparelho (trocar sem senha)
+  const [saved, setSaved] = useState(() => savedAccounts());
+  const [switching, setSwitching] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -120,6 +125,42 @@ export function AuthScreen({ onAuthenticated, inviter }: { onAuthenticated: () =
             <Text style={{ color: colors.text, fontSize: 13, textAlign: "center" }}>
               <Text style={{ fontWeight: "700" }}>@{inviter}</Text> te convidou para o beta do GUVIO
             </Text>
+          </View>
+        ) : null}
+        {!signup && saved.length > 0 ? (
+          <View style={{ marginBottom: 18 }}>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "600", marginBottom: 6 }}>Contas neste aparelho</Text>
+            {saved.map(a => (
+              <Pressable
+                key={a.userId}
+                disabled={!!switching}
+                onPress={async () => {
+                  setSwitching(a.userId);
+                  const ok = await switchToAccount(a.userId).catch(() => false);
+                  setSwitching(null);
+                  if (ok) restartApp();
+                  else {
+                    setSaved(savedAccounts());
+                    Alert.alert("Entre de novo", `O login de @${a.username} venceu. Entre com o e-mail e a senha.`);
+                  }
+                }}
+                style={[s.savedRow, { borderColor: colors.border }]}
+              >
+                {a.avatar ? (
+                  <Image source={{ uri: a.avatar }} style={s.savedAvatar} />
+                ) : (
+                  <View style={[s.savedAvatar, { backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }]}>
+                    <User size={18} color={colors.muted} />
+                  </View>
+                )}
+                <Text style={{ color: colors.text, fontWeight: "700", flex: 1 }}>{a.username}</Text>
+                {switching === a.userId ? (
+                  <ActivityIndicator color={colors.muted} />
+                ) : (
+                  <Text style={{ color: "#0095F6", fontWeight: "700", fontSize: 13 }}>Entrar</Text>
+                )}
+              </Pressable>
+            ))}
           </View>
         ) : null}
         <Text style={[s.h, { color: colors.text }]}>{signup ? "Criar sua conta" : "Entrar"}</Text>
@@ -287,6 +328,8 @@ export function NewPasswordModal({ visible, onDone }: { visible: boolean; onDone
 }
 
 const s = StyleSheet.create({
+  savedRow: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderRadius: 14, padding: 10, marginBottom: 8 },
+  savedAvatar: { width: 40, height: 40, borderRadius: 20 },
   scrollContainer: { flexGrow: 1, justifyContent: "center", paddingVertical: 40 },
   c: { paddingHorizontal: 28, maxWidth: 500, width: "100%", alignSelf: "center" },
   logo: { alignItems: "center", marginBottom: 28 },

@@ -80,6 +80,7 @@ import { canShowInstall, openInstallHelp } from "./InstallPrompt";
 import { PeekTile, noSwipeBack } from "./gestures";
 import { CloseFriendsView } from "./CloseFriendsView";
 import { PublicCollectionsRow } from "./PublicCollectionsRow";
+import { openAccountSwitcher } from "./AccountSwitcher";
 import { BioLink } from "./BioExtras";
 import { AchievementsRow } from "./AchievementsRow";
 import { LEGAL_TEXTS } from "../data/legal";
@@ -90,7 +91,7 @@ function Grid({
   colors,
   onSelectPost,
   emptyTitle = "Nenhuma publicação ainda",
-  emptySubtitle = "Seus looks publicados no feed aparecerão aqui no estilo grade do Instagram."
+  emptySubtitle = "Os looks que você publicar aparecem aqui."
 }: {
   posts: FeedPost[];
   colors: any;
@@ -152,12 +153,14 @@ export function PublicProfileView({
   onBack,
   onMessage,
   onOpenPost,
+  onOpenPostList,
   onOpenFollows
 }: {
   profile: UserProfile;
   onBack: () => void;
   onMessage: () => void;
   onOpenPost?: (postId: string) => void;
+  onOpenPostList?: (posts: FeedPost[], startId: string, title?: string) => void;
   onOpenFollows?: (kind: "followers" | "following") => void;
 }) {
   const { colors } = useAppTheme();
@@ -368,14 +371,14 @@ export function PublicProfileView({
               </Pressable>
             </View>
             {tab === "posts" ? (
-              <Grid posts={posts} colors={colors} onSelectPost={p => (onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))} />
+              <Grid posts={posts} colors={colors} onSelectPost={p => (onOpenPostList ? onOpenPostList(posts, p.id) : onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))} />
             ) : tagged === null ? (
               <GridSkeleton count={6} />
             ) : (
               <Grid
                 posts={tagged}
                 colors={colors}
-                onSelectPost={p => (onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))}
+                onSelectPost={p => (onOpenPostList ? onOpenPostList(tagged, p.id, "Marcações") : onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))}
                 emptyTitle="Nenhuma marcação"
                 emptySubtitle={`Looks em que marcarem @${profile.username} aparecem aqui.`}
               />
@@ -459,11 +462,13 @@ export function MyProfileView({
   onSettings,
   postsVersion = 0,
   onOpenPost,
+  onOpenPostList,
   onOpenFollows
 }: {
   onSettings: () => void;
   postsVersion?: number;
   onOpenPost?: (postId: string) => void;
+  onOpenPostList?: (posts: FeedPost[], startId: string, title?: string) => void;
   onOpenFollows?: (p: UserProfile, kind: "followers" | "following") => void;
 }) {
   const { colors } = useAppTheme();
@@ -605,6 +610,7 @@ export function MyProfileView({
       <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: 110 }}>
         <ScreenHeader
           title={`@${profile.username}`}
+          onTitlePress={openAccountSwitcher}
           right={
             <Pressable onPress={onSettings}>
               <MoreHorizontal size={25} color={colors.icon} />
@@ -719,9 +725,9 @@ export function MyProfileView({
           <Grid
             posts={userPosts}
             colors={colors}
-            onSelectPost={p => (onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))}
+            onSelectPost={p => (onOpenPostList ? onOpenPostList(userPosts, p.id) : onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))}
             emptyTitle="Nenhum look postado"
-            emptySubtitle="Seus looks publicados no feed aparecerão aqui no estilo grade do Instagram."
+            emptySubtitle="Os looks que você publicar aparecem aqui."
           />
         )}
 
@@ -729,7 +735,7 @@ export function MyProfileView({
           <Grid
             posts={savedPosts}
             colors={colors}
-            onSelectPost={p => (onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))}
+            onSelectPost={p => (onOpenPostList ? onOpenPostList(savedPosts, p.id, "Salvos") : onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))}
             emptyTitle="Nenhum look salvo"
             emptySubtitle="Clique no ícone de salvar em qualquer look do feed para guardá-lo na sua coleção privada."
           />
@@ -742,7 +748,7 @@ export function MyProfileView({
             <Grid
               posts={tagged}
               colors={colors}
-              onSelectPost={p => (onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))}
+              onSelectPost={p => (onOpenPostList ? onOpenPostList(tagged, p.id, "Marcações") : onOpenPost ? onOpenPost(p.id) : setSelectedPost(p))}
               emptyTitle="Nenhuma marcação"
               emptySubtitle={`Looks em que alguém escrever @${profile.username} na legenda aparecem aqui.`}
             />
@@ -908,7 +914,7 @@ export function MyProfileView({
 }
 
 /** "Sua atividade": tempo no app (7 dias), totais e o que você curtiu e comentou */
-function ActivityStats({ colors, onOpenPost }: { colors: any; onOpenPost?: (id: string) => void }) {
+function ActivityStats({ colors, onOpenPost, onOpenPostList }: { colors: any; onOpenPost?: (id: string) => void; onOpenPostList?: (posts: FeedPost[], startId: string, title?: string) => void }) {
   const [days] = useState(() => usageLastDays(7));
   const [data, setData] = useState<Awaited<ReturnType<typeof loadMyActivity>> | null>(null);
   const [tab, setTab] = useState<"likes" | "comments">("likes");
@@ -993,7 +999,7 @@ function ActivityStats({ colors, onOpenPost }: { colors: any; onOpenPost?: (id: 
         <Grid
           posts={data.liked}
           colors={colors}
-          onSelectPost={p => onOpenPost?.(p.id)}
+          onSelectPost={p => (onOpenPostList ? onOpenPostList(data.liked, p.id, "Curtidas") : onOpenPost?.(p.id))}
           emptyTitle="Nenhuma curtida ainda"
           emptySubtitle="Os looks que você curtir aparecem aqui."
         />
@@ -1186,11 +1192,13 @@ export function SettingsView({
 export function SimpleSettingsPage({
   kind,
   onBack,
-  onOpenPost
+  onOpenPost,
+  onOpenPostList
 }: {
   kind: string;
   onBack: () => void;
   onOpenPost?: (postId: string) => void;
+  onOpenPostList?: (posts: FeedPost[], startId: string, title?: string) => void;
 }) {
   const { colors } = useAppTheme();
   const [savedPosts, setSavedPosts] = useState<FeedPost[]>([]);
@@ -1303,7 +1311,7 @@ export function SimpleSettingsPage({
             <Grid
               posts={archived}
               colors={colors}
-              onSelectPost={p => onOpenPost?.(p.id)}
+              onSelectPost={p => (onOpenPostList ? onOpenPostList(archived, p.id, "Arquivados") : onOpenPost?.(p.id))}
               emptyTitle="Nada arquivado"
               emptySubtitle="Use o menu (…) de um look seu e toque em Arquivar para tirá-lo do perfil sem apagar."
             />
@@ -1348,10 +1356,16 @@ export function SimpleSettingsPage({
               Segure uma coleção para torná-la pública: ela aparece no seu perfil.
             </Text>
           )}
-          <Grid posts={activeCol ? colPosts : savedPosts} colors={colors} onSelectPost={p => onOpenPost?.(p.id)} />
+          <Grid
+            posts={activeCol ? colPosts : savedPosts}
+            colors={colors}
+            onSelectPost={p =>
+              onOpenPostList ? onOpenPostList(activeCol ? colPosts : savedPosts, p.id, activeCol ? cols.find(c => c.id === activeCol)?.name || "Coleção" : "Salvos") : onOpenPost?.(p.id)
+            }
+          />
         </>
       ) : kind === "activity" ? (
-        <ActivityStats colors={colors} onOpenPost={onOpenPost} />
+        <ActivityStats colors={colors} onOpenPost={onOpenPost} onOpenPostList={onOpenPostList} />
       ) : blocked.length > 0 ? (
         <View style={{ paddingVertical: 8 }}>
           {blocked.map(p => (

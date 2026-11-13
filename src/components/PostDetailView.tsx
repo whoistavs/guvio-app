@@ -45,18 +45,6 @@ export function PostDetailView({
   const [retry, setRetry] = useState(0);
   const [loading, setLoading] = useState(true);
   const [myId, setMyId] = useState<string | null>(null);
-  const [showComments, setShowComments] = useState(false);
-  const [editing, setEditing] = useState<FeedPost | null>(null);
-  const [zoom, setZoom] = useState<number | null>(null);
-  const [sharing, setSharing] = useState(false);
-  const [showLikers, setShowLikers] = useState(false);
-  const [reposting, setReposting] = useState(false);
-  const [picking, setPicking] = useState(false);
-  const [reel, setReel] = useState(false);
-  const [followed, setFollowed] = useState<string[]>([]);
-  useEffect(() => {
-    loadFollowedIds().then(setFollowed).catch(() => {});
-  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -104,6 +92,64 @@ export function PostDetailView({
     );
   }
 
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <ScreenHeader title="Look" onBack={onBack} />
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+        <PostCard
+          post={post}
+          onChange={setPost}
+          myId={myId}
+          onOpenProfile={onOpenProfile}
+          onOpenTag={onOpenTag}
+          onDeleted={onDeleted}
+          onGone={onBack}
+        />
+      </ScrollView>
+    </View>
+  );
+}
+
+/** Um look completo (foto, ações, legenda, peças) — usado na tela do look e na lista de looks do perfil */
+export function PostCard({
+  post,
+  onChange,
+  myId,
+  onOpenProfile,
+  onOpenTag,
+  onDeleted,
+  onGone
+}: {
+  post: FeedPost;
+  onChange: (p: FeedPost) => void;
+  myId: string | null;
+  onOpenProfile?: (username: string) => void;
+  onOpenTag?: (tag: string) => void;
+  onDeleted?: (postId: string) => void;
+  /** depois de denunciar/apagar: sai da tela */
+  onGone?: () => void;
+}) {
+  const { colors } = useAppTheme();
+  const [showComments, setShowComments] = useState(false);
+  const [editing, setEditing] = useState<FeedPost | null>(null);
+  const [zoom, setZoom] = useState<number | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [showLikers, setShowLikers] = useState(false);
+  const [reposting, setReposting] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [reel, setReel] = useState(false);
+  const [followed, setFollowed] = useState<string[]>([]);
+  useEffect(() => {
+    loadFollowedIds().then(setFollowed).catch(() => {});
+  }, []);
+  // aceita valor ou função (como o setState)
+  const latest = React.useRef(post);
+  latest.current = post;
+  const setPost = (v: FeedPost | ((p: FeedPost | null) => FeedPost | null)) => {
+    const next = typeof v === "function" ? v(latest.current) : v;
+    if (next) onChange(next);
+  };
+
   const isMine = !!myId && post.userId === myId;
 
   const toggleLike = async (forceOn = false) => {
@@ -137,7 +183,10 @@ export function PostDetailView({
       openOwnPostMenu(post, {
         onEdit: () => setEditing(post),
         onChanged: u => setPost(u),
-        onRemoved: id => onDeleted?.(id)
+        onRemoved: id => {
+          onDeleted?.(id);
+          onGone?.();
+        }
       });
     } else {
       Alert.alert(`@${post.creatorUsername || post.creatorName}`, undefined, [
@@ -146,7 +195,7 @@ export function PostDetailView({
           text: "Denunciar",
           style: "destructive",
           onPress: async () => {
-            if (await askReport(post)) onBack();
+            if (await askReport(post)) onGone?.();
           }
         },
         { text: "Cancelar", style: "cancel" }
@@ -155,19 +204,10 @@ export function PostDetailView({
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <ScreenHeader
-        title="Look"
-        onBack={onBack}
-        right={
-          <Pressable onPress={openMenu} hitSlop={10}>
-            <MoreHorizontal size={22} color={colors.icon} />
-          </Pressable>
-        }
-      />
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+    <View>
+        <View style={s.creatorRow}>
         <Pressable
-          style={s.creator}
+          style={[s.creator, { flex: 1 }]}
           onPress={() => onOpenProfile?.(post.creatorUsername || post.creatorName)}
         >
           <FastImage source={post.creatorAvatar} style={s.avatar} />
@@ -183,6 +223,10 @@ export function PostDetailView({
             ) : null}
           </View>
         </Pressable>
+        <Pressable onPress={openMenu} hitSlop={10} style={{ paddingHorizontal: 16 }}>
+          <MoreHorizontal size={20} color={colors.icon} />
+        </Pressable>
+        </View>
 
         <RepostLine post={post} onOpenProfile={onOpenProfile} />
         <PostMedia
@@ -272,14 +316,15 @@ export function PostDetailView({
           ) : null}
           {post.commentsCount > 0 ? (
             <Pressable onPress={() => setShowComments(true)}>
-              <Text style={{ color: colors.muted }}>Ver {post.commentsCount} comentários</Text>
+              <Text style={{ color: colors.muted }}>
+                {post.commentsCount === 1 ? "Ver 1 comentário" : `Ver todos os ${post.commentsCount} comentários`}
+              </Text>
             </Pressable>
           ) : null}
           <Text style={{ color: colors.muted, fontSize: 11 }}>
             {[post.styleTag !== "Novo look" ? post.styleTag : "", post.timeAgo].filter(Boolean).join(" · ")}
           </Text>
         </View>
-      </ScrollView>
 
       <CommentsModal
         isOwner={isMine}
@@ -314,7 +359,7 @@ export function PostDetailView({
           },
           onOpenProfile: u => onOpenProfile?.(u),
           onPostChange: u => setPost(u),
-          onRemoved: () => onBack()
+          onRemoved: () => onGone?.()
         }}
       />
       <SharePostModal post={post} visible={sharing} onClose={() => setSharing(false)} />
@@ -335,6 +380,7 @@ export function PostDetailView({
 }
 
 const s = StyleSheet.create({
+  creatorRow: { flexDirection: "row", alignItems: "center" },
   creator: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 10 },
   avatar: { width: 38, height: 38, borderRadius: 19 },
   name: { fontWeight: "600", fontSize: 14 },
