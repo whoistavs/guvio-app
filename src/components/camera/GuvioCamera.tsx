@@ -127,6 +127,7 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
   const [busy, setBusy] = useState(false);
   const [camMode, setCamMode] = useState<"picture" | "video">("picture");
   const [lastThumb, setLastThumb] = useState<string | null>(null);
+  const [mirrorRec, setMirrorRec] = useState(false);
   const zoomRef = { get current() { return zoomStore.pending ?? zoomStore.value; } };
   const applyZoom = (z: number) => zoomStore.set(z);
   const [camPerm, askCam] = useCameraPermissions();
@@ -235,7 +236,18 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
     try {
       tapFeedback();
       const pic = await cam.current.takePictureAsync({ quality: 0.9, skipProcessing: false });
-      if (pic?.uri) await deliver({ uri: pic.uri, type: "image", width: pic.width, height: pic.height });
+      if (!pic?.uri) return;
+      let { uri, width, height } = pic;
+      // selfie: a câmera entrega a foto "de verdade" (sem espelho) e a gente espelha aqui, gravando
+      // nos pixels. Assim o story sai igual ao que você viu na tela, em qualquer celular
+      if (facing === "front" && !WEB) {
+        const { manipulateAsync, FlipType, SaveFormat } = require("expo-image-manipulator") as typeof import("expo-image-manipulator");
+        const out = await manipulateAsync(uri, prefs.mirror ? [{ flip: FlipType.Horizontal }] : [], { compress: 0.92, format: SaveFormat.JPEG });
+        uri = out.uri;
+        width = out.width;
+        height = out.height;
+      }
+      await deliver({ uri, type: "image", width, height });
     } catch (e: any) {
       Alert.alert("Não deu para tirar a foto", e?.message || "Tente de novo.");
     } finally {
@@ -279,12 +291,17 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
     // soltou o dedo antes de começar a gravar: vira foto
     if (recRef.current.cancel) {
       recRef.current.on = false;
-      if (mode !== "video") {
+      if (mode !== "video" && !(mode === "story" && IOS)) {
         ready.current = false;
         setCamMode("picture");
         await waitReady(2500);
       }
       return takePhoto();
+    }
+    // vídeo de selfie: liga o espelho só agora (na foto quem espelha é o app)
+    if (facing === "front" && prefs.mirror && !mirrorRec) {
+      setMirrorRec(true);
+      await new Promise(r => setTimeout(r, 60));
     }
     setRecording(true);
     tapFeedback();
@@ -302,7 +319,8 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
       );
     } finally {
       recRef.current.on = false;
-      if (mode !== "video") {
+      setMirrorRec(false);
+      if (mode !== "video" && !(mode === "story" && IOS)) {
         ready.current = false;
         setCamMode("picture");
       }
@@ -445,7 +463,7 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
               mode={camMode}
               videoQuality="1080p"
               onCameraReady={onCameraReady}
-              mirror={front && prefs.mirror}
+              mirror={WEB ? front && prefs.mirror : front && mirrorRec}
               animateShutter
             />
           ) : (
