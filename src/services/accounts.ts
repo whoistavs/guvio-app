@@ -80,10 +80,20 @@ export async function switchToAccount(userId: string): Promise<boolean> {
   return true;
 }
 
-/** "Adicionar conta": sai só deste aparelho, sem invalidar o login guardado da conta atual */
+/**
+ * "Adicionar conta": tira a conta atual só deste aparelho, SEM avisar o servidor.
+ * (o signOut do Supabase, mesmo o "local", cancela o login no servidor — aí o
+ * login guardado para trocar de conta deixava de valer)
+ */
 export async function signOutForNewAccount(): Promise<void> {
   if (!supabase) return;
   await rememberCurrentAccount().catch(() => {});
   clearMyCache();
-  await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+  const auth: any = supabase.auth;
+  if (typeof auth._removeSession === "function") {
+    await auth._removeSession().catch(() => {});
+  } else {
+    // versão sem esse método: último recurso (a conta atual vai pedir senha de novo)
+    await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+  }
 }
