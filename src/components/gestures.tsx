@@ -10,10 +10,19 @@ if (Platform.OS === "web" && typeof document !== "undefined" && !document.getEle
   st.id = "guvio-gestures-css";
   // html/body: sem zoom de pinça nem de toque duplo na página inteira (o app cuida do zoom das fotos)
   st.textContent =
-    "img{-webkit-user-drag:none;user-drag:none;-webkit-touch-callout:none}html,body{touch-action:pan-x pan-y;overscroll-behavior:none}";
+    "img{-webkit-user-drag:none;user-drag:none;-webkit-touch-callout:none}html,body{touch-action:pan-x pan-y;overscroll-behavior:none}" +
+    // segurar o dedo não abre "Copiar/Selecionar" do navegador (só nos campos de texto)
+    "body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}" +
+    "input,textarea,[contenteditable=true]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}";
   document.head.appendChild(st);
   // iPhone (Safari): bloqueia o zoom de pinça da página; os gestos de pinça do app continuam funcionando
   const stop = (e: Event) => e.preventDefault();
+  // Android/Chrome: segurar não abre o menu do navegador (fora dos campos de texto)
+  document.addEventListener("contextmenu", e => {
+    const t = e.target as HTMLElement | null;
+    if (t && /^(INPUT|TEXTAREA)$/.test(t.tagName)) return;
+    e.preventDefault();
+  });
   document.addEventListener("gesturestart", stop, { passive: false } as any);
   document.addEventListener("gesturechange", stop, { passive: false } as any);
   document.addEventListener(
