@@ -3,9 +3,9 @@ import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleS
 import { useAppTheme } from "../context/AppTheme";
 import { ScreenHeader } from "./ScreenHeader";
 import { FastImage } from "./FastImage";
-import { adminDeletePost, adminDismissReports, adminOverview, AdminOverview, timeAgo } from "../services/cloud";
+import { adminDecideRequest, adminDeletePost, adminDismissReports, adminListRequests, adminOverview, AdminOverview, AdminRequest, timeAgo } from "../services/cloud";
 
-type Tab = "reports" | "feedback" | "users" | "posts";
+type Tab = "reports" | "requests" | "feedback" | "users" | "posts";
 
 /** Painel do criador: números do beta, denúncias, feedbacks, quem entrou e looks recentes */
 export function AdminView({ onBack, onOpenPost, onOpenProfile }: { onBack: () => void; onOpenPost?: (id: string) => void; onOpenProfile?: (username: string) => void }) {
@@ -15,7 +15,18 @@ export function AdminView({ onBack, onOpenPost, onOpenProfile }: { onBack: () =>
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<Tab>("reports");
 
+  const [requests, setRequests] = useState<AdminRequest[] | null>(null);
+  const [reqError, setReqError] = useState<string | null>(null);
   const load = useCallback(async () => {
+    adminListRequests()
+      .then(r => {
+        setRequests(r);
+        setReqError(null);
+      })
+      .catch(e => {
+        setRequests([]);
+        setReqError(e?.message || "Não foi possível carregar os pedidos.");
+      });
     try {
       setError(null);
       setData(await adminOverview());
@@ -50,6 +61,27 @@ export function AdminView({ onBack, onOpenPost, onOpenProfile }: { onBack: () =>
       }
     ]);
 
+  const decide = (r: AdminRequest, approve: boolean) =>
+    Alert.alert(
+      approve ? `Tornar @${r.username} admin?` : `Recusar o pedido de @${r.username}?`,
+      approve ? "A pessoa vai ver o Painel do criador e poderá apagar looks e aprovar outros admins." : undefined,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: approve ? "Aprovar" : "Recusar",
+          style: approve ? "default" : "destructive",
+          onPress: async () => {
+            try {
+              await adminDecideRequest(r.user_id, approve);
+              setRequests(prev => (prev || []).filter(x => x.user_id !== r.user_id));
+            } catch (e: any) {
+              Alert.alert("Erro", e?.message || "Tente de novo.");
+            }
+          }
+        }
+      ]
+    );
+
   const keepPost = async (postId: string) => {
     try {
       await adminDismissReports(postId);
@@ -72,6 +104,7 @@ export function AdminView({ onBack, onOpenPost, onOpenProfile }: { onBack: () =>
 
   const tabs: [Tab, string][] = [
     ["reports", `Denúncias${data?.reports.length ? ` (${data.reports.length})` : ""}`],
+    ["requests", `Pedidos${requests?.length ? ` (${requests.length})` : ""}`],
     ["feedback", "Feedbacks"],
     ["users", "Quem entrou"],
     ["posts", "Looks"]
@@ -158,6 +191,32 @@ export function AdminView({ onBack, onOpenPost, onOpenProfile }: { onBack: () =>
                 </View>
               ))
             )
+          ) : tab === "requests" ? (
+            reqError ? (
+              <Empty text={reqError} />
+            ) : !requests?.length ? (
+              <Empty text="Nenhum pedido de acesso de admin." />
+            ) : (
+              requests.map(r => (
+                <View key={r.user_id} style={[s.row, { borderBottomColor: colors.border }]}>
+                  <Pressable onPress={() => onOpenProfile?.(r.username)}>
+                    <FastImage source={r.avatar_url || ""} style={s.avatar} contentFit="cover" />
+                  </Pressable>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontWeight: "700" }}>@{r.username}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 12 }} numberOfLines={3}>
+                      {r.note ? r.note : "sem motivo"} · {timeAgo(r.created_at)}
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => decide(r, true)} style={[s.reqBtn, { backgroundColor: "#0095F6" }]}>
+                    <Text style={{ color: "#FFF", fontWeight: "700", fontSize: 12 }}>Aprovar</Text>
+                  </Pressable>
+                  <Pressable onPress={() => decide(r, false)} style={[s.reqBtn, { backgroundColor: colors.surface }]}>
+                    <Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>Recusar</Text>
+                  </Pressable>
+                </View>
+              ))
+            )
           ) : tab === "users" ? (
             data.new_users.map(u => (
               <Pressable key={u.id} onPress={() => onOpenProfile?.(u.username)} style={[s.row, { borderBottomColor: colors.border }]}>
@@ -196,6 +255,7 @@ export function AdminView({ onBack, onOpenPost, onOpenProfile }: { onBack: () =>
 }
 
 const s = StyleSheet.create({
+  reqBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10 },
   stats: { flexDirection: "row", flexWrap: "wrap", gap: 8, padding: 16 },
   stat: { width: "31%", flexGrow: 1, borderRadius: 14, padding: 12, gap: 1 },
   statN: { fontSize: 22, fontWeight: "700" },

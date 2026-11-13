@@ -55,9 +55,12 @@ function outfitToPost(pieces: WardrobeItem[]): { images: string[]; tags: Clothin
 export function WardrobeView({
   onAdd,
   currentWeather,
-  onPublishOutfit
+  onPublishOutfit,
+  addPhoto
 }: {
   onAdd?: () => void;
+  /** foto tirada na câmera (modo ROUPA): abre "Adicionar peça" já com ela */
+  addPhoto?: { uri: string; id: number } | null;
   currentWeather?: WeatherData | null;
   /** abre "Nova publicação" já com as fotos e peças marcadas */
   onPublishOutfit?: (images: string[], tags: ClothingTag[], name: string) => void;
@@ -88,6 +91,11 @@ export function WardrobeView({
   const [newLink, setNewLink] = useState("");
   const [matchFor, setMatchFor] = useState<WardrobeItem | null>(null);
   const [newImageUri, setNewImageUri] = useState(DEFAULT_CLOTH);
+  useEffect(() => {
+    if (!addPhoto) return;
+    setNewImageUri(addPhoto.uri);
+    setAddModalVisible(true);
+  }, [addPhoto?.id]);
 
   useEffect(() => {
     getSavedAuthSession().then(session => {

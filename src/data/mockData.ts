@@ -96,22 +96,73 @@ export interface WardrobeItem {
   link?: string;
 }
 
+/** posição de uma camada no story: centro em x/y (0 a 1), tamanho e giro */
+export interface StoryPlacement {
+  x: number;
+  y: number;
+  scale: number;
+  /** graus */
+  rot: number;
+}
+
+export type StoryTextFont = "classica" | "forte" | "maquina" | "neon" | "serifa";
+
+export type StoryLayer =
+  | (StoryPlacement & {
+      id: string;
+      kind: "text";
+      text: string;
+      color: string;
+      font: StoryTextFont;
+      /** fundo atrás do texto */
+      bg: "none" | "solid" | "soft";
+      align: "center" | "left" | "right";
+    })
+  | (StoryPlacement & {
+      id: string;
+      kind: "tag";
+      tag: "mention" | "hashtag" | "location" | "link" | "time";
+      text: string;
+      /** link: endereço completo */
+      url?: string;
+    })
+  | (StoryPlacement & { id: string; kind: "emoji"; text: string })
+  | {
+      id: string;
+      kind: "draw";
+      color: string;
+      /** espessura em fração da largura */
+      width: number;
+      neon?: boolean;
+      /** pontos em pares x,y (0 a 1) */
+      points: number[];
+    };
+
 export interface StoryOverlay {
+  /** todo o texto do story (marcações com @ geram aviso para a pessoa marcada) */
   text: string;
   color?: string;
   /** fundo atrás do texto */
   boxed?: boolean;
   /** posição vertical, 0 a 1 */
   y?: number;
+  /** stories novos: camadas livres (texto em qualquer lugar, figurinhas, desenho) */
+  layers?: StoryLayer[];
+  /** story só de texto: fundo escolhido */
+  background?: string;
 }
 
-export type StorySticker =
+export type StorySticker = (
   | { type: "poll"; question: string; options: string[] }
-  | { type: "question"; prompt: string };
+  | { type: "question"; prompt: string }
+) &
+  Partial<StoryPlacement>;
 
 export interface StoryItem {
   id: string;
   image: string;
+  /** story em vídeo (a imagem vira a capa) */
+  videoUrl?: string | null;
   timestamp: string;
   caption?: string;
   seen?: boolean;
@@ -169,6 +220,8 @@ export interface ActivityItem {
   postId?: string;
   isFollowing?: boolean;
   timeCategory: "today" | "week" | "earlier";
+  /** data ISO (para separar Hoje / Ontem / 7 dias / 30 dias) */
+  createdAt?: string;
 }
 
 // Spherical coordinates helper: converts Lat/Lon (degrees) to 3D Vector (x,y,z) on sphere radius R

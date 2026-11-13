@@ -17,6 +17,7 @@ import { PollBar, RepostLine } from "./PostExtras";
 import { RepostModal } from "./RepostModal";
 import { openBioLink } from "./BioExtras";
 import { PostMedia } from "./PostMedia";
+import { openInspireLook } from "./InspireLookModal";
 import { SharePostModal } from "./SharePostModal";
 import { CollectionPickerModal } from "./CollectionPickerModal";
 import { ImageZoomModal } from "./ImageZoomModal";
@@ -254,6 +255,9 @@ export function PostCard({
             <Send size={23} color={colors.icon} />
           </View>
           </Pressable>
+          <Pressable onPress={() => openInspireLook(post)} hitSlop={8} accessibilityLabel="Montar parecido">
+            <Shirt size={23} color={colors.icon} />
+          </Pressable>
           <View style={{ flex: 1 }} />
           <Pressable onPress={toggleSave} onLongPress={() => setPicking(true)} delayLongPress={350} hitSlop={8}>
             <PopOnActive active={!!post.isSaved}>
@@ -359,7 +363,11 @@ export function PostCard({
           },
           onOpenProfile: u => onOpenProfile?.(u),
           onPostChange: u => setPost(u),
-          onRemoved: () => onGone?.()
+          onRemoved: () => onGone?.(),
+          onAssemble: p => {
+            setReel(false);
+            setTimeout(() => openInspireLook(p), 250);
+          }
         }}
       />
       <SharePostModal post={post} visible={sharing} onClose={() => setSharing(false)} />

@@ -1,13 +1,10 @@
-import { toast } from "./motion";
 import React, { useRef, useState } from "react";
 import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { X } from "lucide-react-native";
 import { captureRef } from "react-native-view-shot";
 import { WardrobeItem } from "../data/mockData";
 import { FastImage } from "./FastImage";
-import { CreateStoryModal } from "./StoryViewerModal";
-import { publishMyStory } from "../services/storage";
-import { successFeedback } from "../utils/haptics";
+import { openStoryEditor } from "./story/StoryEditor";
 
 const W = 270;
 const H = 480;
@@ -28,7 +25,6 @@ export function OutfitStoryModal({
   const ref = useRef<View>(null);
   const [bg, setBg] = useState(BGS[0]);
   const [capturing, setCapturing] = useState(false);
-  const [shot, setShot] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(0);
   if (!pieces) return null;
   const list = pieces.slice(0, 6);
@@ -42,7 +38,10 @@ export function OutfitStoryModal({
     setCapturing(true);
     try {
       const uri = await captureRef(ref, { format: "jpg", quality: 0.9, result: "tmpfile", width: 1080, height: 1920 });
-      setShot(uri);
+      // abre o editor de story com a colagem (texto, figurinhas, desenho...)
+      onClose();
+      onPublished?.();
+      setTimeout(() => openStoryEditor({ uri, type: "image" }), 400);
     } catch (e: any) {
       Alert.alert("Não deu para montar a imagem", e?.message || "Tente de novo.");
     } finally {
@@ -52,7 +51,7 @@ export function OutfitStoryModal({
 
   return (
     <>
-      <Modal visible={!shot} transparent animationType="fade" onRequestClose={onClose}>
+      <Modal visible transparent animationType="fade" onRequestClose={onClose}>
         <View style={s.back}>
           <View style={s.card}>
             <View style={s.head}>
@@ -85,24 +84,6 @@ export function OutfitStoryModal({
           </View>
         </View>
       </Modal>
-      <CreateStoryModal
-        visible={!!shot}
-        initialImage={shot}
-        onClose={() => {
-          setShot(null);
-          onClose();
-        }}
-        onPublish={async (uri, caption, overlay, extra) => {
-          try {
-            await publishMyStory(uri, caption, overlay, extra);
-            successFeedback();
-            toast("Story publicado");
-            onPublished?.();
-          } catch (e: any) {
-            Alert.alert("Story não publicado", e?.message || "Tente novamente.");
-          }
-        }}
-      />
     </>
   );
 }

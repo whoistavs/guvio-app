@@ -13,7 +13,7 @@ import { getSavedAuthSession } from "../services/auth";
 
 const MAX_PHOTOS = 10;
 
-export type PostDraft = { images: string[]; tags: ClothingTag[]; caption: string; id: number };
+export type PostDraft = { images: string[]; tags: ClothingTag[]; caption: string; id: number; video?: string; aspect?: number };
 
 /** espalha as marcações pela foto para não ficarem umas em cima das outras */
 function tagFromItem(it: WardrobeItem, idx: number): ClothingTag {
@@ -103,7 +103,9 @@ export function CreateHubView({
   useEffect(() => {
     if (!draft) return;
     setImages(draft.images.slice(0, MAX_PHOTOS));
-    setAspect(1);
+    setVideo(draft.video || null);
+    if (draft.aspect) setAspect(draft.aspect);
+    else aspectFrom(draft.images[0]);
     setTags(draft.tags);
     setCaption(draft.caption);
     setCurrent(0);

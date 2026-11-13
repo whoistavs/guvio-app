@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.guvio.ios",
-      "buildNumber": "35"
+      "buildNumber": "36"
     },
     "android": {
       "package": "app.guvio.android",
@@ -83,6 +83,14 @@
         {
           "color": "#111111",
           "defaultChannel": "default"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "O Guvio usa a câmera para você fotografar looks, stories e peças do guarda-roupa.",
+          "microphonePermission": "O Guvio usa o microfone para gravar vídeos e stories.",
+          "recordAudioAndroid": true
         }
       ]
     ],

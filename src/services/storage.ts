@@ -11,6 +11,8 @@ import {
   SavedCollection,
   Highlight,
   StoryItem,
+  StoryOverlay,
+  StorySticker,
   WishlistItem,
   OutfitLogEntry,
   INITIAL_STORIES,
@@ -638,12 +640,45 @@ export async function loadStoryViewers(storyId: string) {
 }
 
 /** Salva stories. Na nuvem, publica os stories novos do meu grupo. */
+/** publica um story novo (foto, vídeo ou só texto) com camadas e figurinhas */
+export async function publishStory(input: {
+  image: string;
+  video?: string | null;
+  overlay?: StoryOverlay | null;
+  sticker?: StorySticker | null;
+  closeFriends?: boolean;
+}): Promise<void> {
+  if (await isCloud()) {
+    const created = await cloud.addStory(input.image, undefined, input.overlay, {
+      closeFriends: input.closeFriends,
+      sticker: input.sticker,
+      video: input.video
+    });
+    storySnapshot.add(created.id);
+    return;
+  }
+  const all: UserStoryGroup[] = FastStorage.getItemSync(KEYS.STORIES, INITIAL_STORIES);
+  const story: StoryItem = {
+    id: `my-st-${Date.now()}`,
+    image: input.image,
+    videoUrl: input.video || null,
+    timestamp: "Agora",
+    overlay: input.overlay || null,
+    sticker: input.sticker || null,
+    closeFriends: !!input.closeFriends,
+    seen: true
+  };
+  const mine = all.find(g => g.isMe);
+  const next = mine ? all.map(g => (g.isMe ? { ...g, stories: [...g.stories, story] } : g)) : all;
+  FastStorage.setItemSync(KEYS.STORIES, next);
+}
+
 export async function saveStories(stories: UserStoryGroup[]): Promise<void> {
   if (await isCloud()) {
     const mine = stories.find(g => g.isMe);
     for (const st of mine?.stories || []) {
       if (!storySnapshot.has(st.id)) {
-        const created = await cloud.addStory(st.image, st.caption, st.overlay, { closeFriends: st.closeFriends, sticker: st.sticker });
+        const created = await cloud.addStory(st.image, st.caption, st.overlay, { closeFriends: st.closeFriends, sticker: st.sticker, video: st.videoUrl });
         storySnapshot.add(st.id);
         storySnapshot.add(created.id);
       }
@@ -659,9 +694,22 @@ export async function loadActivities(): Promise<ActivityItem[]> {
   return FastStorage.getItemSync(KEYS.ACTIVITIES, MOCK_ACTIVITIES);
 }
 
+// quando a pessoa abriu as notificações pela última vez (por conta, neste aparelho)
+const activitySeenKey = (uid: string) => `guvio_activity_seen_${uid}`;
+
 export async function hasUnreadActivity(): Promise<boolean> {
-  if (await isCloud()) return cloud.hasRecentActivity().catch(() => false);
-  return true;
+  if (await isCloud()) {
+    const me = await loadSavedProfile().catch(() => null);
+    const seen = me?.id ? FastStorage.getItemSync<string | null>(activitySeenKey(me.id), null) : null;
+    return cloud.hasRecentActivity(seen).catch(() => false);
+  }
+  return false;
+}
+
+/** abriu as notificações: o pontinho vermelho só volta com notificação nova */
+export async function markActivitySeen(): Promise<void> {
+  const me = await loadSavedProfile().catch(() => null);
+  if (me?.id) FastStorage.setItemSync(activitySeenKey(me.id), new Date().toISOString());
 }
 
 // ---------------------------------------------------------------------

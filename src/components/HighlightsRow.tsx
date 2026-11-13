@@ -2,13 +2,20 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { noSwipeBack } from "./gestures";
 import { topPad } from "../utils/insets";
-import { Check, Plus, X } from "lucide-react-native";
+import { Check, ImagePlus, Plus, X } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
 import { Highlight, StoryItem, UserStoryGroup } from "../data/mockData";
 import { useAppTheme } from "../context/AppTheme";
 import { GridSkeleton } from "./SkeletonLoader";
 import { FastImage } from "./FastImage";
 import { StoryViewerModal } from "./StoryViewerModal";
 import { deleteHighlight, loadHighlights, loadMyStoryArchive, saveHighlight } from "../services/storage";
+
+// o menu "Criar" do + no Perfil abre "Novo destaque" daqui
+let newHighlightFn: (() => void) | null = null;
+export function openNewHighlight() {
+  newHighlightFn?.();
+}
 
 /** Destaques de stories no perfil (bolinhas abaixo da bio) */
 export function HighlightsRow({
@@ -28,6 +35,13 @@ export function HighlightsRow({
   const [editing, setEditing] = useState<Highlight | "new" | null>(null);
 
   const reload = () => loadHighlights(userId).then(setList).catch(() => {});
+  useEffect(() => {
+    if (!isMe) return;
+    newHighlightFn = () => setEditing("new");
+    return () => {
+      newHighlightFn = null;
+    };
+  }, [isMe]);
   useEffect(() => {
     if (userId) reload();
   }, [userId]);
@@ -114,6 +128,9 @@ function HighlightEditor({
   const [archive, setArchive] = useState<StoryItem[] | null>(null);
   const [picked, setPicked] = useState<string[]>(highlight?.stories.map(s => s.id) || []);
   const [saving, setSaving] = useState(false);
+  // capa escolhida (de um story do destaque ou da galeria); sem escolha = 1º story
+  const [cover, setCover] = useState<string | null>(highlight?.cover || null);
+  const [coverOpen, setCoverOpen] = useState(false);
 
   useEffect(() => {
     loadMyStoryArchive().then(list => {
@@ -123,13 +140,24 @@ function HighlightEditor({
     });
   }, []);
 
+  const pickedStories = (archive || []).filter(st => picked.includes(st.id));
+
+  const fromGallery = async () => {
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.85 }).catch(() => null);
+    const a = r && !r.canceled ? r.assets?.[0] : null;
+    if (a) {
+      setCover(a.uri);
+      setCoverOpen(false);
+    }
+  };
+
   const save = async () => {
     if (!title.trim()) return Alert.alert("Dê um nome", "Ex.: Viagens, Trabalho, Looks de inverno.");
     if (!picked.length) return Alert.alert("Escolha stories", "Selecione pelo menos um story.");
     setSaving(true);
     try {
       const stories = (archive || []).filter(s => picked.includes(s.id));
-      await saveHighlight(userId, { id: highlight?.id, title: title.trim().slice(0, 30), stories, cover: stories[0]?.image });
+      await saveHighlight(userId, { id: highlight?.id, title: title.trim().slice(0, 30), stories, cover: cover || stories[0]?.image });
       onSaved();
     } catch (e: any) {
       Alert.alert("Erro", e?.message || "Não foi possível salvar o destaque.");
@@ -148,6 +176,14 @@ function HighlightEditor({
           <Text style={{ color: colors.text, fontWeight: "700", fontSize: 16 }}>{highlight ? "Editar destaque" : "Novo destaque"}</Text>
           <Pressable onPress={save} disabled={saving} hitSlop={10}>
             {saving ? <ActivityIndicator color={colors.text} /> : <Text style={{ color: "#0095F6", fontWeight: "700" }}>Salvar</Text>}
+          </Pressable>
+        </View>
+        <View style={{ alignItems: "center", marginBottom: 14 }}>
+          <Pressable onPress={() => setCoverOpen(true)} style={[s.bigCircle, { borderColor: colors.border }]}>
+            <FastImage source={cover || pickedStories[0]?.image || ""} style={s.cover} contentFit="cover" />
+          </Pressable>
+          <Pressable onPress={() => setCoverOpen(true)} hitSlop={8}>
+            <Text style={{ color: colors.text, fontWeight: "700", marginTop: 8 }}>Editar capa</Text>
           </Pressable>
         </View>
         <TextInput
@@ -188,6 +224,36 @@ function HighlightEditor({
           </ScrollView>
         )}
       </View>
+      <Modal visible={coverOpen} transparent animationType="slide" onRequestClose={() => setCoverOpen(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,.4)" }} onPress={() => setCoverOpen(false)} />
+        <View style={[s.coverSheet, { backgroundColor: colors.surface }]}>
+          <Text style={{ color: colors.text, fontWeight: "800", fontSize: 16, textAlign: "center", marginBottom: 14 }}>Escolher capa</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: 4 }}>
+            <Pressable onPress={fromGallery} style={[s.coverOpt, { borderColor: colors.border, alignItems: "center", justifyContent: "center" }]}>
+              <ImagePlus size={24} color={colors.text} />
+              <Text style={{ color: colors.text, fontSize: 10, marginTop: 4 }}>Galeria</Text>
+            </Pressable>
+            {pickedStories.map(st => {
+              const on = (cover || pickedStories[0]?.image) === st.image;
+              return (
+                <Pressable
+                  key={st.id}
+                  onPress={() => {
+                    setCover(st.image);
+                    setCoverOpen(false);
+                  }}
+                  style={[s.coverOpt, { borderColor: on ? "#0095F6" : colors.border, borderWidth: on ? 3 : 1.5 }]}
+                >
+                  <FastImage source={st.image} style={s.cover} contentFit="cover" />
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          {!pickedStories.length ? (
+            <Text style={{ color: colors.muted, fontSize: 12, textAlign: "center", marginTop: 12 }}>Escolha os stories primeiro ou use uma foto da galeria.</Text>
+          ) : null}
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -196,7 +262,10 @@ const s = StyleSheet.create({
   row: { paddingHorizontal: 18, paddingTop: 14, gap: 14 },
   item: { width: 68, alignItems: "center", gap: 5 },
   circle: { width: 64, height: 64, borderRadius: 32, borderWidth: 1.5, padding: 3, overflow: "hidden" },
-  cover: { width: "100%", height: "100%", borderRadius: 30 },
+  cover: { width: "100%", height: "100%", borderRadius: 999 },
+  bigCircle: { width: 96, height: 96, borderRadius: 48, borderWidth: 1.5, padding: 3, overflow: "hidden" },
+  coverSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, paddingBottom: 40 },
+  coverOpt: { width: 70, height: 70, borderRadius: 35, borderWidth: 1.5, padding: 3, overflow: "hidden" },
   label: { fontSize: 11, fontWeight: "600" },
   full: { flex: 1, paddingTop: topPad(50) },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, marginBottom: 14 },

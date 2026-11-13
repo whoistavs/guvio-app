@@ -30,7 +30,9 @@ import { WardrobeView } from "./src/components/WardrobeView";
 import { SearchProfilesView } from "./src/components/SearchProfilesView";
 import { BottomNavLiquid } from "./src/components/BottomNavLiquid";
 import { FeedPost, UserProfile, DirectThread, ClothingTag } from "./src/data/mockData";
-import { MyProfileView, PublicProfileView, SettingsView, SimpleSettingsPage } from "./src/components/ProfileViews";
+import { MyProfileView, PublicProfileView, SimpleSettingsPage } from "./src/components/ProfileViews";
+import { SettingsView } from "./src/components/SettingsHome";
+import { DevToolsView } from "./src/components/DevToolsView";
 import { DirectView } from "./src/components/DirectView";
 import { ActivityView } from "./src/components/ActivityView";
 import { CreateHubView } from "./src/components/CreateHubView";
@@ -42,6 +44,7 @@ import {
   publishPost,
   findProfile,
   hasUnreadActivity,
+  markActivitySeen,
   threadForProfile,
   unreadMessages,
   loadMorePosts,
@@ -60,8 +63,14 @@ import { OnboardingView, onboardingDone, resetOnboarding } from "./src/component
 import { FeedbackView } from "./src/components/FeedbackView";
 import { AdminView } from "./src/components/AdminView";
 import { PostListView } from "./src/components/PostListView";
+import { InspireLookModal, setInspireOpener } from "./src/components/InspireLookModal";
+import { CameraHost, CameraResult, openCamera } from "./src/components/camera/GuvioCamera";
+import { CreateSheet, CreateChoice } from "./src/components/camera/CreateSheet";
+import { StoryEditorHost } from "./src/components/story/StoryEditor";
+import { openNewHighlight } from "./src/components/HighlightsRow";
 import { AccountSwitcherHost, setAppRestarter } from "./src/components/AccountSwitcher";
 import { IntroSplash, markAppReady } from "./src/components/IntroSplash";
+import { BETA, isDevMode, setDevMode, startDevLogCapture, useDevMode } from "./src/services/devMode";
 import { currentUserId, forgetAccount, rememberCurrentAccount, updateStoredToken } from "./src/services/accounts";
 import { PushPrompt } from "./src/components/PushPrompt";
 import { forgetPushDevice, refreshPushRegistration } from "./src/services/push";
@@ -131,7 +140,9 @@ function Guvio() {
   // botão "voltar" do Android: fecha a tela de cima; depois volta para a Home; só então sai do app
   useEffect(() => {
     startUsageTracking();
+    startDevLogCapture();
   }, []);
+  const devFlags = useDevMode();
   // abertura com o logo: sai quando já sabemos se a pessoa está logada
   useEffect(() => {
     if (!booting) markAppReady();
@@ -175,6 +186,9 @@ function Guvio() {
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [location, setLocation] = useState("Sua cidade");
   const [recovery, setRecovery] = useState(false);
+  // "Montar parecido": look do feed usado como inspiração
+  const [inspirePost, setInspirePost] = useState<FeedPost | null>(null);
+  useEffect(() => setInspireOpener(setInspirePost), []);
   const applyPlaceRef = useRef<(force: boolean, explain?: boolean) => void>(() => {});
   applyPlaceRef.current = (force, explain) => {
     getCurrentPlace(force).then(pl => {
@@ -226,7 +240,39 @@ function Guvio() {
   // pedido de busca vindo de uma #hashtag
   const [searchRequest, setSearchRequest] = useState<{ text: string; id: number } | null>(null);
   // rascunho de post vindo do montador de looks
-  const [draft, setDraft] = useState<{ images: string[]; tags: ClothingTag[]; caption: string; id: number } | null>(null);
+  const [draft, setDraft] = useState<{ images: string[]; tags: ClothingTag[]; caption: string; id: number; video?: string; aspect?: number } | null>(null);
+  const [createSheet, setCreateSheet] = useState(false);
+  const [clothingPhoto, setClothingPhoto] = useState<{ uri: string; id: number } | null>(null);
+  // o que a câmera do app devolve: post/vídeo vai para "Nova publicação", roupa para o guarda-roupa
+  const onCamera = (r: CameraResult) => {
+    setStack([]);
+    if (r.kind === "gallery-post") return setTab("add");
+    if (r.kind === "clothing") {
+      setClothingPhoto({ uri: r.image, id: Date.now() });
+      return setTab("wardrobe");
+    }
+    setDraft({ images: r.images, tags: [], caption: "", id: Date.now(), video: r.video, aspect: r.aspect });
+    setTab("add");
+  };
+  // 10 toques seguidos no logo da Home: liga/desliga o modo desenvolvedor (só no beta)
+  const logoTaps = useRef<number[]>([]);
+  const onLogoPress = () => {
+    if (!BETA) return;
+    const now = Date.now();
+    logoTaps.current = [...logoTaps.current.filter(x => now - x < 4000), now];
+    const n = logoTaps.current.length;
+    if (n >= 10) {
+      logoTaps.current = [];
+      const on = !isDevMode();
+      setDevMode(on);
+      successFeedback();
+      toast(on ? "Modo desenvolvedor ligado · veja em Configurações" : "Modo desenvolvedor desligado");
+    } else if (n >= 6) toast(`Faltam ${10 - n} toques para o modo desenvolvedor`);
+  };
+  const onCreateChoice = (c: CreateChoice) => {
+    if (c === "highlight") return openNewHighlight();
+    openCamera(c);
+  };
 
   // pontos do globo: cidades onde há looks com localização
   const globeMarkers = useMemo<GlobeMarker[]>(() => {
@@ -739,6 +785,8 @@ function Guvio() {
         screen =
           top.kind === "feedback" ? (
             <FeedbackView onBack={back} />
+          ) : top.kind === "devtools" ? (
+            <DevToolsView onBack={back} />
           ) : top.kind === "admin" ? (
             <AdminView onBack={back} onOpenPost={openPost} onOpenProfile={openName} />
           ) : (
@@ -781,8 +829,8 @@ function Guvio() {
       ) : null}
       {/* a Home fica sempre montada (só escondida), para manter a posição do feed */}
       <View style={tab === "home" ? s.safe : s.hidden} pointerEvents={tab === "home" ? "auto" : "none"}>
-        {/* bordas: da direita abre o Direct, da esquerda abre Publicar */}
-        <EdgeSwipe side="left" anywhere interactive={false} onSwipe={() => setTab("add")}>
+        {/* arrastar para a direita abre a câmera (story); para a esquerda, o Direct */}
+        <EdgeSwipe side="left" anywhere interactive={false} onSwipe={() => openCamera("story")}>
         <EdgeSwipe side="right" anywhere interactive={false} onSwipe={() => push({ name: "direct" })}>
         <ScrollView
           ref={scroll}
@@ -805,9 +853,11 @@ function Guvio() {
               onPressLocation={() => applyPlaceRef.current(true, true)}
               weatherText={weatherText}
               onOpenDirect={() => push({ name: "direct" })}
+              onLogoPress={onLogoPress}
               onOpenBeta={() => push({ name: "settingsPage", kind: "feedback" })}
               onOpenActivity={() => {
                 setUnread(false);
+                markActivitySeen();
                 push({ name: "activity" });
               }}
               hasUnreadActivity={unread}
@@ -822,7 +872,7 @@ function Guvio() {
             countryFilter={filterCountry}
             cityFilter={filterCity}
             onClearFilter={clearGlobeSelection}
-            onAssembleWithWardrobe={() => setTab("wardrobe")}
+            onAssembleWithWardrobe={p => setInspirePost(p)}
             todayWeather={
               weather?.kind
                 ? weather.kind === "chuva" || weather.kind === "neve"
@@ -838,7 +888,10 @@ function Guvio() {
             onOpenTag={openTag}
             refreshKey={refreshKey}
             nearby={place ? { lat: place.lat, lng: place.lng } : null}
-            belowStories={<ChallengeCard onJoin={joinChallenge} onOpenRanking={() => push({ name: "challenge" })} />}
+            belowStories={
+              // desafio da semana: ideia futura (só aparece ligando no modo desenvolvedor)
+              devFlags.flag("challenge") ? <ChallengeCard onJoin={joinChallenge} onOpenRanking={() => push({ name: "challenge" })} /> : undefined
+            }
           />
           {loadingMore ? <ActivityIndicator color={colors.muted} style={{ marginVertical: 24 }} /> : null}
           {!hasMore && posts.length > 0 ? (
@@ -869,6 +922,7 @@ function Guvio() {
       {tab === "wardrobe" ? (
         <WardrobeView
           onAdd={() => setTab("add")}
+          addPhoto={clothingPhoto}
           currentWeather={weather}
           onPublishOutfit={(images, tags, name) => {
             setDraft({ images, tags, caption: name, id: Date.now() });
@@ -926,6 +980,13 @@ function Guvio() {
       <BottomNavLiquid
         activeTab={tab}
         onTabChange={t => {
+          // o + abre a câmera do app; no Perfil, abre o menu "Criar"
+          if (t === "add") {
+            tapFeedback();
+            if (tab === "profile" && !stack.length) setCreateSheet(true);
+            else openCamera("post");
+            return;
+          }
           if (t !== tab) tapFeedback();
           // tocar de novo na Home: sobe para o topo; se já estiver no topo, atualiza
           if (t === tab && t === "home" && !stack.length) {
@@ -942,6 +1003,17 @@ function Guvio() {
       <UpdateBanner />
       {top ? null : <InstallPrompt />}
       <NewPasswordModal visible={recovery} onDone={() => setRecovery(false)} />
+      <CameraHost onResult={onCamera} />
+      <StoryEditorHost />
+      <CreateSheet visible={createSheet} onClose={() => setCreateSheet(false)} onPick={onCreateChoice} />
+      <InspireLookModal
+        post={inspirePost}
+        onClose={() => setInspirePost(null)}
+        onOpenWardrobe={() => {
+          setStack([]);
+          setTab("wardrobe");
+        }}
+      />
       {betaWelcome}
       <PinchHost />
       <PeekHost />

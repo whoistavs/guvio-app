@@ -28,7 +28,9 @@ import { RichCaption } from "./RichCaption";
 import { likeFeedback, tapFeedback } from "../utils/haptics";
 import { isCloud } from "../services/supabase";
 import { CommentsModal } from "./CommentsModal";
-import { StoryViewerModal, CreateStoryModal } from "./StoryViewerModal";
+import { StoryViewerModal } from "./StoryViewerModal";
+import { openCamera } from "./camera/GuvioCamera";
+import { onStoryPublished } from "./story/StoryEditor";
 import { CollectionPickerModal } from "./CollectionPickerModal";
 import { SuggestionsRow } from "./SuggestionsRow";
 import { LikersModal } from "./LikersModal";
@@ -128,13 +130,14 @@ export function HomeFeed({
     loadNearby(nearby.lat, nearby.lng, 60).then(setNearbyPosts);
   }, [feedTab, nearby?.lat, nearby?.lng, refreshKey]);
   const [stories, setStories] = useState<UserStoryGroup[]>(() => getCachedStories());
+  // muda quando alguém posta ou você vê um story (atualiza o anel nos posts)
+  const storyRingKey = stories.map(g => `${g.id}:${g.stories.filter(x => !x.seen).length}`).join("|");
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 800);
     return () => clearTimeout(timer);
   }, []);
   const [activeStoryIdx, setActiveStoryIdx] = useState<number | null>(null);
-  const [createStoryOpen, setCreateStoryOpen] = useState(false);
   const [followedUserIds, setFollowedUserIds] = useState<string[]>([]);
   const [visibleTagsPostId, setVisibleTagsPostId] = useState<string | null>(null);
 
@@ -150,6 +153,9 @@ export function HomeFeed({
   useEffect(() => {
     if (refreshKey > 0) loadStories().then(setStories);
   }, [refreshKey]);
+
+  // publicou um story pelo editor: atualiza o carrossel
+  useEffect(() => onStoryPublished(() => loadStories().then(setStories)), []);
 
   const [zoom, setZoom] = useState<{ images: string[]; index: number } | null>(null);
 
@@ -223,43 +229,7 @@ export function HomeFeed({
     await saveFollowedUsers(updated);
   };
 
-  const handlePublishStory = async (
-    imageUri: string,
-    caption?: string,
-    overlay?: StoryOverlay | null,
-    extra?: { closeFriends?: boolean; sticker?: StorySticker | null }
-  ) => {
-    const newStory = {
-      id: `my-st-${Date.now()}`,
-      image: imageUri,
-      timestamp: "Agora",
-      caption,
-      overlay: overlay || null,
-      closeFriends: !!extra?.closeFriends,
-      sticker: extra?.sticker || null
-    };
 
-    const updatedStories = stories.map(g => {
-      if (g.isMe) {
-        return {
-          ...g,
-          hasUnseen: true,
-          stories: [...g.stories, newStory]
-        };
-      }
-      return g;
-    });
-
-    setStories(updatedStories);
-    try {
-      await saveStories(updatedStories);
-      if (await isCloud()) loadStories().then(setStories);
-      Alert.alert("Story publicado", "Seu look agora está visível no carrossel de stories.");
-    } catch (e: any) {
-      setStories(stories);
-      Alert.alert("Story não publicado", e?.message || "Tente novamente.");
-    }
-  };
 
   const [editingPost, setEditingPost] = useState<FeedPost | null>(null);
   // atualiza um post na lista (já salvo no servidor)
@@ -343,7 +313,7 @@ export function HomeFeed({
               style={s.storyItem}
               onPress={() => {
                 if (st.isMe && !hasStories) {
-                  setCreateStoryOpen(true);
+                  openCamera("story");
                 } else if (hasStories) {
                   // o visualizador só conta grupos que têm stories
                   setActiveStoryIdx(stories.filter(g => g.stories.length > 0).findIndex(g => g.id === st.id));
@@ -367,7 +337,7 @@ export function HomeFeed({
                 <FastImage source={st.avatar} style={s.storyImg} contentFit="cover" transition={100} />
                 {st.isMe && (
                   <Pressable
-                    onPress={() => setCreateStoryOpen(true)}
+                    onPress={() => openCamera("story")}
                     style={[s.addStoryBadge, { backgroundColor: colors.text }]}
                   >
                     <Plus size={11} color={colors.bg} />
@@ -539,7 +509,7 @@ export function HomeFeed({
             ) : null}
             <MemoRow
               key={p.id}
-              deps={[p, isTagsVisible, heartAnimPostId === p.id, colors, myId, pIdx === 1 ? refreshKey : 0, pIdx < 4]}
+              deps={[p, isTagsVisible, heartAnimPostId === p.id, colors, myId, pIdx === 1 ? refreshKey : 0, pIdx < 4, storyRingKey]}
               render={() => (
             <FadeIn delay={pIdx < 4 ? pIdx * 70 : 0} from={14}>
             <React.Fragment key={p.id}>
@@ -550,9 +520,29 @@ export function HomeFeed({
                     onPress={() => onOpenProfile?.(p.creatorUsername || p.creatorName)}
                     style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
                   >
-                    <View style={s.avatarStoryRing}>
-                      <FastImage source={p.creatorAvatar} style={s.avatar} contentFit="cover" transition={100} />
-                    </View>
+                    {(() => {
+                      // anel só quando a pessoa tem story que você ainda não viu (tocar abre o story)
+                      const withStories = stories.filter(g => g.stories.length > 0);
+                      const gi = withStories.findIndex(
+                        g => !g.isMe && (g.id === p.userId || (!!p.creatorUsername && g.username === p.creatorUsername))
+                      );
+                      const g = gi >= 0 ? withStories[gi] : null;
+                      const unseen = !!g && g.stories.some(x => !x.seen);
+                      return (
+                        <Pressable
+                          disabled={!unseen}
+                          onPress={() => setActiveStoryIdx(gi)}
+                          style={[
+                            s.avatarStoryRing,
+                            unseen
+                              ? { borderColor: g!.hasClose ? "#22C55E" : "#FF2D55" }
+                              : { borderColor: "transparent" }
+                          ]}
+                        >
+                          <FastImage source={p.creatorAvatar} style={s.avatar} contentFit="cover" transition={100} />
+                        </Pressable>
+                      );
+                    })()}
                     <View style={{ flex: 1 }}>
                       <Text style={[s.creator, { color: colors.text }]}>{p.creatorName}</Text>
                       {p.city || p.country ? (
@@ -752,7 +742,12 @@ export function HomeFeed({
           onPostChange: setPostsSilently,
           onRemoved: id => setPosts(v => v.filter(x => x.id !== id)),
           onNotInterested: (_p, n) => setNi(n),
-          onAssemble: onAssembleWithWardrobe ? p => onAssembleWithWardrobe(p) : undefined,
+          onAssemble: onAssembleWithWardrobe
+            ? p => {
+                setReelId(null);
+                setTimeout(() => onAssembleWithWardrobe(p), 250);
+              }
+            : undefined,
           onReposted: np => setPosts(v => [np, ...v])
         }}
       />
@@ -795,6 +790,8 @@ export function HomeFeed({
         onClose={() => setActiveStoryIdx(null)}
         storyGroups={stories}
         initialGroupIndex={activeStoryIdx || 0}
+        onOpenProfile={onOpenProfile}
+        onOpenTag={onOpenTag}
         onStorySeen={id =>
           setStories(prev =>
             prev.map(g => {
@@ -807,11 +804,6 @@ export function HomeFeed({
         onStoryDeleted={id =>
           setStories(prev => prev.map(g => ({ ...g, stories: g.stories.filter(st => st.id !== id) })))
         }
-      />
-      <CreateStoryModal
-        visible={createStoryOpen}
-        onClose={() => setCreateStoryOpen(false)}
-        onPublish={handlePublishStory}
       />
     </View>
   );

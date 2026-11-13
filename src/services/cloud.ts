@@ -885,6 +885,36 @@ export async function adminOverview(): Promise<AdminOverview> {
   return data as AdminOverview;
 }
 
+// ---------- pedidos de acesso de admin (modo desenvolvedor) ----------
+export type AdminRequestStatus = "pending" | "approved" | "denied" | "admin" | null;
+export async function requestAdmin(note?: string): Promise<string> {
+  const { data, error } = await db().rpc("request_admin", { p_note: note || null });
+  if (error) throw new Error(/function|does not exist/i.test(error.message) ? "Falta rodar a migração 013 no Supabase." : error.message);
+  return String(data);
+}
+export async function myAdminRequest(): Promise<AdminRequestStatus> {
+  const { data, error } = await db().rpc("my_admin_request");
+  if (error) return null;
+  return (data as AdminRequestStatus) || null;
+}
+export interface AdminRequest {
+  user_id: string;
+  username: string;
+  avatar_url: string | null;
+  note: string | null;
+  status: string;
+  created_at: string;
+}
+export async function adminListRequests(): Promise<AdminRequest[]> {
+  const { data, error } = await db().rpc("admin_list_requests");
+  if (error) throw new Error(/function|does not exist/i.test(error.message) ? "Falta rodar a migração 013 no Supabase." : error.message);
+  return (data || []) as AdminRequest[];
+}
+export async function adminDecideRequest(userId: string, approve: boolean) {
+  const { error } = await db().rpc("admin_decide_request", { p_user: userId, p_approve: approve });
+  if (error) throw new Error(error.message);
+}
+
 export async function adminDeletePost(postId: string) {
   const { error } = await db().rpc("admin_delete_post", { p_post: postId });
   if (error) throw new Error(error.message);
@@ -1051,14 +1081,11 @@ export async function fetchFollowList(userId: string, kind: "followers" | "follo
 export async function fetchStories(): Promise<UserStoryGroup[]> {
   const uid = await me();
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-  const [rows, mine] = await Promise.all([
-    db()
-      .from("stories")
-      .select("id, user_id, image_url, caption, overlay, audience, sticker, created_at, profiles!stories_user_id_fkey(username, display_name, avatar_url)")
-      .gte("created_at", since)
-      .order("created_at", { ascending: true }),
-    getMyProfile()
-  ]);
+  const q = (cols: string) => db().from("stories").select(cols).gte("created_at", since).order("created_at", { ascending: true });
+  const base = "id, user_id, image_url, caption, overlay, audience, sticker, created_at, profiles!stories_user_id_fkey(username, display_name, avatar_url)";
+  let [rows, mine] = await Promise.all([q(`${base}, video_url`), getMyProfile()]);
+  // banco sem a coluna de vídeo (migração 013 não rodou)
+  if ((rows as any).error && /video_url/.test((rows as any).error.message || "")) rows = await q(base);
   const storyIds = ((check(rows) as any[]) || []).map(r => r.id);
   const seenRes = storyIds.length
     ? await db().from("story_views").select("story_id").eq("viewer_id", uid).in("story_id", storyIds)
@@ -1091,6 +1118,7 @@ export async function fetchStories(): Promise<UserStoryGroup[]> {
     g.stories.push({
       id: r.id,
       image: r.image_url,
+      videoUrl: r.video_url || null,
       caption: r.caption || undefined,
       overlay: r.overlay || null,
       sticker: r.sticker || null,
@@ -1109,25 +1137,28 @@ export async function addStory(
   imageUri: string,
   caption?: string,
   overlay?: StoryOverlay | null,
-  extra?: { closeFriends?: boolean; sticker?: StorySticker | null }
+  extra?: { closeFriends?: boolean; sticker?: StorySticker | null; video?: string | null }
 ): Promise<{ id: string; image: string }> {
   const uid = await me();
-  const image_url = await uploadImage(imageUri, "stories");
-  const row = check(
-    await db()
-      .from("stories")
-      .insert({
-        user_id: uid,
-        image_url,
-        caption: caption || null,
-        overlay: overlay?.text ? overlay : null,
-        audience: extra?.closeFriends ? "close" : "all",
-        sticker: extra?.sticker || null
-      })
-      .select("id")
-      .single()
-  ) as any;
-  return { id: row.id, image: image_url };
+  const [image_url, video_url] = await Promise.all([
+    uploadImage(imageUri, "stories"),
+    extra?.video ? uploadVideo(extra.video) : Promise.resolve(null)
+  ]);
+  const row: any = {
+    user_id: uid,
+    image_url,
+    caption: caption || null,
+    overlay: overlay?.text || overlay?.layers?.length || overlay?.background ? overlay : null,
+    audience: extra?.closeFriends ? "close" : "all",
+    sticker: extra?.sticker || null
+  };
+  if (video_url) row.video_url = video_url;
+  const res = await db().from("stories").insert(row).select("id").single();
+  if (res.error && /video_url/.test(res.error.message || "")) {
+    throw new Error("Story em vídeo precisa da atualização do banco (migração 013). Publique como foto por enquanto.");
+  }
+  const created = check(res) as any;
+  return { id: created.id, image: image_url };
 }
 
 export async function markStorySeen(storyId: string) {
@@ -1475,18 +1506,20 @@ export async function fetchActivities(): Promise<ActivityItem[]> {
     timeAgo: timeAgo(r.created_at),
     postImage: r.post?.image_url || undefined,
     postId: r.post_id || undefined,
-    timeCategory: timeCategory(r.created_at)
+    timeCategory: timeCategory(r.created_at),
+    createdAt: r.created_at
   }));
 }
 
-export async function hasRecentActivity(): Promise<boolean> {
+/** tem notificação nova depois da última vez que a pessoa abriu as notificações? */
+export async function hasRecentActivity(seenAt?: string | null): Promise<boolean> {
   const uid = await me();
-  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const since = seenAt || new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const { count } = await db()
     .from("notifications")
     .select("id", { count: "exact", head: true })
     .eq("user_id", uid)
-    .gte("created_at", since);
+    .gt("created_at", since);
   return (count || 0) > 0;
 }
 
@@ -1667,7 +1700,7 @@ export async function deleteOutfit(id: string) {
 // Destaques de stories
 // ---------------------------------------------------------------------
 function toStory(r: any): StoryItem {
-  return { id: r.id, image: r.image_url, caption: r.caption || undefined, overlay: r.overlay || null, timestamp: timeAgo(r.created_at), seen: true };
+  return { id: r.id, image: r.image_url, videoUrl: r.video_url || null, caption: r.caption || undefined, overlay: r.overlay || null, sticker: r.sticker || null, timestamp: timeAgo(r.created_at), seen: true };
 }
 
 export async function fetchHighlights(userId: string): Promise<Highlight[]> {
@@ -1699,7 +1732,7 @@ export async function fetchMyStoryArchive(): Promise<StoryItem[]> {
 export async function saveHighlight(input: { id?: string; title: string; storyIds: string[]; cover?: string }): Promise<string> {
   const uid = await me();
   let id = input.id;
-  const cover_url = input.cover || null;
+  const cover_url = input.cover ? await uploadImage(input.cover, "highlights") : null;
   if (id) check(await db().from("highlights").update({ title: input.title, cover_url }).eq("id", id));
   else {
     const r = check(await db().from("highlights").insert({ user_id: uid, title: input.title, cover_url }).select("id").single()) as any;

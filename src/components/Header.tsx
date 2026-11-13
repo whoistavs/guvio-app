@@ -10,6 +10,7 @@ export function Header({
   onPressLocation,
   onOpenBeta,
   onOpenActivity,
+  onLogoPress,
   hasUnreadActivity = true,
   unreadMessages = 0
 }: {
@@ -21,6 +22,8 @@ export function Header({
   /** selo BETA: abre o feedback */
   onOpenBeta?: () => void;
   onOpenActivity?: () => void;
+  /** toques no logo (10 seguidos liga o modo desenvolvedor no beta) */
+  onLogoPress?: () => void;
   hasUnreadActivity?: boolean;
   unreadMessages?: number;
 }) {
@@ -28,11 +31,10 @@ export function Header({
   return (
     <View style={styles.c}>
       <View style={styles.left}>
-        <Image
-          source={require("../assets/logo.png")}
-          style={styles.logoBadge}
-        />
-        <Text style={[styles.title, { color: colors.text }]}>GUVIO</Text>
+        <Pressable onPress={onLogoPress} style={styles.left} accessibilityLabel="GUVIO">
+          <Image source={require("../assets/logo.png")} style={styles.logoBadge} />
+          <Text style={[styles.title, { color: colors.text }]}>GUVIO</Text>
+        </Pressable>
         {onOpenBeta ? (
           <Pressable onPress={onOpenBeta} hitSlop={8} style={[styles.beta, { borderColor: colors.border }]}>
             <Text style={[styles.betaText, { color: colors.muted }]}>BETA</Text>

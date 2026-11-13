@@ -12,14 +12,15 @@ import {
   Animated,
   Platform,
   PanResponder,
-  ScrollView
+  ScrollView,
+  Easing
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { BarChart2, Camera, ChevronLeft, Eye, Heart, HelpCircle, ImagePlus, MoveVertical, Plus, Send, Square, Trash2, X } from "lucide-react-native";
-import * as ImagePicker from "expo-image-picker";
-import { StoryOverlay, StorySticker } from "../data/mockData";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useVideoPlayer, VideoView } from "expo-video";
+import { Eye, Send, Trash2, X } from "lucide-react-native";
 import { StoryStickerView } from "./StoryStickerView";
-import { OVERLAY_COLORS, StoryOverlayText } from "./StoryOverlayText";
+import { StoryOverlayText } from "./StoryOverlayText";
+import { placeStyle, StoryLayersView } from "./story/StoryLayers";
 import { UserStoryGroup, StoryItem } from "../data/mockData";
 import { FastImage } from "./FastImage";
 import {
@@ -41,7 +42,9 @@ export function StoryViewerModal({
   initialGroupIndex = 0,
   onAddStory,
   onStorySeen,
-  onStoryDeleted
+  onStoryDeleted,
+  onOpenProfile,
+  onOpenTag
 }: {
   visible: boolean;
   onClose: () => void;
@@ -50,7 +53,11 @@ export function StoryViewerModal({
   onAddStory?: (imageUri: string, caption?: string) => void;
   onStorySeen?: (storyId: string) => void;
   onStoryDeleted?: (storyId: string) => void;
+  /** tocar numa @menção / #hashtag do story */
+  onOpenProfile?: (username: string) => void;
+  onOpenTag?: (tag: string) => void;
 }) {
+  const insets = useSafeAreaInsets();
   const [groupIndex, setGroupIndex] = useState(initialGroupIndex);
   const [storyIndex, setStoryIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -74,29 +81,74 @@ export function StoryViewerModal({
     }
   }, [visible, initialGroupIndex]);
 
+  // segurar o dedo: pausa e esconde a interface (igual ao Instagram)
+  const [holding, setHolding] = useState(false);
+  // vídeo: o tempo do story é o do vídeo; foto: 5s
+  const [dur, setDur] = useState(STORY_DURATION);
+  const [mediaReady, setMediaReady] = useState(true);
+  const [fit, setFit] = useState<"cover" | "contain">("cover");
+  const progressVal = useRef(0);
+  const nextRef = useRef(() => {});
   useEffect(() => {
-    if (!visible || !currentStory || isPaused) {
+    const id = progressAnim.addListener(({ value }) => (progressVal.current = value));
+    return () => progressAnim.removeListener(id);
+  }, []);
+
+  // story novo: barra do zero
+  useEffect(() => {
+    progressAnim.setValue(0);
+    progressVal.current = 0;
+    setDur(STORY_DURATION);
+    setFit("cover");
+    setMediaReady(!currentStory?.videoUrl);
+  }, [visible, currentStory?.id]);
+
+  useEffect(() => {
+    if (!visible || !currentStory || isPaused || !mediaReady) {
       progressAnim.stopAnimation();
       return;
     }
-
-    progressAnim.setValue(0);
+    // continua de onde parou (pausar não zera a barra)
+    const from = progressVal.current;
     const animation = Animated.timing(progressAnim, {
       toValue: 1,
-      duration: STORY_DURATION,
+      duration: Math.max(60, dur * (1 - from)),
+      easing: Easing.linear,
       useNativeDriver: false
     });
-
     animation.start(({ finished }) => {
-      if (finished) {
-        handleNextStory();
-      }
+      if (finished) nextRef.current();
     });
-
     return () => {
       progressAnim.stopAnimation();
     };
-  }, [visible, groupIndex, storyIndex, isPaused, currentStory]);
+  }, [visible, currentStory?.id, isPaused, mediaReady, dur]);
+
+  const player = useVideoPlayer(visible && currentStory?.videoUrl ? currentStory.videoUrl : null, p => {
+    p.loop = false;
+    p.play();
+  });
+  useEffect(() => {
+    if (!player || !currentStory?.videoUrl) return;
+    const ready = () => {
+      setDur(Math.min(30000, Math.max(1500, (player.duration || 5) * 1000)));
+      setMediaReady(true);
+    };
+    if (player.status === "readyToPlay") ready();
+    const sub = player.addListener("statusChange", ({ status }) => {
+      if (status === "readyToPlay") ready();
+      // vídeo não carregou: mostra a capa por 5s
+      if (status === "error") setMediaReady(true);
+    });
+    return () => sub.remove();
+  }, [player]);
+  useEffect(() => {
+    if (!player) return;
+    try {
+      if (isPaused || !visible) player.pause();
+      else player.play();
+    } catch {}
+  }, [player, isPaused, visible]);
 
   const handleNextStory = () => {
     if (!currentGroup) return;
@@ -109,6 +161,8 @@ export function StoryViewerModal({
       onClose();
     }
   };
+
+  nextRef.current = handleNextStory;
 
   const handlePrevStory = () => {
     if (storyIndex > 0) {
@@ -283,13 +337,29 @@ export function StoryViewerModal({
 
   if (!visible || !currentGroup || !currentStory) return null;
 
+  // o story tem sempre o formato 9:16 (o mesmo do editor), para o texto e as figurinhas ficarem no lugar certo
+  const win = Dimensions.get("window");
+  const maxH = win.height - insets.top - insets.bottom - 70;
+  const CW = Math.min(win.width, maxH * (9 / 16));
+  const CH = CW * (16 / 9);
+  const layers = currentStory.overlay?.layers;
+  const sticker = currentStory.sticker;
+  const placed = sticker && typeof sticker.x === "number";
+  const pressIn = () => setIsPaused(true);
+  const pressOut = () => {
+    setIsPaused(false);
+    setHolding(false);
+  };
+
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose} statusBarTranslucent>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
       <Animated.View
         style={[
           s.container,
           {
+            paddingTop: insets.top,
+            paddingBottom: insets.bottom,
             transformOrigin: cubeEdge,
             transform: [
               { perspective: 900 },
@@ -298,117 +368,163 @@ export function StoryViewerModal({
               {
                 // efeito cubo: a tela gira em volta da aresta enquanto troca de pessoa
                 rotateY: dragX.interpolate({
-                  inputRange: [-Dimensions.get("window").width, 0, Dimensions.get("window").width],
+                  inputRange: [-win.width, 0, win.width],
                   outputRange: ["-75deg", "0deg", "75deg"],
                   extrapolate: "clamp"
                 })
               },
               { scale: dragY.interpolate({ inputRange: [0, 600], outputRange: [1, 0.85], extrapolate: "clamp" }) }
-            ],
-            borderRadius: 18,
-            overflow: "hidden"
+            ]
           }
         ]}
         {...swipe.panHandlers}
       >
-        {/* Story Background Image */}
-        <FastImage source={currentStory.image} style={s.storyImage} contentFit="cover" transition={150} />
-        <StoryOverlayText overlay={currentStory.overlay} />
-        {currentStory.sticker ? (
-          <View style={s.stickerWrap} pointerEvents="box-none">
-            <StoryStickerView
-              sticker={currentStory.sticker}
-              story={currentStory}
-              isMe={!!currentGroup.isMe}
-              onPause={p => setIsPaused(p)}
-            />
-          </View>
-        ) : null}
-
-        {/* reação: o emoji escolhido aparece grande */}
-        {reactionHeart && (
-          <View pointerEvents="none" style={s.reactionOverlay}>
-            <Text style={{ fontSize: 96 }}>{reactionEmoji}</Text>
-            <Text style={{ color: "#FFF", fontWeight: "600", marginTop: 6 }}>{reactionLabel}</Text>
-          </View>
-        )}
-
-        {/* Gradient dark overlays */}
-        <View style={s.topOverlay} pointerEvents="none" />
-        <View style={s.bottomOverlay} pointerEvents="none" />
-
-        <SafeAreaView style={s.safeArea}>
-          {/* Progress Indicators */}
-          <View style={s.progressContainer}>
-            {currentGroup.stories.map((st, idx) => {
-              let width: any = "0%";
-              if (idx < storyIndex) {
-                width = "100%";
-              } else if (idx === storyIndex) {
-                width = progressAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ["0%", "100%"]
-                });
+        <View style={[s.canvas, { width: CW, height: CH }]}>
+          {/* foto que não é 9:16: aparece inteira, com o fundo desfocado */}
+          {fit === "contain" ? (
+            <FastImage source={currentStory.image} style={s.storyImage} contentFit="cover" blurRadius={40} />
+          ) : null}
+          <FastImage
+            source={currentStory.image}
+            style={s.storyImage}
+            contentFit={fit}
+            transition={120}
+            onLoad={e => {
+              const w = e?.source?.width, h = e?.source?.height;
+              if (w && h) {
+                const r = w / h;
+                setFit(r > 0.68 || r < 0.5 ? "contain" : "cover");
               }
-              return (
-                <View key={st.id} style={s.progressBarBackground}>
-                  <Animated.View style={[s.progressBarFill, { width }]} />
-                </View>
-              );
-            })}
-          </View>
+            }}
+          />
+          {currentStory.videoUrl && player ? (
+            <VideoView player={player} style={s.storyImage} contentFit="cover" nativeControls={false} />
+          ) : null}
+          {!layers?.length ? <StoryOverlayText overlay={currentStory.overlay} /> : null}
 
-          {/* Story Author Header */}
-          <View style={s.header}>
-            <View style={s.authorInfo}>
-              <FastImage source={currentGroup.avatar} style={s.authorAvatar} contentFit="cover" />
-              <View>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Text style={s.authorName}>
-                    {currentGroup.displayName}
-                  </Text>
-                  <Text style={s.timeAgo}>· {currentStory.timestamp}</Text>
-                  {currentStory.closeFriends ? (
-                    <View style={s.cfBadge}>
-                      <Text style={{ color: "#FFF", fontSize: 10, fontWeight: "700" }}>Melhores amigos</Text>
-                    </View>
-                  ) : null}
-                </View>
-                <Text style={s.authorHandle}>@{currentGroup.username}</Text>
-              </View>
-            </View>
-
-            <Pressable onPress={onClose} hitSlop={15} style={s.closeButton}>
-              <X size={24} color="#FFF" />
-            </Pressable>
-          </View>
-
-          {/* Touch navigation zones */}
+          {/* toque: esquerda volta, direita avança; segurar pausa */}
           <View style={s.touchArea}>
             <Pressable
               style={s.touchLeft}
               onPress={handlePrevStory}
-              onPressIn={() => setIsPaused(true)}
-              onPressOut={() => setIsPaused(false)}
+              onPressIn={pressIn}
+              onPressOut={pressOut}
+              onLongPress={() => setHolding(true)}
+              delayLongPress={220}
             />
             <Pressable
               style={s.touchRight}
               onPress={handleNextStory}
-              onPressIn={() => setIsPaused(true)}
-              onPressOut={() => setIsPaused(false)}
+              onPressIn={pressIn}
+              onPressOut={pressOut}
+              onLongPress={() => setHolding(true)}
+              delayLongPress={220}
             />
           </View>
 
-          {/* empurra legenda e barra de resposta para baixo; topo fica preso em cima */}
-          <View style={{ flex: 1 }} pointerEvents="none" />
+          {/* textos, menções, links e desenho (por cima dos toques, para dar para tocar) */}
+          <StoryLayersView
+            layers={layers}
+            W={CW}
+            H={CH}
+            onMention={u => {
+              onClose();
+              onOpenProfile?.(u);
+            }}
+            onHashtag={tag => {
+              onClose();
+              onOpenTag?.(tag);
+            }}
+          />
 
-          {/* Caption text */}
-          {currentStory.caption ? (
-            <View style={s.captionContainer}>
+          {sticker ? (
+            placed ? (
+              <View style={placeStyle({ x: sticker.x!, y: sticker.y ?? 0.6, scale: sticker.scale ?? 1, rot: sticker.rot ?? 0 }, CW, CH)} pointerEvents="box-none">
+                <View style={{ width: CW }} pointerEvents="box-none">
+                  <StoryStickerView sticker={sticker} story={currentStory} isMe={!!currentGroup.isMe} onPause={p => setIsPaused(p)} />
+                </View>
+              </View>
+            ) : (
+              <View style={s.stickerWrap} pointerEvents="box-none">
+                <StoryStickerView sticker={sticker} story={currentStory} isMe={!!currentGroup.isMe} onPause={p => setIsPaused(p)} />
+              </View>
+            )
+          ) : null}
+
+          {/* topo: barras e autor (somem enquanto segura) */}
+          {!holding ? (
+            <View style={s.topWrap} pointerEvents="box-none">
+              <View style={s.topOverlay} pointerEvents="none" />
+              <View style={s.progressContainer} pointerEvents="none">
+                {currentGroup.stories.map((st, idx) => {
+                  let width: any = "0%";
+                  if (idx < storyIndex) width = "100%";
+                  else if (idx === storyIndex)
+                    width = progressAnim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
+                  return (
+                    <View key={st.id} style={s.progressBarBackground}>
+                      <Animated.View style={[s.progressBarFill, { width }]} />
+                    </View>
+                  );
+                })}
+              </View>
+              <View style={s.header} pointerEvents="box-none">
+                <Pressable
+                  style={s.authorInfo}
+                  onPress={() => {
+                    if (currentGroup.isMe) return;
+                    onClose();
+                    onOpenProfile?.(currentGroup.username);
+                  }}
+                >
+                  <FastImage source={currentGroup.avatar} style={s.authorAvatar} contentFit="cover" />
+                  <View>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Text style={s.authorName}>{currentGroup.displayName}</Text>
+                      <Text style={s.timeAgo}>· {currentStory.timestamp}</Text>
+                      {currentStory.closeFriends ? (
+                        <View style={s.cfBadge}>
+                          <Text style={{ color: "#FFF", fontSize: 10, fontWeight: "700" }}>Melhores amigos</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text style={s.authorHandle}>@{currentGroup.username}</Text>
+                  </View>
+                </Pressable>
+                <Pressable onPress={onClose} hitSlop={15} style={s.closeButton}>
+                  <X size={24} color="#FFF" />
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+
+          {currentStory.caption && !holding ? (
+            <View style={s.captionContainer} pointerEvents="none">
               <Text style={s.captionText}>{currentStory.caption}</Text>
             </View>
           ) : null}
 
+          {!currentGroup.isMe && !holding ? (
+            <View style={s.reactionsRow}>
+              {["❤️", "🔥", "😍", "😂", "👏", "✨"].map(emoji => (
+                <Pressable key={emoji} onPress={() => handleSendReaction(emoji)} style={s.emojiBtn} hitSlop={4}>
+                  <Text style={s.emojiText}>{emoji}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
+          {/* reação: o emoji escolhido aparece grande */}
+          {reactionHeart && (
+            <View pointerEvents="none" style={s.reactionOverlay}>
+              <Text style={{ fontSize: 96 }}>{reactionEmoji}</Text>
+              <Text style={{ color: "#FFF", fontWeight: "600", marginTop: 6 }}>{reactionLabel}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* embaixo do story: responder / reações, ou Quem viu e Apagar */}
+        <View style={{ flex: 1, alignSelf: "stretch", justifyContent: "center", opacity: holding ? 0 : 1 }}>
           {currentGroup.isMe ? (
             <View style={s.ownerBar}>
               <Pressable onPress={openViewers} style={s.ownerBtn} hitSlop={8}>
@@ -438,306 +554,67 @@ export function StoryViewerModal({
                   </Pressable>
                 ) : null}
               </View>
-
-              <View style={s.reactionsRow}>
-                {["❤️", "🔥", "😍", "😂", "👏", "✨"].map(emoji => (
-                  <Pressable key={emoji} onPress={() => handleSendReaction(emoji)} style={s.emojiBtn}>
-                    <Text style={s.emojiText}>{emoji}</Text>
-                  </Pressable>
-                ))}
-              </View>
             </View>
           )}
-
-          {viewers !== null ? (
-            <View style={s.viewersSheet}>
-              <View style={s.viewersHead}>
-                <Text style={s.viewersTitle}>Visto por {viewers.length}</Text>
-                <Pressable
-                  onPress={() => {
-                    setViewers(null);
-                    setIsPaused(false);
-                  }}
-                  hitSlop={10}
-                >
-                  <X size={22} color="#FFF" />
-                </Pressable>
-              </View>
-              <ScrollView>
-                {responses.length > 0 && currentStory?.sticker ? (
-                  <View style={{ marginBottom: 14 }}>
-                    <Text style={s.respTitle}>
-                      {currentStory.sticker.type === "poll" ? "Votos" : "Respostas"} ({responses.length})
-                    </Text>
-                    {responses.map((r, i) => (
-                      <View key={i} style={s.viewerRow}>
-                        <FastImage source={r.avatar} style={s.viewerAvatar} />
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ color: "#FFF", fontWeight: "600" }}>@{r.username}</Text>
-                          <Text style={{ color: "rgba(255,255,255,.8)", fontSize: 13 }}>
-                            {r.kind === "vote" && currentStory.sticker?.type === "poll"
-                              ? `votou em "${currentStory.sticker.options[Number(r.value)] ?? r.value}"`
-                              : r.value}
-                          </Text>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                ) : null}
-                {viewers.length === 0 ? (
-                  <Text style={{ color: "rgba(255,255,255,.7)", textAlign: "center", marginTop: 20 }}>
-                    Ninguém viu ainda.
-                  </Text>
-                ) : (
-                  viewers.map(v => (
-                    <View key={v.username} style={s.viewerRow}>
-                      <FastImage source={v.avatar} style={s.viewerAvatar} />
-                      <Text style={{ color: "#FFF", fontWeight: "600", flex: 1 }}>@{v.username}</Text>
-                      <Text style={{ color: "rgba(255,255,255,.6)", fontSize: 11 }}>{v.time}</Text>
-                    </View>
-                  ))
-                )}
-              </ScrollView>
+        </View>
+        {viewers !== null ? (
+          <View style={s.viewersSheet}>
+            <View style={s.viewersHead}>
+              <Text style={s.viewersTitle}>Visto por {viewers.length}</Text>
+              <Pressable
+                onPress={() => {
+                  setViewers(null);
+                  setIsPaused(false);
+                }}
+                hitSlop={10}
+              >
+                <X size={22} color="#FFF" />
+              </Pressable>
             </View>
-          ) : null}
-        </SafeAreaView>
+            <ScrollView>
+              {responses.length > 0 && currentStory?.sticker ? (
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={s.respTitle}>
+                    {currentStory.sticker.type === "poll" ? "Votos" : "Respostas"} ({responses.length})
+                  </Text>
+                  {responses.map((r, i) => (
+                    <View key={i} style={s.viewerRow}>
+                      <FastImage source={r.avatar} style={s.viewerAvatar} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: "#FFF", fontWeight: "600" }}>@{r.username}</Text>
+                        <Text style={{ color: "rgba(255,255,255,.8)", fontSize: 13 }}>
+                          {r.kind === "vote" && currentStory.sticker?.type === "poll"
+                            ? `votou em "${currentStory.sticker.options[Number(r.value)] ?? r.value}"`
+                            : r.value}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              {viewers.length === 0 ? (
+                <Text style={{ color: "rgba(255,255,255,.7)", textAlign: "center", marginTop: 20 }}>
+                  Ninguém viu ainda.
+                </Text>
+              ) : (
+                viewers.map(v => (
+                  <View key={v.username} style={s.viewerRow}>
+                    <FastImage source={v.avatar} style={s.viewerAvatar} />
+                    <Text style={{ color: "#FFF", fontWeight: "600", flex: 1 }}>@{v.username}</Text>
+                    <Text style={{ color: "rgba(255,255,255,.6)", fontSize: 11 }}>{v.time}</Text>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        ) : null}
       </Animated.View>
     </Modal>
   );
 }
 
-// Modal to create and publish a new story
-export function CreateStoryModal({
-  visible,
-  onClose,
-  onPublish,
-  initialImage
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onPublish: (
-    imageUri: string,
-    caption?: string,
-    overlay?: StoryOverlay | null,
-    extra?: { closeFriends?: boolean; sticker?: StorySticker | null }
-  ) => void;
-  /** já abre com esta imagem (ex.: colagem de um look do guarda-roupa) */
-  initialImage?: string | null;
-}) {
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [caption, setCaption] = useState("");
-  const [ovText, setOvText] = useState("");
-  const [ovColor, setOvColor] = useState(OVERLAY_COLORS[0]);
-  const [ovBoxed, setOvBoxed] = useState(false);
-  const [ovY, setOvY] = useState(0.42);
-  const [editingText, setEditingText] = useState(false);
-  const [sticker, setSticker] = useState<StorySticker | null>(null);
-  const [stickerForm, setStickerForm] = useState<"poll" | "question" | null>(null);
-  const [sq, setSq] = useState("");
-  const [so1, setSo1] = useState("Sim");
-  const [so2, setSo2] = useState("Não");
-  const [closeOnly, setCloseOnly] = useState(false);
-
-  useEffect(() => {
-    if (visible && initialImage) setImageUri(initialImage);
-  }, [visible, initialImage]);
-
-  const pickImage = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [9, 16],
-      quality: 0.85
-    });
-    if (!res.canceled && res.assets[0]?.uri) {
-      setImageUri(res.assets[0].uri);
-    }
-  };
-
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permissão necessária", "Precisamos de acesso à câmera para tirar uma foto.");
-      return;
-    }
-    const res = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [9, 16],
-      quality: 0.85
-    });
-    if (!res.canceled && res.assets[0]?.uri) {
-      setImageUri(res.assets[0].uri);
-    }
-  };
-
-  const handlePublish = () => {
-    if (!imageUri) return;
-    onPublish(imageUri, caption, ovText.trim() ? { text: ovText.trim(), color: ovColor, boxed: ovBoxed, y: ovY } : null, {
-      closeFriends: closeOnly,
-      sticker
-    });
-    setImageUri(null);
-    setCaption("");
-    setOvText("");
-    setEditingText(false);
-    setSticker(null);
-    setCloseOnly(false);
-    onClose();
-  };
-
-  return (
-    <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <SafeAreaView style={s.createContainer}>
-        <StatusBar barStyle="light-content" />
-        <View style={s.createHeader}>
-          <Pressable onPress={onClose} hitSlop={10}>
-            <X size={26} color="#FFF" />
-          </Pressable>
-          <Text style={s.createTitle}>Novo Story</Text>
-          <Pressable
-            onPress={handlePublish}
-            disabled={!imageUri}
-            style={[s.publishBtn, { opacity: imageUri ? 1 : 0.4 }]}
-          >
-            <Text style={s.publishBtnText}>Compartilhar</Text>
-          </Pressable>
-        </View>
-
-        {imageUri ? (
-          <View style={s.previewContainer}>
-            <FastImage source={imageUri} style={s.previewImage} contentFit="cover" />
-            {!editingText ? <StoryOverlayText overlay={ovText ? { text: ovText, color: ovColor, boxed: ovBoxed, y: ovY } : null} /> : null}
-            {sticker && !stickerForm ? (
-              <Pressable style={s.stickerWrap} onLongPress={() => setSticker(null)}>
-                <StoryStickerView sticker={sticker} preview />
-                <Text style={{ color: "#FFF", fontSize: 10, textAlign: "center", marginTop: 4 }}>segure para remover</Text>
-              </Pressable>
-            ) : null}
-            {stickerForm ? (
-              <View style={s.textEditor}>
-                <Text style={{ color: "#FFF", fontWeight: "700", fontSize: 18, textAlign: "center", marginBottom: 14 }}>
-                  {stickerForm === "poll" ? "Enquete" : "Caixinha de pergunta"}
-                </Text>
-                <TextInput
-                  value={sq}
-                  onChangeText={setSq}
-                  autoFocus
-                  maxLength={80}
-                  placeholder={stickerForm === "poll" ? "Pergunta (ex.: Uso esse look hoje?)" : "Ex.: Me pergunte sobre estilo"}
-                  placeholderTextColor="rgba(255,255,255,.6)"
-                  style={s.stickerInput}
-                />
-                {stickerForm === "poll" ? (
-                  <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-                    <TextInput value={so1} onChangeText={setSo1} maxLength={24} style={[s.stickerInput, { flex: 1 }]} placeholderTextColor="rgba(255,255,255,.6)" placeholder="Opção 1" />
-                    <TextInput value={so2} onChangeText={setSo2} maxLength={24} style={[s.stickerInput, { flex: 1 }]} placeholderTextColor="rgba(255,255,255,.6)" placeholder="Opção 2" />
-                  </View>
-                ) : null}
-                <Pressable
-                  onPress={() => {
-                    setSticker(
-                      stickerForm === "poll"
-                        ? { type: "poll", question: sq.trim() || "O que acham?", options: [so1.trim() || "Sim", so2.trim() || "Não"] }
-                        : { type: "question", prompt: sq.trim() || "Me pergunte algo" }
-                    );
-                    setStickerForm(null);
-                  }}
-                  style={s.doneText}
-                >
-                  <Text style={{ color: "#000", fontWeight: "700" }}>Adicionar</Text>
-                </Pressable>
-              </View>
-            ) : null}
-            <View style={s.textTools}>
-              <Pressable onPress={() => setEditingText(v => !v)} style={s.toolBtn}>
-                <Text style={{ color: "#FFF", fontWeight: "700", fontSize: 18 }}>Aa</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setSq("");
-                  setStickerForm("poll");
-                }}
-                style={s.toolBtn}
-              >
-                <BarChart2 size={20} color="#FFF" />
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setSq("");
-                  setStickerForm("question");
-                }}
-                style={s.toolBtn}
-              >
-                <HelpCircle size={20} color="#FFF" />
-              </Pressable>
-              {ovText ? (
-                <>
-                  <Pressable onPress={() => setOvBoxed(b => !b)} style={[s.toolBtn, ovBoxed && { backgroundColor: "rgba(255,255,255,.35)" }]}>
-                    <Square size={18} color="#FFF" />
-                  </Pressable>
-                  <Pressable onPress={() => setOvY(y => (y <= 0.2 ? 0.42 : y <= 0.5 ? 0.7 : 0.15))} style={s.toolBtn}>
-                    <MoveVertical size={18} color="#FFF" />
-                  </Pressable>
-                </>
-              ) : null}
-            </View>
-            {editingText ? (
-              <View style={s.textEditor}>
-                <TextInput
-                  value={ovText}
-                  onChangeText={setOvText}
-                  autoFocus
-                  multiline
-                  maxLength={120}
-                  placeholder="Escreva algo... use @ para marcar alguém"
-                  placeholderTextColor="rgba(255,255,255,.6)"
-                  style={[s.textEditorInput, { color: ovColor }]}
-                />
-                <View style={s.colorRow}>
-                  {OVERLAY_COLORS.map(c => (
-                    <Pressable key={c} onPress={() => setOvColor(c)} style={[s.colorDot, { backgroundColor: c, borderWidth: ovColor === c ? 3 : 1.5 }]} />
-                  ))}
-                </View>
-                <Pressable onPress={() => setEditingText(false)} style={s.doneText}>
-                  <Text style={{ color: "#000", fontWeight: "700" }}>Pronto</Text>
-                </Pressable>
-              </View>
-            ) : null}
-            <Pressable onPress={() => setCloseOnly(v => !v)} style={[s.cfToggle, closeOnly && { backgroundColor: "#22C55E", borderColor: "#22C55E" }]}>
-              <Text style={{ color: "#FFF", fontWeight: "700", fontSize: 12 }}>{closeOnly ? "Só melhores amigos" : "Melhores amigos"}</Text>
-            </Pressable>
-            <View style={s.captionInputBox}>
-              <TextInput
-                value={caption}
-                onChangeText={setCaption}
-                placeholder="Adicionar legenda ao story..."
-                placeholderTextColor="rgba(255,255,255,0.7)"
-                style={s.captionInput}
-              />
-            </View>
-          </View>
-        ) : (
-          <View style={s.emptyPicker}>
-            <Text style={s.pickerPrompt}>Escolha como adicionar seu look aos Stories</Text>
-            <View style={s.pickerButtonsRow}>
-              <Pressable onPress={takePhoto} style={s.pickerOption}>
-                <Camera size={32} color="#FFF" />
-                <Text style={s.pickerOptionText}>Câmera</Text>
-              </Pressable>
-              <Pressable onPress={pickImage} style={s.pickerOption}>
-                <ImagePlus size={32} color="#FFF" />
-                <Text style={s.pickerOptionText}>Galeria</Text>
-              </Pressable>
-            </View>
-          </View>
-        )}
-      </SafeAreaView>
-    </Modal>
-  );
-}
-
 const s = StyleSheet.create({
-  stickerWrap: { position: "absolute", left: 0, right: 0, top: "55%", zIndex: 6 },
+  stickerWrap: { position: "absolute", left: 0, right: 0, top: "55%" },
   stickerInput: { color: "#FFF", fontSize: 16, fontWeight: "700", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,.4)", paddingVertical: 8, textAlign: "center" },
   cfBadge: { backgroundColor: "#22C55E", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1 },
   cfToggle: { position: "absolute", left: 14, top: 14, zIndex: 6, borderWidth: 1.5, borderColor: "rgba(255,255,255,.7)", borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "rgba(0,0,0,.4)" },
@@ -749,7 +626,7 @@ const s = StyleSheet.create({
   colorRow: { flexDirection: "row", justifyContent: "center", gap: 10, marginTop: 24 },
   colorDot: { width: 30, height: 30, borderRadius: 15, borderColor: "#FFF" },
   doneText: { alignSelf: "center", marginTop: 24, backgroundColor: "#FFF", paddingHorizontal: 22, paddingVertical: 10, borderRadius: 20 },
-  ownerBar: { flexDirection: "row", justifyContent: "center", gap: 40, paddingBottom: 30, zIndex: 10 },
+  ownerBar: { flexDirection: "row", justifyContent: "center", gap: 40 },
   ownerBtn: { alignItems: "center", gap: 4 },
   ownerText: { color: "#FFF", fontSize: 11, fontWeight: "600" },
   viewersSheet: {
@@ -767,7 +644,9 @@ const s = StyleSheet.create({
   viewersTitle: { color: "#FFF", fontWeight: "700", fontSize: 15 },
   viewerRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 },
   viewerAvatar: { width: 36, height: 36, borderRadius: 18 },
-  container: { flex: 1, backgroundColor: "#000" },
+  container: { flex: 1, backgroundColor: "#000", alignItems: "center" },
+  canvas: { borderRadius: 14, overflow: "hidden", backgroundColor: "#111" },
+  topWrap: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 10 },
   storyImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
   topOverlay: {
     position: "absolute",
@@ -820,13 +699,14 @@ const s = StyleSheet.create({
   closeButton: { padding: 4 },
   touchArea: {
     ...StyleSheet.absoluteFillObject,
-    flexDirection: "row",
-    zIndex: 5
+    flexDirection: "row"
   },
   touchLeft: { width: "35%", height: "100%" },
   touchRight: { width: "65%", height: "100%" },
   captionContainer: {
-    marginHorizontal: 18,
+    position: "absolute",
+    bottom: 64,
+    maxWidth: "88%",
     backgroundColor: "rgba(0,0,0,0.55)",
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -837,10 +717,8 @@ const s = StyleSheet.create({
   },
   captionText: { color: "#FFF", fontSize: 13, fontWeight: "600", textAlign: "center" },
   bottomBar: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    gap: 12,
-    zIndex: 10
+    paddingHorizontal: 12,
+    width: "100%"
   },
   replyInputWrapper: {
     flexDirection: "row",
@@ -854,7 +732,7 @@ const s = StyleSheet.create({
   },
   replyInput: { flex: 1, color: "#FFF", fontSize: 13 },
   sendBtn: { padding: 4 },
-  reactionsRow: { flexDirection: "row", justifyContent: "space-around", alignItems: "center" },
+  reactionsRow: { position: "absolute", left: 10, right: 10, bottom: 12, flexDirection: "row", justifyContent: "space-around", alignItems: "center" },
   emojiBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
