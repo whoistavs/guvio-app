@@ -89,7 +89,11 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
 
   // vídeo: modo vídeo da câmera; foto: modo foto
   useEffect(() => {
-    setCamMode(mode === "video" ? "video" : "picture");
+    const next = mode === "video" ? "video" : "picture";
+    setCamMode(prev => {
+      if (prev !== next) ready.current = false;
+      return next;
+    });
   }, [mode]);
 
   useEffect(() => {
@@ -108,7 +112,7 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
   };
 
   const close = () => {
-    if (recording) cam.current?.stopRecording();
+    if (recRef.current.on) cam.current?.stopRecording();
     setOpen(false);
   };
 
@@ -152,40 +156,90 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
     }
   };
 
+  // a câmera avisa quando terminou de trocar foto <-> vídeo (no iPhone isso demora)
+  const ready = useRef(false);
+  const readyWaiters = useRef<(() => void)[]>([]);
+  const onCameraReady = () => {
+    ready.current = true;
+    readyWaiters.current.splice(0).forEach(r => r());
+  };
+  const waitReady = (ms: number) =>
+    new Promise<void>(res => {
+      if (ready.current) return res();
+      readyWaiters.current.push(res);
+      setTimeout(res, ms);
+    });
+  const recRef = useRef<{ on: boolean; startedAt: number; cancel: boolean }>({ on: false, startedAt: 0, cancel: false });
+
   const startRecording = async () => {
     if (WEB) return Alert.alert("Só no app", "Gravar vídeo pela câmera funciona no app do celular. No site, escolha um vídeo da galeria.");
-    if (!cam.current || recording) return;
+    if (!cam.current || recRef.current.on) return;
+    recRef.current = { on: true, startedAt: 0, cancel: false };
     if (!micPerm?.granted) {
       const r = await askMic();
-      if (!r.granted) return Alert.alert("Microfone", "Libere o microfone nos ajustes do celular para gravar com som.");
+      if (!r.granted) {
+        recRef.current.on = false;
+        return Alert.alert("Microfone", "Libere o microfone nos ajustes do celular para gravar com som.");
+      }
     }
     if (camMode !== "video") {
+      ready.current = false;
       setCamMode("video");
-      // a câmera precisa de um instante para trocar para vídeo
-      await new Promise(r => setTimeout(r, 450));
+      await waitReady(2500);
+      // folga para a sessão de vídeo estabilizar
+      await new Promise(r => setTimeout(r, 250));
+    }
+    // soltou o dedo antes de começar a gravar: vira foto
+    if (recRef.current.cancel) {
+      recRef.current.on = false;
+      if (mode !== "video") {
+        ready.current = false;
+        setCamMode("picture");
+        await waitReady(2500);
+      }
+      return takePhoto();
     }
     setRecording(true);
     tapFeedback();
+    recRef.current.startedAt = Date.now();
     try {
       const v = await cam.current?.recordAsync({ maxDuration: MAX_S });
       setRecording(false);
       if (v?.uri) await deliver({ uri: v.uri, type: "video" });
     } catch (e: any) {
       setRecording(false);
-      Alert.alert("Não deu para gravar", e?.message || "Tente de novo.");
+      const short = Date.now() - recRef.current.startedAt < 1500;
+      Alert.alert(
+        "Não deu para gravar",
+        short ? "Segure o botão por pelo menos 1 segundo para gravar um vídeo." : "Tente de novo. Se continuar, feche e abra a câmera."
+      );
     } finally {
-      if (mode !== "video") setCamMode("picture");
+      recRef.current.on = false;
+      if (mode !== "video") {
+        ready.current = false;
+        setCamMode("picture");
+      }
     }
   };
 
   const stopRecording = () => {
-    if (recording) cam.current?.stopRecording();
+    const r = recRef.current;
+    if (!r.on) return;
+    if (!r.startedAt) {
+      // ainda trocando para vídeo
+      r.cancel = true;
+      return;
+    }
+    // vídeo muito curto dá erro no iPhone: grava pelo menos 1s
+    const left = 1000 - (Date.now() - r.startedAt);
+    if (left > 0) setTimeout(() => cam.current?.stopRecording(), left);
+    else cam.current?.stopRecording();
   };
 
   // botão: toque = foto (no VÍDEO, grava); segurar = vídeo; mãos livres = toque liga/desliga a gravação
   const onShutterIn = () => {
     held.current = false;
-    if (mode === "video" || handsFree || recording || mode === "clothing" || WEB) return;
+    if (mode === "video" || handsFree || recRef.current.on || mode === "clothing" || WEB) return;
     holdTimer.current = setTimeout(() => {
       held.current = true;
       startRecording();
@@ -200,7 +254,7 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
   };
   const onShutterPress = () => {
     if (held.current) return;
-    if (recording) return stopRecording();
+    if (recRef.current.on) return stopRecording();
     if (mode === "video" || (handsFree && mode !== "clothing")) return startRecording();
     takePhoto();
   };
@@ -241,8 +295,9 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
               style={StyleSheet.absoluteFill}
               facing={facing}
               flash={flash}
-              enableTorch={recording && flash === "on" && !front}
+              enableTorch={flash === "on" && !front && camMode === "video"}
               mode={camMode}
+              onCameraReady={onCameraReady}
               mirror={front && prefs.mirror}
               animateShutter
             />
