@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Linking, Modal, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Modal, PanResponder, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
@@ -17,11 +17,17 @@ export type CameraMode = "post" | "story" | "video" | "clothing";
 const MODES: { id: CameraMode; label: string }[] = [
   { id: "post", label: "POST" },
   { id: "story", label: "STORY" },
-  { id: "video", label: "VÍDEO" },
+  { id: "video", label: "DESFILE" },
   { id: "clothing", label: "ROUPA" }
 ];
 const MAX_S = 30;
 const WEB = Platform.OS === "web";
+const IOS = Platform.OS === "ios";
+// zoom da câmera (0..1). No iPhone a escala é exponencial; no Android, linear
+const ZOOM_MAX = IOS ? 0.55 : 1;
+const ZOOM_K = IOS ? 1 / Math.log(100) : 0.45;
+const clampZoom = (z: number) => Math.max(0, Math.min(ZOOM_MAX, z));
+const zoomBy = (z0: number, scale: number) => clampZoom(z0 + Math.log(Math.max(0.05, scale)) * ZOOM_K);
 
 export type CameraResult =
   | { kind: "post"; images: string[]; aspect: number; video?: string }
@@ -52,11 +58,21 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
   const [busy, setBusy] = useState(false);
   const [camMode, setCamMode] = useState<"picture" | "video">("picture");
   const [lastThumb, setLastThumb] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(0);
+  const [zoomShown, setZoomShown] = useState(false);
+  const zoomRef = useRef(0);
+  zoomRef.current = zoom;
+  const zoomHide = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const applyZoom = (z: number) => {
+    setZoom(z);
+    setZoomShown(true);
+    if (zoomHide.current) clearTimeout(zoomHide.current);
+    zoomHide.current = setTimeout(() => setZoomShown(false), 1200);
+  };
   const [camPerm, askCam] = useCameraPermissions();
   const [micPerm, askMic] = useMicrophonePermissions();
   const cam = useRef<CameraView>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const held = useRef(false);
 
   useEffect(() => {
     openFn = m => {
@@ -87,9 +103,20 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
     if (open && camPerm && !camPerm.granted && camPerm.canAskAgain) askCam();
   }, [open, camPerm?.granted]);
 
+  // pede o microfone já ao abrir, para segurar e gravar sem esperar
+  useEffect(() => {
+    if (open && !WEB && camPerm?.granted && micPerm && !micPerm.granted && micPerm.canAskAgain) askMic();
+  }, [open, camPerm?.granted, micPerm?.granted]);
+
+  // trocar de câmera volta o zoom para 1x
+  useEffect(() => {
+    setZoom(0);
+  }, [facing, open]);
+
   // vídeo: modo vídeo da câmera; foto: modo foto
   useEffect(() => {
-    const next = mode === "video" ? "video" : "picture";
+    // no iPhone o STORY já fica em modo vídeo: toque tira foto e segurar grava na hora, sem trocar
+    const next = mode === "video" || (mode === "story" && IOS) ? "video" : "picture";
     setCamMode(prev => {
       if (prev !== next) ready.current = false;
       return next;
@@ -236,28 +263,83 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
     else cam.current?.stopRecording();
   };
 
-  // botão: toque = foto (no VÍDEO, grava); segurar = vídeo; mãos livres = toque liga/desliga a gravação
-  const onShutterIn = () => {
-    held.current = false;
-    if (mode === "video" || handsFree || recRef.current.on || mode === "clothing" || WEB) return;
+  // botão: toque = foto (no DESFILE e no Mãos livres, toque liga/desliga a gravação);
+  // segurar = grava enquanto segura; arrastar o dedo para cima enquanto grava = zoom
+  const press = useRef({ startY: 0, z0: 0, held: false });
+  const handlers = useRef({ grant: (_y: number) => {}, move: (_y: number) => {}, release: () => {} });
+  handlers.current.grant = y => {
+    press.current = { startY: y, z0: zoomRef.current, held: false };
+    if (recRef.current.on || mode === "clothing" || WEB || handsFree) return;
     holdTimer.current = setTimeout(() => {
-      held.current = true;
+      press.current.held = true;
       startRecording();
-    }, 280);
+    }, 260);
   };
-  const onShutterOut = () => {
+  handlers.current.move = y => {
+    if (!press.current.held && !recRef.current.on) return;
+    const dy = press.current.startY - y;
+    if (Math.abs(dy) > 8) applyZoom(zoomBy(press.current.z0, Math.exp(dy / 140)));
+  };
+  handlers.current.release = () => {
     if (holdTimer.current) clearTimeout(holdTimer.current);
-    if (held.current) {
-      held.current = false;
+    if (press.current.held) {
+      press.current.held = false;
       stopRecording();
+      return;
     }
-  };
-  const onShutterPress = () => {
-    if (held.current) return;
+    if (busy || !camPerm?.granted) return;
     if (recRef.current.on) return stopRecording();
     if (mode === "video" || (handsFree && mode !== "clothing")) return startRecording();
     takePhoto();
   };
+  const shutterPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: e => handlers.current.grant(e.nativeEvent.pageY),
+      onPanResponderMove: e => handlers.current.move(e.nativeEvent.pageY),
+      onPanResponderRelease: () => handlers.current.release(),
+      onPanResponderTerminate: () => handlers.current.release()
+    })
+  ).current;
+
+  // pinça com dois dedos na tela = zoom; dois toques rápidos = vira a câmera
+  const pinch = useRef({ d0: 0, z0: 0, lastTap: 0, moved: false });
+  const flipRef = useRef(() => {});
+  flipRef.current = () => {
+    if (!recRef.current.on) setFacing(f => (f === "back" ? "front" : "back"));
+  };
+  const pinchPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        pinch.current.d0 = 0;
+        pinch.current.moved = false;
+      },
+      onPanResponderMove: e => {
+        const ts = e.nativeEvent.touches;
+        if (ts.length < 2) return;
+        const d = Math.hypot(ts[0].pageX - ts[1].pageX, ts[0].pageY - ts[1].pageY);
+        if (!pinch.current.d0) {
+          pinch.current.d0 = d;
+          pinch.current.z0 = zoomRef.current;
+          return;
+        }
+        pinch.current.moved = true;
+        applyZoom(zoomBy(pinch.current.z0, d / pinch.current.d0));
+      },
+      onPanResponderRelease: (_e, g) => {
+        if (pinch.current.moved || Math.abs(g.dx) > 10 || Math.abs(g.dy) > 10) return;
+        const now = Date.now();
+        if (now - pinch.current.lastTap < 300) {
+          pinch.current.lastTap = 0;
+          flipRef.current();
+        } else pinch.current.lastTap = now;
+      }
+    })
+  ).current;
 
   const openGallery = async () => {
     if (mode === "post" || mode === "video") {
@@ -297,6 +379,8 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
               flash={flash}
               enableTorch={flash === "on" && !front && camMode === "video"}
               mode={camMode}
+              zoom={zoom}
+              videoQuality="1080p"
               onCameraReady={onCameraReady}
               mirror={front && prefs.mirror}
               animateShutter
@@ -322,6 +406,8 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
               <View style={[s.gridH, { top: "66.66%" }]} />
             </View>
           ) : null}
+
+          {granted ? <View style={StyleSheet.absoluteFill} {...pinchPan.panHandlers} /> : null}
 
           {/* topo */}
           <View style={s.top}>
@@ -373,17 +459,23 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
             </View>
           ) : null}
 
+          {zoomShown ? (
+            <View pointerEvents="none" style={s.zoomPill}>
+              <Text style={{ color: "#FFF", fontWeight: "800", fontSize: 13 }}>
+                {IOS ? (Math.round(Math.pow(100, zoom) * 10) / 10).toFixed(1) : (1 + zoom * 7).toFixed(1)}x
+              </Text>
+            </View>
+          ) : null}
+
           {/* botão de captura */}
           <View style={s.shutterRow}>
             <Pressable onPress={openGallery} style={s.thumb} accessibilityLabel="Galeria">
               {lastThumb ? <FastImage source={lastThumb} style={StyleSheet.absoluteFill} contentFit="cover" /> : <ImageIcon size={22} color="#FFF" />}
             </Pressable>
-            <Pressable
-              onPressIn={onShutterIn}
-              onPressOut={onShutterOut}
-              onPress={onShutterPress}
-              disabled={!granted || busy}
-              style={[s.shutter, recording && s.shutterRec]}
+            <View
+              {...shutterPan.panHandlers}
+              style={[s.shutter, recording && s.shutterRec, (!granted || busy) && { opacity: 0.6 }]}
+              accessibilityRole="button"
               accessibilityLabel={mode === "video" ? "Gravar" : "Tirar foto"}
             >
               {busy ? (
@@ -397,7 +489,7 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
                   ]}
                 />
               )}
-            </Pressable>
+            </View>
             <Pressable onPress={() => setFacing(f => (f === "back" ? "front" : "back"))} style={s.flip} disabled={recording} accessibilityLabel="Virar câmera">
               <RefreshCw size={24} color="#FFF" />
             </Pressable>
@@ -411,7 +503,7 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
                   ? "Toque para tirar a foto"
                   : "Toque para foto, segure para vídeo"
                 : mode === "video"
-                ? "Toque para gravar (até 30s)"
+                ? "Toque ou segure para gravar (até 30s)"
                 : mode === "clothing"
                 ? "Fotografe a peça num fundo liso"
                 : WEB
@@ -497,6 +589,7 @@ const s = StyleSheet.create({
   shutter: { width: 80, height: 80, borderRadius: 40, borderWidth: 5, borderColor: "#FFF", alignItems: "center", justifyContent: "center" },
   shutterRec: { borderColor: "rgba(255,255,255,.6)", transform: [{ scale: 1.15 }] },
   shutterIn: { width: 62, height: 62, borderRadius: 31, backgroundColor: "#FFF" },
+  zoomPill: { position: "absolute", bottom: 128, alignSelf: "center", backgroundColor: "rgba(0,0,0,.5)", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14 },
   hint: { position: "absolute", bottom: 10, alignSelf: "center", color: "rgba(255,255,255,.75)", fontSize: 12 },
   modes: { gap: 26, paddingHorizontal: 40, height: 52, alignItems: "center", flexGrow: 1, justifyContent: "center" },
   mode: { color: "rgba(255,255,255,.55)", fontWeight: "800", fontSize: 14, letterSpacing: 0.5 },

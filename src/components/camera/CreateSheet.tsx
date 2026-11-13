@@ -11,7 +11,7 @@ export function CreateSheet({ visible, onClose, onPick }: { visible: boolean; on
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const rows: { id: CreateChoice; label: string; Icon: any }[] = [
-    { id: "video", label: "Vídeo", Icon: Clapperboard },
+    { id: "video", label: "Desfile (vídeo)", Icon: Clapperboard },
     { id: "post", label: "Publicação", Icon: Grid3x3 },
     { id: "story", label: "Story", Icon: CircleFadingPlus },
     { id: "highlight", label: "Destaque dos stories", Icon: Heart },
