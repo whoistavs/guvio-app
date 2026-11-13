@@ -17,7 +17,7 @@ export type CameraMode = "post" | "story" | "video" | "clothing";
 const MODES: { id: CameraMode; label: string }[] = [
   { id: "post", label: "POST" },
   { id: "story", label: "STORY" },
-  { id: "video", label: "DESFILE" },
+  { id: "video", label: "DRIP" },
   { id: "clothing", label: "ROUPA" }
 ];
 const MAX_S = 30;
