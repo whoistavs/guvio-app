@@ -29,6 +29,75 @@ const ZOOM_K = IOS ? 1 / Math.log(100) : 0.45;
 const clampZoom = (z: number) => Math.max(0, Math.min(ZOOM_MAX, z));
 const zoomBy = (z0: number, scale: number) => clampZoom(z0 + Math.log(Math.max(0.05, scale)) * ZOOM_K);
 
+// O zoom muda a cada quadro do gesto: fica fora do estado da tela para não redesenhar
+// a câmera inteira (era isso que travava). Só a câmera e o "2.0x" escutam, 1 vez por quadro.
+const zoomStore = {
+  value: 0,
+  shown: false,
+  pending: null as number | null,
+  frame: 0 as any,
+  hide: null as ReturnType<typeof setTimeout> | null,
+  subs: new Set<() => void>(),
+  emit() {
+    this.subs.forEach(f => f());
+  },
+  set(z: number, show = true) {
+    this.pending = z;
+    if (show) {
+      this.shown = true;
+      if (this.hide) clearTimeout(this.hide);
+      this.hide = setTimeout(() => {
+        this.shown = false;
+        this.emit();
+      }, 1200);
+    }
+    if (this.frame) return;
+    this.frame = requestAnimationFrame(() => {
+      this.frame = 0;
+      if (this.pending === null) return;
+      this.value = this.pending;
+      this.pending = null;
+      this.emit();
+    });
+  },
+  reset() {
+    this.pending = null;
+    this.value = 0;
+    this.shown = false;
+    this.emit();
+  }
+};
+function useZoomStore() {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const f = () => force(n => n + 1);
+    zoomStore.subs.add(f);
+    return () => {
+      zoomStore.subs.delete(f);
+    };
+  }, []);
+  return zoomStore;
+}
+
+type CamProps = React.ComponentProps<typeof CameraView>;
+const ZoomCamera = React.memo(
+  React.forwardRef<CameraView, Omit<CamProps, "zoom">>((props, ref) => {
+    const z = useZoomStore();
+    return <CameraView ref={ref} {...props} zoom={z.value} />;
+  })
+);
+
+function ZoomPill() {
+  const z = useZoomStore();
+  if (!z.shown) return null;
+  const f = IOS ? Math.pow(100, z.value) : 1 + z.value * 7;
+  return (
+    <View pointerEvents="none" style={s.zoomPill}>
+      <Text style={{ color: "#FFF", fontWeight: "800", fontSize: 13 }}>{f.toFixed(1)}x</Text>
+    </View>
+  );
+}
+
 export type CameraResult =
   | { kind: "post"; images: string[]; aspect: number; video?: string }
   | { kind: "clothing"; image: string }
@@ -58,17 +127,8 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
   const [busy, setBusy] = useState(false);
   const [camMode, setCamMode] = useState<"picture" | "video">("picture");
   const [lastThumb, setLastThumb] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(0);
-  const [zoomShown, setZoomShown] = useState(false);
-  const zoomRef = useRef(0);
-  zoomRef.current = zoom;
-  const zoomHide = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const applyZoom = (z: number) => {
-    setZoom(z);
-    setZoomShown(true);
-    if (zoomHide.current) clearTimeout(zoomHide.current);
-    zoomHide.current = setTimeout(() => setZoomShown(false), 1200);
-  };
+  const zoomRef = { get current() { return zoomStore.pending ?? zoomStore.value; } };
+  const applyZoom = (z: number) => zoomStore.set(z);
   const [camPerm, askCam] = useCameraPermissions();
   const [micPerm, askMic] = useMicrophonePermissions();
   const cam = useRef<CameraView>(null);
@@ -110,7 +170,7 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
 
   // trocar de câmera volta o zoom para 1x
   useEffect(() => {
-    setZoom(0);
+    zoomStore.reset();
   }, [facing, open]);
 
   // vídeo: modo vídeo da câmera; foto: modo foto
@@ -320,7 +380,11 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
       },
       onPanResponderMove: e => {
         const ts = e.nativeEvent.touches;
-        if (ts.length < 2) return;
+        if (ts.length < 2) {
+          // tirou um dedo: o próximo par de dedos começa de onde parou (sem pulo)
+          pinch.current.d0 = 0;
+          return;
+        }
         const d = Math.hypot(ts[0].pageX - ts[1].pageX, ts[0].pageY - ts[1].pageY);
         if (!pinch.current.d0) {
           pinch.current.d0 = d;
@@ -372,14 +436,13 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
       <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <View style={s.preview}>
           {granted ? (
-            <CameraView
+            <ZoomCamera
               ref={cam}
               style={StyleSheet.absoluteFill}
               facing={facing}
               flash={flash}
               enableTorch={flash === "on" && !front && camMode === "video"}
               mode={camMode}
-              zoom={zoom}
               videoQuality="1080p"
               onCameraReady={onCameraReady}
               mirror={front && prefs.mirror}
@@ -459,13 +522,7 @@ export function CameraHost({ onResult }: { onResult: (r: CameraResult) => void }
             </View>
           ) : null}
 
-          {zoomShown ? (
-            <View pointerEvents="none" style={s.zoomPill}>
-              <Text style={{ color: "#FFF", fontWeight: "800", fontSize: 13 }}>
-                {IOS ? (Math.round(Math.pow(100, zoom) * 10) / 10).toFixed(1) : (1 + zoom * 7).toFixed(1)}x
-              </Text>
-            </View>
-          ) : null}
+          <ZoomPill />
 
           {/* botão de captura */}
           <View style={s.shutterRow}>
